@@ -203,6 +203,37 @@ export const AUDIT_ACTIONS = {
    */
   STAFF_ID_CARD_DOWNLOADED: 'staff.id_card_downloaded',
   STAFF_BRIEFING_DOWNLOADED: 'staff.briefing_downloaded',
+  /*
+   * Story 13-51 (AC2.6) — CLOSING A LIVE VOCABULARY DRIFT, not minting new words.
+   *
+   * `_ops-contact-remediation.ts` has been writing these two as RAW STRING
+   * LITERALS since 2026-08-11 (four rows on prod: §11 of the portfolio-triage
+   * SCP). They compiled because `logAction`/`logActionTx` type `action` as a
+   * bare `string`, so nothing forced them through this object.
+   *
+   * ⚠️ THE VALUES BELOW ARE DELIBERATELY THE STRINGS ALREADY ON PROD. `action`
+   * IS part of the hash-chain payload (`computeHash`: id|action|actorId|
+   * createdAt|details|previousHash), so re-spelling either one would leave the
+   * historic rows unreachable by any query written against the new spelling and
+   * un-rehashable by construction. The constant adopts the data; the data is
+   * not migrated to the constant.
+   */
+  EMAIL_SUPPRESSION_LIFTED: 'email.suppression_lifted',
+  USER_EMAIL_CORRECTED: 'user.email_corrected',
+  /*
+   * Story 13-51 (code-review L2) — NORMALISING A KEY IS NOT LIFTING A SUPPRESSION.
+   *
+   * `--normalise-keys` rewrites non-bare `email_suppressions.email` values (and deletes wrapped
+   * duplicates whose bare form is already suppressed). It lifts nothing: the person stays
+   * suppressed, the key merely becomes one a lookup can match. Filing it under
+   * EMAIL_SUPPRESSION_LIFTED would have put a row that suppresses HARDER into the same bucket as
+   * the rows that release someone — and `action` IS in the hash payload, so it would have been
+   * unfixable the moment it was written to prod.
+   *
+   * Unlike the two above, this value has never been written by anything, so it is free to be
+   * spelled correctly.
+   */
+  EMAIL_SUPPRESSION_KEYS_NORMALISED: 'email.suppression_keys_normalised',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -222,6 +253,28 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
  */
 export const AUDIT_TARGETS = {
   RESPONDENT: 'respondent',
+  /*
+   * Story 13-51 (AC2.6) — SINGULAR is canonical ([[feedback_audit_target_unification]],
+   * and `RESPONDENT` above is the precedent).
+   *
+   * ⚠️ SCOPE, STATED SO IT IS NOT MISTAKEN FOR A FINISHED UNIFICATION: a census
+   * on 2026-08-19 found `targetResource: 'users'` (plural) at **28 sites** —
+   * mfa.controller.ts x12, staff.service.ts x7, auth.service.ts x4,
+   * _ops-contact-remediation.ts x2, and one each in staff-artefacts.service.ts,
+   * mfa-grace.ts and _deactivate-undeliverable-admins.ts. 13-51 re-points ONLY
+   * the two it owns (the contact-remediation pair). The other 26 keep writing
+   * 'users' and are a stated residual, NOT silently fixed here: flipping live
+   * MFA/auth/staff audit values is a different blast radius and a different
+   * story.
+   *
+   * Because of that, the prod row migration is scoped to the two ACTIONS this
+   * story owns (`email.suppression_lifted`, `user.email_corrected`) rather than
+   * to every row spelled 'users' — migrating the rest while 26 sites still
+   * write the plural would manufacture a THIRD state instead of removing the
+   * second. `targetResource` is NOT in the hash payload, so that migration
+   * cannot invalidate the chain (verified against `computeHash` above).
+   */
+  USER: 'user',
 } as const;
 
 export type AuditTarget = (typeof AUDIT_TARGETS)[keyof typeof AUDIT_TARGETS];

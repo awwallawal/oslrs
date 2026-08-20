@@ -35,6 +35,7 @@ import { getRedisClient } from '../lib/redis.js';
 import {
   type NotificationCategory,
   classifyEmailSubject,
+  isUnclassifiedSubject,
   isUndeliverableRecipient,
 } from './notification-category.js';
 
@@ -184,6 +185,24 @@ export class NotificationMeter {
     category?: NotificationCategory;
   }): Promise<NotificationCategory> {
     const category = args.category ?? classifyEmailSubject(args.subject);
+
+    // Story 13-51 (➕ ADDED §2) — MAKE THE FALLBACK OBSERVABLE.
+    //
+    // `classifyEmailSubject` always returns something, so an unmatched subject falls to 'other'
+    // silently and a brand-new send type looks exactly like a send legitimately bucketed 'other'.
+    // A RISING count of this line is the signal that a send type exists with no word for it —
+    // which is how the operator-reply gap went unnoticed until a human read one line of script
+    // output. ⚠️ WARN, never throw: a taxonomy gap must not be able to block a citizen's email.
+    // Code-review L1 — asks the exported predicate rather than re-deriving `=== 'other'` here, so
+    // `isUnclassifiedSubject` has a production consumer instead of only its own test. The
+    // `!args.category` half still matters: a caller that DECLARED its bucket has not fallen
+    // through anything, even when the bucket it declared is `other`.
+    if (!args.category && isUnclassifiedSubject(args.subject)) {
+      logger.warn(
+        { event: 'notification_meter.unclassified_subject', subject: args.subject },
+        'email subject matched no category rule — counted as "other" (13-51)',
+      );
+    }
     return this.record({
       channel: 'email',
       category,

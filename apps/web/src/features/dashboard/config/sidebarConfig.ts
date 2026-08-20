@@ -43,6 +43,7 @@ import {
   Settings,
   Gauge,
   CreditCard,
+  MailWarning,
 } from 'lucide-react';
 import { type UserRole, ROLE_DISPLAY_NAMES, ALL_ROLES as SHARED_ALL_ROLES, getRoleDisplayName } from '@oslsr/types';
 
@@ -183,6 +184,10 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     // R3-F1: end:true prevents accidental highlight on nested routes
     // (e.g. /dashboard/super-admin/audit-log/detail/:id when future stories add them)
     { label: 'Audit Log', href: '/dashboard/super-admin/audit-log', icon: ScrollText, end: true },
+    // Story 13-51 — the people the register has gone SILENT on. Sits beside Audit Log because it
+    // is the same kind of thing: a record of something the system did to a citizen without
+    // telling anyone. end:true so a future detail route does not keep it highlighted.
+    { label: 'Suppressed Contacts', href: '/dashboard/super-admin/suppressed-contacts', icon: MailWarning, end: true },
     // prep-settings-landing-and-feature-flags — Settings landing page (between Audit Log and MFA Settings).
     // end:true so it doesn't highlight on nested routes like /settings/fraud-thresholds.
     { label: 'Settings', href: '/dashboard/super-admin/settings', icon: Settings, end: true },

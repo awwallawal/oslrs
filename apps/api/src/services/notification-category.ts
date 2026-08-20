@@ -31,6 +31,17 @@ export type NotificationCategory =
   | 'thankyou-referral'
   | 'notification-digest'
   | 'registration-status'
+  /**
+   * Story 13-51 (➕ ADDED §1) — AN OPERATOR REPLYING TO A NAMED CITIZEN BY HAND.
+   *
+   * Found by using it. The two individual registration-number replies sent from
+   * `admin@oyoskills.com` on 2026-08-11 (Jamiu, Juliet) were counted as `other`:
+   * they are the first sends of their kind and the vocabulary had no bucket, so
+   * the ops digest could not tell a deliberate human reply to a real person from
+   * an unclassified stray. The override at `recordEmailSend` already existed —
+   * the WORD did not.
+   */
+  | 'operator-reply'
   | 'other';
 
 /**
@@ -62,7 +73,31 @@ export function classifyEmailSubject(subjectRaw: string): NotificationCategory {
   if (s.includes('payment recorded')) return 'payment-notification';
   if (s.includes('dispute')) return 'dispute';
   if (s.includes('you have') && s.includes('notification')) return 'notification-digest';
+  // Story 13-51 — the operator reply that tells one named citizen their registration number.
+  // Ordered with the other specifics. ⚠️ The script that sends it passes `category` EXPLICITLY;
+  // this rule is the safety net, not the mechanism. A script that identifies itself by matching
+  // its own subject line breaks the first time someone edits the copy.
+  if (s.includes('you are registered')) return 'operator-reply';
   return 'other';
+}
+
+/**
+ * Story 13-51 (➕ ADDED §2) — THE BIGGER HALF: `other` IS SILENT, SO A MISSING BUCKET LOOKS LIKE A
+ * DELIBERATE ONE.
+ *
+ * `classifyEmailSubject` is a substring cascade that ALWAYS returns something. An unmatched
+ * subject falls to `'other'` with no error, no warning and no log — so a brand-new send type is
+ * indistinguishable from a send legitimately bucketed `other`, and nobody learns the vocabulary
+ * has fallen behind the code. That is exactly what happened above, and it was noticed only
+ * because a human read one line of script output. It is
+ * [[pattern-monitor-measuring-something-else]] in the counter itself: one of the categories
+ * secretly means "I did not recognise this."
+ *
+ * ⚠️ THIS MUST NEVER THROW. A classifier that can fail a send would let a taxonomy gap block a
+ * citizen's email, which is far worse than a miscounted one. Observable, not louder.
+ */
+export function isUnclassifiedSubject(subjectRaw: string): boolean {
+  return classifyEmailSubject(subjectRaw) === 'other';
 }
 
 /** Categories that are user/public-triggered → candidate abuse vectors (AC5). */

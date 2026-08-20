@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { Webhook } from 'svix';
 import pino from 'pino';
-import { parseResendEvent, recordEmailEvent } from '../services/email-events.service.js';
+import { parseResendEvent, recordEmailEvent, NonBareSuppressionKeyError } from '../services/email-events.service.js';
 
 const logger = pino({ name: 'resend-webhook' });
 
@@ -55,6 +55,21 @@ export async function handleResendWebhook(req: Request, res: Response): Promise<
     }
     res.status(200).json({ ok: true });
   } catch (err) {
+    // Story 13-51 (AC3.6) — A REJECTED KEY IS OUR BUG, NOT A REASON TO MAKE RESEND RETRY.
+    //
+    // The guard exists so an unstorable suppression key fails loudly instead of sitting inert.
+    // But 500 is how you tell a webhook sender "try again", and Resend obliges — so answering a
+    // deterministic rejection with 500 turns one bad payload into a retry storm that can never
+    // succeed, on the delivery pipeline this story is trying to protect. Log it hard, alert on the
+    // log, and 200 the delivery: it was received and understood, and retrying changes nothing.
+    if (err instanceof NonBareSuppressionKeyError) {
+      logger.error(
+        { event: 'resend_webhook.non_bare_suppression_key', value: err.value },
+        'refused a non-bare suppression key (13-51 AC3.6) — payload accepted, nothing suppressed',
+      );
+      res.status(200).json({ ok: true, warning: 'suppression key refused' });
+      return;
+    }
     logger.error({ event: 'resend_webhook.record_failed', err: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'processing failed' });
   }

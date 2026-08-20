@@ -48,6 +48,23 @@ function loadTypoDict(): TypoDict {
 
 const dict: TypoDict = loadTypoDict();
 
+/**
+ * Story 13-51 (AC1.4) — read-only view of the loaded dictionary, so a second consumer can ask
+ * "is this domain a known typo?" without opening the JSON a second time.
+ *
+ * `classifySuppressedAddress` is that consumer. It matters that it reads THIS object and not a
+ * copy: the whole point of the `capture_typo` bucket is that it agrees with what the capture
+ * surfaces would have warned about, and a private copy would drift the moment either moved.
+ */
+export function isKnownTypoDomain(domain: string): boolean {
+  return Object.prototype.hasOwnProperty.call(dict.domain_typos, domain.trim().toLowerCase());
+}
+
+/** The canonical domain for a known typo, or null. Same source of truth as `normaliseEmail`. */
+export function correctionForTypoDomain(domain: string): string | null {
+  return dict.domain_typos[domain.trim().toLowerCase()] ?? null;
+}
+
 export function normaliseEmail(input: unknown): NormaliseResult {
   const warnings: string[] = [];
 

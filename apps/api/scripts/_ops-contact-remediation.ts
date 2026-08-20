@@ -42,10 +42,12 @@
  */
 import 'dotenv/config';
 import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { db } from '../src/db/index.js';
 import { emailSuppressions } from '../src/db/schema/email-suppressions.js';
 import { users } from '../src/db/schema/users.js';
-import { AuditService } from '../src/services/audit.service.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
+import { toCanonicalEmail, isBareEmail } from '../src/lib/canonical-email.js';
 
 function arg(name: string): string | undefined {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -64,6 +66,7 @@ const LIFT = arg('lift')?.toLowerCase();
 const FROM = arg('correct-user')?.toLowerCase();
 const TO = arg('to')?.toLowerCase();
 const REASON = arg('reason') ?? '(no reason given)';
+const NORMALISE_KEYS = process.argv.includes('--normalise-keys');
 
 const log = (s = '') => process.stdout.write(`${s}\n`);
 const banner = () => log('='.repeat(70));
@@ -101,8 +104,10 @@ async function lift(email: string): Promise<number> {
     await tx.delete(emailSuppressions).where(eq(emailSuppressions.email, email));
     await AuditService.logActionTx(tx, {
       actorId: null, // operator script, run by a human over SSH — no session principal
-      action: 'email.suppression_lifted',
-      targetResource: 'users',
+      // 13-51 AC2.6 — constants, not raw literals. Same ACTION string (it is hashed);
+      // targetResource narrows 'users' → the singular canonical (not hashed).
+      action: AUDIT_ACTIONS.EMAIL_SUPPRESSION_LIFTED,
+      targetResource: AUDIT_TARGETS.USER,
       targetId: null,
       details: {
         email,
@@ -165,8 +170,9 @@ async function correctUser(from: string, to: string): Promise<number> {
     await tx.update(users).set({ email: to, updatedAt: new Date() }).where(eq(users.id, u.id));
     await AuditService.logActionTx(tx, {
       actorId: null,
-      action: 'user.email_corrected',
-      targetResource: 'users',
+      // 13-51 AC2.6 — see the note on the lift() audit write above.
+      action: AUDIT_ACTIONS.USER_EMAIL_CORRECTED,
+      targetResource: AUDIT_TARGETS.USER,
       targetId: u.id,
       details: { from, to, reason: REASON, script: '_ops-contact-remediation.ts' },
     });
@@ -184,7 +190,128 @@ async function correctUser(from: string, to: string): Promise<number> {
   return 0;
 }
 
+/**
+ * Story 13-51 (AC3.3) — BACKFILL THE NON-BARE KEYS the old inlet wrote.
+ *
+ * `email-events.service.ts` stored the provider's raw recipient, so a bounce whose payload carried
+ * `Display Name <addr@dom>` produced a suppression row keyed on a string the send path can never
+ * look up. One such row exists on prod (`wahab akeem olaide <aqeemakolade@gmail.com>`) and it
+ * belongs to a REGISTERED person; `email_events.recipient` holds the same raw value.
+ *
+ * ⚠️ THIS IS THE SMALLER HALF OF THE FIX. The 8% non-bare rate is a property of the PROVIDER'S
+ * payloads and can change without notice — the guard in `recordEmailEvent` is what stops the next
+ * one, and this only cleans up the ones already stored.
+ *
+ * ⛔ RUN IT ONLY WITH THE SEVERITY WORK DEPLOYED. Normalising the key is what makes the row
+ * FUNCTION, and an un-severitied row that functions is a permanent exclusion of a live citizen on
+ * one soft bounce. That is the 13-51 SEQUENCING ruling; this script cannot check the deploy for
+ * you, so check it yourself before --normalise-keys without --dry-run.
+ *
+ * Collisions are real and are handled by DELETING the wrapped duplicate: if the bare address is
+ * already suppressed in its own right, the wrapped row carries no information the bare one lacks.
+ */
+async function normaliseKeys(): Promise<number> {
+  banner();
+  log(`NORMALISE NON-BARE SUPPRESSION / EVENT KEYS${DRY ? '   [DRY RUN]' : ''}`);
+  banner();
+  log('');
+  log('  ⚠️  Only run this once bounce SEVERITY is live (13-51 AC3.4). Making these keys match is');
+  log('      what turns an inert row into a working exclusion.');
+  log('');
+
+  const sups = await db.select().from(emailSuppressions);
+  const badSups = sups.filter((r) => !isBareEmail(r.email));
+  log(`  email_suppressions: ${sups.length} row(s), ${badSups.length} non-bare.`);
+  for (const r of badSups) {
+    log(`    '${r.email}'  →  '${toCanonicalEmail(r.email)}'   (reason=${r.reason})`);
+  }
+
+  const evs = (await db.execute(sql`
+    SELECT DISTINCT recipient FROM email_events
+  `)) as unknown as { rows: Array<{ recipient: string }> };
+  const badEvs = evs.rows.filter((r) => !isBareEmail(r.recipient));
+  log(`  email_events: ${evs.rows.length} distinct recipient(s), ${badEvs.length} non-bare.`);
+  for (const r of badEvs) {
+    log(`    '${r.recipient}'  →  '${toCanonicalEmail(r.recipient)}'`);
+  }
+
+  if (badSups.length === 0 && badEvs.length === 0) {
+    log('');
+    log('  ✅ nothing to normalise (idempotent — a second run lands here).');
+    return 0;
+  }
+
+  if (DRY) {
+    log('');
+    log('  DRY RUN — nothing written, no audit row.');
+    return 0;
+  }
+
+  let merged = 0;
+  let rewritten = 0;
+  await db.transaction(async (tx) => {
+    for (const r of badSups) {
+      const bare = toCanonicalEmail(r.email);
+      const existing = (await tx.execute(sql`
+        SELECT 1 AS hit FROM email_suppressions WHERE email = ${bare} LIMIT 1
+      `)) as unknown as { rows: Array<{ hit: number }> };
+      if (existing.rows.length > 0) {
+        // The bare address is already suppressed in its own right. The wrapped row adds nothing.
+        await tx.execute(sql`DELETE FROM email_suppressions WHERE email = ${r.email}`);
+        merged += 1;
+      } else {
+        await tx.execute(sql`UPDATE email_suppressions SET email = ${bare} WHERE email = ${r.email}`);
+        rewritten += 1;
+      }
+    }
+    for (const r of badEvs) {
+      await tx.execute(
+        sql`UPDATE email_events SET recipient = ${toCanonicalEmail(r.recipient)} WHERE recipient = ${r.recipient}`,
+      );
+    }
+
+    await AuditService.logActionTx(tx, {
+      actorId: null,
+      // Code-review L2 — its OWN action. This run lifts nothing; it makes existing keys
+      // matchable, which if anything suppresses harder. Sharing the lift action would have made
+      // "when did we release someone" unanswerable, permanently (`action` is hashed).
+      action: AUDIT_ACTIONS.EMAIL_SUPPRESSION_KEYS_NORMALISED,
+      targetResource: AUDIT_TARGETS.USER,
+      targetId: null,
+      details: {
+        operation: 'normalise_non_bare_keys',
+        suppressionsRewritten: rewritten,
+        suppressionsMergedIntoExistingBare: merged,
+        eventRecipientsRewritten: badEvs.length,
+        addresses: badSups.map((r) => ({ from: r.email, to: toCanonicalEmail(r.email) })),
+        reason: REASON,
+        script: '_ops-contact-remediation.ts --normalise-keys',
+        story: '13-51 AC3.3',
+      },
+    });
+  });
+
+  // Read it back. A record about the work is not the work.
+  const after = await db.select().from(emailSuppressions);
+  const stillBad = after.filter((r) => !isBareEmail(r.email));
+  const afterEvs = (await db.execute(sql`SELECT DISTINCT recipient FROM email_events`)) as unknown as {
+    rows: Array<{ recipient: string }>;
+  };
+  const stillBadEvs = afterEvs.rows.filter((r) => !isBareEmail(r.recipient));
+
+  log('');
+  log(`  rewritten: ${rewritten}   merged-into-existing-bare: ${merged}   events: ${badEvs.length}`);
+  log(`  non-bare remaining — suppressions: ${stillBad.length} (want 0), events: ${stillBadEvs.length} (want 0)`);
+  if (stillBad.length !== 0 || stillBadEvs.length !== 0) {
+    log('  ⛔ READ-BACK MISMATCH.');
+    return 2;
+  }
+  log('  ✅ every suppression key is now a key the send path can actually match.');
+  return 0;
+}
+
 async function main(): Promise<number> {
+  if (NORMALISE_KEYS) return normaliseKeys();
   if (LIFT) return lift(LIFT);
   if (FROM || TO) {
     if (!FROM || !TO) {
@@ -193,7 +320,7 @@ async function main(): Promise<number> {
     }
     return correctUser(FROM, TO);
   }
-  log('ERROR: give either --lift <email> or --correct-user <from> --to <to>.');
+  log('ERROR: give --lift <email>, --correct-user <from> --to <to>, or --normalise-keys.');
   return 4;
 }
 

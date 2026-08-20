@@ -33,6 +33,16 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 
+/**
+ * Story 13-51 — the same runner shape `audit.service.ts` uses, so the priority SQL below can be
+ * executed against either the pooled `db` or an open transaction. It exists because the
+ * correction path (13-51 AC2.7/AC2.8) has to READ BACK the resolved address INSIDE the
+ * transaction that just wrote it; a read on `db` would see the pre-commit world and the
+ * read-back would be a lie that always passed.
+ */
+type DbTransaction = Parameters<Parameters<(typeof db)['transaction']>[0]>[0];
+type Runner = typeof db | DbTransaction;
+
 export type ContactEmailSource = 'submission' | 'magic_link_token' | 'user_account';
 
 export interface RespondentContactEmail {
@@ -50,28 +60,56 @@ export interface RespondentContactEmail {
 export async function resolveRespondentContactEmail(
   respondentId: string,
 ): Promise<RespondentContactEmail | null> {
-  const result = await db.execute(sql`
+  return resolveRespondentContactEmailWith(db, respondentId);
+}
+
+/**
+ * Story 13-51 — the SAME resolution, run against a caller-supplied runner.
+ *
+ * ⚠️ There is exactly ONE copy of the priority SQL and it lives below. That is the entire point
+ * of this file (see the header): every previous caller that re-derived a narrower lookup
+ * produced a defect. A transaction-scoped variant that copied the query would reintroduce the
+ * problem this module was created to end.
+ */
+export async function resolveRespondentContactEmailWith(
+  runner: Runner,
+  respondentId: string,
+): Promise<RespondentContactEmail | null> {
+  // ⛔ EACH UNION BRANCH IS PARENTHESISED, AND THAT IS NOT COSMETIC — 13-51, 2026-08-19.
+  //
+  // Postgres does not accept a bare `ORDER BY ... LIMIT` on a branch of a UNION: without the
+  // parentheses it reads them as belonging to the whole union and errors `42601 syntax error at
+  // or near "UNION"`. This query has carried that defect since it was introduced (9d33b94), so
+  // THE CANONICAL RESOLVER HAS NEVER SUCCEEDED — every call threw, for every respondent.
+  //
+  // It went unseen because all three callers are hand-run operator scripts (`nin-reconfirm.ts`,
+  // `_adoption-number-correction.ts`, and `sms-outreach-list.ts` for the sibling function), and
+  // `apps/api/scripts/` is outside tsconfig — the repo's own Pitfall #41 rule, "RUN scripts,
+  // don't trust tsc". A SQL syntax error is invisible to tsc in any case: it is only ever found
+  // by executing the statement against a real database, which is why 13-51 found it the moment
+  // AC2.7's read-back asserted on the resolver instead of on the tables it reads.
+  const result = await runner.execute(sql`
     SELECT email, source FROM (
-      SELECT btrim(s.raw_data->>'email') AS email, 'submission' AS source, 1 AS rank
-        FROM submissions s
-       WHERE s.respondent_id = ${respondentId}
-         AND btrim(coalesce(s.raw_data->>'email', '')) <> ''
-       ORDER BY s.submitted_at DESC
-       LIMIT 1
+      (SELECT btrim(s.raw_data->>'email') AS email, 'submission' AS source, 1 AS rank
+         FROM submissions s
+        WHERE s.respondent_id = ${respondentId}
+          AND btrim(coalesce(s.raw_data->>'email', '')) <> ''
+        ORDER BY s.submitted_at DESC
+        LIMIT 1)
       UNION ALL
-      SELECT btrim(m.email), 'magic_link_token', 2
-        FROM magic_link_tokens m
-       WHERE m.respondent_id = ${respondentId}
-         AND btrim(coalesce(m.email, '')) <> ''
-       ORDER BY m.created_at DESC
-       LIMIT 1
+      (SELECT btrim(m.email), 'magic_link_token', 2
+         FROM magic_link_tokens m
+        WHERE m.respondent_id = ${respondentId}
+          AND btrim(coalesce(m.email, '')) <> ''
+        ORDER BY m.created_at DESC
+        LIMIT 1)
       UNION ALL
-      SELECT btrim(u.email), 'user_account', 3
-        FROM users u
-        JOIN respondents r ON r.user_id = u.id
-       WHERE r.id = ${respondentId}
-         AND btrim(coalesce(u.email, '')) <> ''
-       LIMIT 1
+      (SELECT btrim(u.email), 'user_account', 3
+         FROM users u
+         JOIN respondents r ON r.user_id = u.id
+        WHERE r.id = ${respondentId}
+          AND btrim(coalesce(u.email, '')) <> ''
+        LIMIT 1)
     ) candidates
     ORDER BY rank
     LIMIT 1

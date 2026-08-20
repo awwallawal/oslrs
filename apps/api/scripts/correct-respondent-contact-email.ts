@@ -28,11 +28,34 @@
  *   pnpm --filter @oslsr/api tsx scripts/correct-respondent-contact-email.ts \
  *     --ref OSL-2026-DQNPTQ --to asirusakirat@gmail.com [--apply]
  */
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../src/db/index.js';
 import { respondents } from '../src/db/schema/respondents.js';
-import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
+import {
+  correctRespondentContactEmail,
+  ContactAddressClashError,
+  ContactCorrectionRefusedError,
+  ContactCorrectionReadBackError,
+  RespondentNotFoundError,
+} from '../src/services/contact-correction.service.js';
 
+/**
+ * Story 13-51 (AC2.5) — THE LOGIC NO LONGER LIVES HERE.
+ *
+ * Everything this script used to do inline — the clash refusal, the per-source rewrites, the
+ * suppression delete, the audit write, the read-back — now lives in
+ * `src/services/contact-correction.service.ts`, which the operator UI calls too. This file keeps
+ * only what a CLI actually owns: argument parsing, the human-readable preview, and exit codes.
+ *
+ * ⚠️ THE DRY RUN IS NOT A SECOND IMPLEMENTATION. It runs the REAL service inside a transaction
+ * and then rolls it back, so the preview exercises the same refusal and the same read-back as
+ * `--apply`. A dry-run that re-derived "what would happen" is exactly the divergence 13-4 AC4.6
+ * warns about, and it would be at its most convincing when it was wrong.
+ *
+ * ⚠️ It now also rewrites `magic_link_tokens.email` and `users.email` — the sources the original
+ * missed. For the 45 respondents reachable ONLY through a magic-link token, the 2026-08-06
+ * version reported success having written nothing the resolver reads.
+ */
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i === -1 ? undefined : process.argv[i + 1];
@@ -41,13 +64,12 @@ function arg(name: string): string | undefined {
 const ref = arg('ref');
 const to = arg('to')?.trim().toLowerCase();
 const apply = process.argv.includes('--apply');
+const reason =
+  arg('reason') ??
+  'mistyped contact address caused a bounce-suppression; respondent unreachable in the pending-NIN ladder';
 
 if (!ref || !to) {
-  console.error('Usage: --ref OSL-2026-XXXXXX --to correct@address.com [--apply]');
-  process.exit(1);
-}
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
-  console.error(`Refusing: "${to}" is not a plausible email address.`);
+  console.error('Usage: --ref OSL-2026-XXXXXX --to correct@address.com [--reason "..."] [--apply]');
   process.exit(1);
 }
 
@@ -60,69 +82,69 @@ if (!r) {
   process.exit(1);
 }
 
-const subs = (await db.execute(sql`
-  SELECT id, raw_data->>'email' AS email FROM "submissions" WHERE respondent_id = ${r.id}
-`)) as { rows: Array<{ id: string; email: string | null }> };
-
-const current = subs.rows.map((x) => x.email).filter(Boolean) as string[];
-const stale = [...new Set(current.filter((e) => e.toLowerCase() !== to))];
-
-// Refuse to hand this address to someone who is not its owner.
-const clash = (await db.execute(sql`
-  SELECT r.reference_code FROM "submissions" s
-  JOIN "respondents" r ON r.id = s.respondent_id
-  WHERE lower(s.raw_data->>'email') = ${to} AND r.id <> ${r.id} AND r.status <> 'rolled_back'
-  LIMIT 1
-`)) as { rows: Array<{ reference_code: string }> };
-if (clash.rows.length) {
-  console.error(`Refusing: ${to} already belongs to ${clash.rows[0]!.reference_code}.`);
-  process.exit(1);
-}
-
-console.log(`\n${apply ? '🔴 APPLY' : '🟢 DRY-RUN'}  ${r.referenceCode}  ${r.firstName} ${r.lastName ?? ''}`);
+console.log(`\n${apply ? '[APPLY]' : '[DRY-RUN]'}  ${r.referenceCode}  ${r.firstName} ${r.lastName ?? ''}`);
 console.log(`  status        ${r.status}`);
 console.log(`  phone         ${r.phoneNumber ?? '(none)'}`);
-console.log(`  email now     ${current.length ? current.join(', ') : '(none)'}`);
 console.log(`  email after   ${to}`);
-console.log(`  suppressions to lift: ${stale.length ? stale.join(', ') : '(none — data may already be corrected)'}`);
 
-if (!apply) {
-  console.log('\n🟢 DRY-RUN — nothing written. Add --apply.\n');
-  process.exit(0);
+/** Sentinel used to roll a dry run back without pretending the failure was real. */
+class DryRunRollback extends Error {
+  constructor(public readonly result: Awaited<ReturnType<typeof correctRespondentContactEmail>>) {
+    super('dry-run rollback');
+  }
 }
 
-await db.transaction(async (tx) => {
-  for (const old of stale) {
-    await tx.execute(sql`
-      UPDATE "submissions" SET raw_data = jsonb_set(raw_data, '{email}', ${JSON.stringify(to)}::jsonb)
-      WHERE respondent_id = ${r.id} AND lower(raw_data->>'email') = ${old.toLowerCase()}`);
-    await tx.execute(sql`UPDATE "wizard_drafts" SET email = ${to} WHERE lower(email) = ${old.toLowerCase()}`);
-    await tx.execute(sql`DELETE FROM "email_suppressions" WHERE lower(email) = ${old.toLowerCase()}`);
+try {
+  let outcome: Awaited<ReturnType<typeof correctRespondentContactEmail>> | undefined;
+  try {
+    await db.transaction(async (tx) => {
+      const result = await correctRespondentContactEmail(tx, {
+        respondentId: r.id,
+        to,
+        // A CLI has no session principal. The UI passes the operator's id instead (AC2.2).
+        actorId: null,
+        reason,
+      });
+      if (!apply) throw new DryRunRollback(result);
+      outcome = result;
+    });
+  } catch (err) {
+    if (err instanceof DryRunRollback) outcome = err.result;
+    else throw err;
   }
-  // The corrected address must not itself be sitting on the suppression list.
-  await tx.execute(sql`DELETE FROM "email_suppressions" WHERE lower(email) = ${to}`);
 
-  // Audited IN the transaction — `logActionTx`, never the void `logAction`, which cannot be
-  // awaited from a script and loses the last row of every batch (13-49 R11).
-  await AuditService.logActionTx(tx, {
-    actorId: null,
-    action: AUDIT_ACTIONS.OPERATOR_RESPONDENT_EMAIL_CORRECTED,
-    targetResource: AUDIT_TARGETS.RESPONDENT,
-    targetId: r.id,
-    details: {
-      referenceCode: r.referenceCode,
-      correctedTo: to,
-      correctedFrom: stale,
-      suppressionsLifted: stale,
-      retrospective: stale.length === 0,
-      reason: 'mistyped contact address caused a bounce-suppression; respondent unreachable in the pending-NIN ladder',
-    },
-  });
-});
+  const o = outcome!;
+  console.log(`  email before  ${o.correctedFrom.length ? o.correctedFrom.join(', ') : '(none found)'}`);
+  console.log(
+    `  sources written  ${Object.entries(o.sourcesTouched)
+      .map(([k, v]) => `${k}=${v}`)
+      .join('  ')}`,
+  );
+  console.log(`  suppressions lifted: ${o.suppressionsLifted.join(', ')}`);
+  console.log(`  resolver returns afterwards: ${o.resolvedAfter}`);
 
-console.log(
-  stale.length === 0
-    ? '\n✅ Data was already correct — audit row written RETROSPECTIVELY so the change is on the ledger.\n'
-    : '\n✅ Corrected + suppression lifted + audited.\n',
-);
-process.exit(0);
+  if (!apply) {
+    console.log('\n[DRY-RUN] rolled back, nothing written. Add --apply.\n');
+    process.exit(0);
+  }
+  console.log(
+    o.retrospective
+      ? '\nOK Data was already correct - audit row written RETROSPECTIVELY so the change is on the ledger.\n'
+      : '\nOK Corrected + suppression lifted + audited, across every contact source that held it.\n',
+  );
+  process.exit(0);
+} catch (err) {
+  if (
+    err instanceof ContactAddressClashError ||
+    err instanceof ContactCorrectionRefusedError ||
+    err instanceof RespondentNotFoundError
+  ) {
+    console.error(`\nREFUSED: ${err.message}\n`);
+    process.exit(1);
+  }
+  if (err instanceof ContactCorrectionReadBackError) {
+    console.error(`\n${err.message}\n   Rolled back - nothing was written.\n`);
+    process.exit(2);
+  }
+  throw err;
+}

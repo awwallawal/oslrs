@@ -18,6 +18,12 @@ export const EMAIL_DOMAIN_TYPOS: Record<string, string> = {
   'gmail.co': 'gmail.com',
   'gmail.cm': 'gmail.com',
   'gmail.con': 'gmail.com',
+  // Story 13-51 — THE FOUNDING CASE OF THAT STORY, and it was in NEITHER dictionary.
+  // `asirusakirat@gmail.come` bounced on 2026-08-06, was auto-suppressed, and its owner became
+  // permanently unreachable mid-pending-NIN-ladder. The public wizard — the surface 13-51 AC3.1
+  // says to copy onto the staff surfaces — would NOT have caught her. Copying it faithfully
+  // without this entry ships a fix that never fires.
+  'gmail.come': 'gmail.com',
   'gmsil.com': 'gmail.com',
   'gmail.om': 'gmail.com',
   'gmaill.com': 'gmail.com',

@@ -75,11 +75,22 @@ describe('sidebarConfig', () => {
       expect(items.length).toBe(6);
     });
 
-    it('super_admin has exactly 17 sidebar items', () => {
+    it('super_admin has exactly 18 sidebar items', () => {
       // 13 base items + Audit Log (Story 9-11) + Settings (prep-settings-landing)
       // + MFA Settings (Story 9-13) + Operations (Story 9-19)
+      // + Suppressed Contacts (Story 13-51)
       const items = sidebarConfig.super_admin;
-      expect(items.length).toBe(17);
+      expect(items.length).toBe(18);
+    });
+
+    // Story 13-51 — the surface is only delivered if an operator can REACH it. A page routed in
+    // App.tsx with nothing linking to it is a fix that never fires.
+    it('super_admin can reach Suppressed Contacts from the sidebar', () => {
+      const item = sidebarConfig.super_admin.find((i) => i.href === '/dashboard/super-admin/suppressed-contacts');
+      expect(item).toBeDefined();
+      expect(item?.label).toBe('Suppressed Contacts');
+      // end:true — a future detail route must not keep the parent highlighted.
+      expect(item?.end).toBe(true);
     });
 
     // Story 9-19 — Operations Dashboard nav, peer of Settings, placed right

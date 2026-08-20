@@ -52,6 +52,9 @@ const MfaEnrollmentPage = lazy(() => import('./features/security/mfa/pages/MfaEn
 // Story 9-11 — Super Admin audit log viewer
 const AuditLogPage = lazy(() => import('./features/audit-log/pages/AuditLogPage'));
 
+// Story 13-51 — Super Admin suppressed-contact surface (the people we have gone silent on)
+const SuppressedContactsPage = lazy(() => import('./features/suppressed-contacts/pages/SuppressedContactsPage'));
+
 // prep-settings-landing-and-feature-flags — Super Admin settings landing
 const SettingsLandingPage = lazy(() => import('./features/settings/pages/SettingsLandingPage'));
 
@@ -936,6 +939,15 @@ export function AppRoutes() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <AuditLogPage />
+                    </Suspense>
+                  }
+                />
+                {/* Story 13-51 — suppressed contacts + correction (super_admin only) */}
+                <Route
+                  path="suppressed-contacts"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <SuppressedContactsPage />
                     </Suspense>
                   }
                 />

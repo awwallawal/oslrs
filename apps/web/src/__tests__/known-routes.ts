@@ -139,6 +139,8 @@ const DASHBOARD_ROUTES: KnownRoute[] = [
   { route: '/dashboard/super-admin/staff', role: 'super_admin' },
   { route: '/dashboard/super-admin/operations', role: 'super_admin' },
   { route: '/dashboard/super-admin/view-as', role: 'super_admin' },
+  // Story 13-51 — suppressed-contact surface (sidebar: 'Suppressed Contacts').
+  { route: '/dashboard/super-admin/suppressed-contacts', role: 'super_admin' },
   { route: '/dashboard/supervisor', role: 'supervisor' },
   { route: '/dashboard/supervisor/team', role: 'supervisor' },
   { route: '/dashboard/enumerator', role: 'enumerator' },

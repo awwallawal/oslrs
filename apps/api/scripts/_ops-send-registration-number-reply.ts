@@ -225,7 +225,14 @@ async function main(): Promise<number> {
 
   // 3. Count it. Bypassing EmailService must not mean bypassing the 9-63 counter.
   try {
-    const category = await NotificationMeter.recordEmailSend({ subject, recipient: r.to });
+    // Story 13-51 (➕ ADDED §1) — DECLARE OUR OWN BUCKET. The override has always existed; the
+    // word did not, so these replies were counted as `other`. Passing it explicitly rather than
+    // relying on the subject matcher means editing the copy cannot silently re-bucket the send.
+    const category = await NotificationMeter.recordEmailSend({
+      subject,
+      recipient: r.to,
+      category: 'operator-reply',
+    });
     log(`  counted at the chokepoint — category=${category}`);
   } catch (e) {
     log(`  ⚠️  meter record failed (non-fatal, the send already happened): ${(e as Error).message}`);

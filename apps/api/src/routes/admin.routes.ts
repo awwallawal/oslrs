@@ -12,6 +12,7 @@ import auditLogViewerRoutes from './audit-log-viewer.routes.js';
 import settingsRoutes from './settings.routes.js';
 import operationsRoutes from './operations.routes.js';
 import importsRoutes from './imports.routes.js';
+import suppressedContactsRoutes from './suppressed-contacts.routes.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'admin-routes' });
@@ -34,6 +35,10 @@ router.use('/operations', operationsRoutes);
 // Story 11-2 — sub-router for secondary-data import at /admin/imports/*.
 // Super-admin-gated inside the sub-router (auth + SUPER_ADMIN authorize).
 router.use('/imports', importsRoutes);
+
+// Story 13-51 (AC1/AC2) — sub-router for the suppressed-contact surface at
+// /admin/suppressed-contacts/*. Super-admin-gated inside the sub-router.
+router.use('/suppressed-contacts', suppressedContactsRoutes);
 
 /**
  * GET /api/v1/admin/email-budget

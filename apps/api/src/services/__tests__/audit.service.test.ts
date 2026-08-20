@@ -162,7 +162,7 @@ describe('AuditService', () => {
       expect(AUDIT_ACTIONS.SYSTEM_MIGRATION).toBe('system.migration');
     });
 
-    it('should have 60 total action types across all categories', () => {
+    it('should have 63 total action types across all categories', () => {
       // Story 9-13 added 8 MFA action types (mfa.enrolled, mfa.verify_success,
       // mfa.verify_failure, mfa.backup_used, mfa.disabled, mfa.regenerated,
       // mfa.lockout, mfa.grace_expired_redirect) bringing total 23 → 31.
@@ -218,8 +218,20 @@ describe('AuditService', () => {
       //   "we offered it" from "they have it", which is the property the ruling
       //   traded away and AC7 exists to buy back. No schema change — the chain
       //   already carries this shape.
+      // Story 13-51 (AC2.6) added 2 — CLOSING A LIVE DRIFT, not minting new words:
+      //   EMAIL_SUPPRESSION_LIFTED ('email.suppression_lifted'),
+      //   USER_EMAIL_CORRECTED ('user.email_corrected')  → 62.
+      //   ⚠️ Both values are the strings ALREADY ON PROD: `_ops-contact-remediation.ts` has
+      //   written them as raw literals since 2026-08-11 (four rows), and `action` is part of the
+      //   hash-chain payload, so re-spelling either would orphan those rows. The constant adopts
+      //   the data; the data is not migrated to the constant.
+      // Story 13-51 (code-review L2) added 1:
+      //   EMAIL_SUPPRESSION_KEYS_NORMALISED ('email.suppression_keys_normalised') → 63.
+      //   Normalising a non-bare suppression KEY is not LIFTING a suppression — nobody is
+      //   released, the key merely becomes matchable. Unlike the two above this value has never
+      //   been written, so it could still be spelled correctly.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(60);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(63);
     });
 
     /**

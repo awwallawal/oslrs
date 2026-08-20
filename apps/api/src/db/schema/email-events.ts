@@ -30,6 +30,24 @@ export const emailEvents = pgTable(
     /** Campaign tag from the send (Resend tag `campaign_id`); null when the send was untagged. */
     campaignId: text('campaign_id'),
     eventType: text('event_type', { enum: emailEventTypes }).notNull(),
+    /**
+     * Story 13-51 (AC3.4) — THE BOUNCE DETAIL WE USED TO THROW AWAY.
+     *
+     * `webhook.controller.ts` handed the payload to `parseResendEvent`, which kept five fields
+     * and dropped the bounce sub-object on the floor; every bounce then collapsed to
+     * `reason='bounced'`, so a full inbox and a dead domain were stored identically. Resend had
+     * it all along — `GET /emails/{message_id}` still returns the full `bounce` object for every
+     * historic send, which is how the 2026-08-11 remediation recovered it for five addresses
+     * (SCP §11.1) at the cost of zero emails.
+     *
+     * These two columns are the PROVIDER'S OWN WORDS, stored unmapped and uninterpreted:
+     * `type` is `Transient` / `Permanent`, `subType` is e.g. `MailboxFull` / `General`. The
+     * hard/soft decision derived from them lives on `email_suppressions.severity`; keeping the
+     * raw strings here means the next classification question can be answered from the table
+     * instead of from a second API round-trip.
+     */
+    bounceType: text('bounce_type'),
+    bounceSubType: text('bounce_sub_type'),
     /** When Resend reports the event occurred. */
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
