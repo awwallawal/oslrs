@@ -4,6 +4,40 @@ Status: ready-for-dev
 
 > 🔗 **Consumes the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (anchored 2026-07-01; **12-4** is the derivation MODEL). This story RENDERS the honest breakdowns from the 12-4 model: **by-completeness** (139 → 76 `full` / 63 `partial`) + **by-verification** + **by-source**, and the **"+N in progress (drafts)"** funnel line. _Amendment only — ACs unchanged._
 
+> ⛔ **INHERITED FROM 12-5 R2 (handed over 2026-08-20 at adjudication) — READ BEFORE TASK 1.**
+> **The EXISTING dashboard rates double-count ~14 people, and this story is the right place to end
+> that.** 12-5 fixed the *divisor* on `survey-analytics.service` (R-E: divide by who ANSWERED, not by
+> who has any answers). It did **not** fix the *grain*: `buildWhereFragments` reads
+> `FROM submissions s`, one row per SUBMISSION, so anyone with more than one answer-bearing
+> submission is weighted twice.
+>
+> **Measured on prod 2026-08-20:** `submissions` with answers = **286**; `registry_unified` with
+> answers = **272**. So **~14 people are counted twice** in every submissions-anchored dashboard
+> rate. That is the structural reason the dashboard (45.5% at n=198) and the public page (45.5% at
+> n=191) are **not the same number** — today they round to the same figure by coincidence
+> (90/198 = 45.45 vs 87/191 = 45.55) and they will diverge again the moment either population moves.
+>
+> ➜ **THE FIX IS THE ONE THIS STORY ALREADY USES FOR ITS OWN READS: re-point
+> `survey-analytics.service`'s aggregates onto `registryUnifiedSource('ru')`.** Task 1 below already
+> mandates that canonical read for the NEW per-field rates. Doing the same for the *existing* rates
+> in the same story fixes the class instead of leaving a fourth surface on the old grain — and it is
+> far cheaper here, with the file already open, than as a separate story later.
+>
+> ⚠️ **This WILL move published dashboard figures again.** Treat it as a pre-deploy residual and
+> discharge it by **PREDICTION, not by movement** — reproduce the aggregate read-only against prod,
+> confirm the control reproduces the CURRENT live figure exactly, then predict and compare.
+> ⚠️ **And reproduce the WHOLE predicate:** `buildWhereFragments` carries **two** conditions —
+> `s.raw_data IS NOT NULL` **and `s.respondent_id IS NOT NULL`**. Adjudication missed the second on
+> 12-5 and predicted 45.7% where the truth was 45.5%, because prod holds **2 orphan submissions**
+> (13-57's pair) and one of them answered the question. Naming the right table is not reproducing
+> the predicate.
+>
+> **Also inherited:** 12-4 R4 — `registry_unified` is DROPPED by `db:push` on every deploy ~27 s
+> before the init runner recreates it, so 13-33-L4's "no window where the view is absent" guarantee
+> is false. Impact is nil today because nothing at runtime reads the physical view (the service
+> composes the SQL inline). **If this story makes anything read the VIEW rather than the inline
+> source, that window stops being harmless.**
+
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 <!-- Authored 2026-06-16 by Bob (SM) via the create-story workflow as Epic 12 "Dashboard System Refresh" Tier-1 (analytics-redesign / Track-A legibility). POST-LAUNCH, NON-GATING. This story CONSUMES 12-4's getRegistryTotals() aggregate + 9-59's row-level data_status taxonomy (registry-data-status.ts, MERGED on main). It does NOT define data_status and does NOT re-count the registry — it renders the 139→76 funnel + per-data_status breakdown from 12-4, and OWNS the per-field response-rate computation (which 12-4 deliberately placed here). Reuse the ~41 existing chart components + shadcn primitives — compose, don't rebuild. No new stat methods. -->
 

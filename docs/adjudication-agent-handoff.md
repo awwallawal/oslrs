@@ -43,14 +43,26 @@ Then read `MEMORY.md` (auto-loaded) + this doc. If `git status` shows uncommitte
 
 | stream | stories | tree | why grouped |
 |---|---|---|---|
-| **A — analytics honesty** | **12-5** → 12-6 | `C:\Users\DELL\Desktop\oslrs` (main) | Both touch SurveyAnalytics surfaces; 12-6 adds a tab to the page 12-5 relabels. **Sequential, not parallel.** |
-| **B — send readiness** | **13-51** → 13-46 | `C:\Users\DELL\wt-13-51` (`story/13-51-contact-correction`) | Notifications/limiter. Zero file overlap with A. 13-51 first — smaller, and its defect is live. |
+| **A — analytics honesty** | ~~12-5~~ ✅ **CLOSED on prod `836d1c7`** → **12-6** | `C:\Users\DELL\Desktop\oslrs` (main) | Both touch SurveyAnalytics surfaces; 12-6 adds a tab to the page 12-5 relabels. **Sequential, not parallel.** |
+| **B — send readiness** | ~~13-51~~ ✅ **DEPLOYED `d496abf` 2026-08-20** (still `review` — R1/R2 are operator actions) → **13-46** | `C:\Users\DELL\wt-13-46` (`story/13-46-burst-readiness`) | Notifications/limiter. Zero file overlap with A. 13-51 first — smaller, and its defect is live. |
 
 Both worktrees were created from `dc105cc`, so neither starts with a rebase debt. `wt-13-38` was
 **removed** at 13-38's close (clean, merged, nothing unpushed) — a leftover worktree is what the
 `robocopy /MIR` command was aimed at when it deleted 1,574 tracked files. Before deleting, 4,750
 reparse points were enumerated and **zero pointed outside the worktree**; removal used `rmdir /S /Q`,
 which deletes junctions rather than following them. An empty husk survives a locked handle — harmless.
+
+> 🔁 **THE WORKTREE LIFECYCLE, ruled 2026-08-20: one tree per in-flight story, discarded at merge.**
+> A tree's job ends when its branch is merged and CI is green — **NOT when the story reaches `done`.**
+> 13-51 was still `review` (R1/R2 are operator actions run against prod over ssh, not from the tree)
+> and its worktree was correctly removed anyway. Keeping it would have bought nothing and left the
+> exact artefact `robocopy /MIR` was aimed at when it deleted 1,574 tracked files here.
+>
+> **Removal sequence, proven twice (13-38, 13-51):** confirm clean + `rev-list main..branch` = 0 +
+> `rev-list origin/main..branch` = 0 → enumerate reparse points and confirm **ZERO point outside the
+> worktree** → `git worktree remove` → `rmdir /S /Q` (deletes junctions; does NOT follow them) →
+> verify the main repo AND any sibling worktree are intact. Expect to reclaim little disk: pnpm
+> hardlinks to a global store, so most content is shared.
 
 ### ⛔ The rule that decides whether this helps or hurts
 

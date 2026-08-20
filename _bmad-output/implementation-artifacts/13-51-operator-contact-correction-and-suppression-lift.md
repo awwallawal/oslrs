@@ -954,7 +954,21 @@ without all three is a hypothesis, and a hypothesis does not hold a story open o
 
 ## Closing verdict
 
-**Deploy SHA: ⏳ PENDING** — nothing committed, nothing deployed.
+**Deploy SHA: `d496abf` — DEPLOYED 2026-08-20.** CI run 32407120520, all 10 jobs green, health 200.
+**Status stays `review`:** R1 and R2 are operator actions and remain open. §2a0 reserves `done` for a
+real deploy SHA **with every residual resolved** — the SHA is now real, the residuals are not.
+
+### ✅ Verified on prod after deploy, by BEHAVIOUR not by SHA
+
+| check | result |
+|---|---|
+| **SEQUENCING gate — did severity actually ship?** | `email_suppressions.severity` (text, nullable) and `bounce_count` (integer, NOT NULL) both present. **All 12 rows carry `severity = NULL` = "never measured", which reads as SOFT** — the fail-safe direction, exactly as R6 records. |
+| **➜ therefore `--normalise-keys` is now SAFE to run** | Normalising a key is what makes the wrapped row *function*; it can no longer create a permanent exclusion, because the severity logic that governs it exists on prod. **This was the story's own hold condition and it is now met.** |
+| **The canonical resolver, on the DEPLOYED build** | `resolveRespondentContactEmail(...)` → `{"email":"sotundeayobami@gmail.com","source":"magic_link_token"}`. A function that had **never succeeded once since `9d33b94`** now runs in production. `listRespondentsWithoutEmail()` → 12 rows (the phone-only cohort). |
+
+⚠️ **Still NOT done, and deliberately so.** R1 (both backfills unrun) and R2 (the `_ops-*` entry
+points never executed end-to-end) are Awwal's. The order is fixed: **R2 dry-runs against `app_test`
+first** — `apps/api/scripts/` is outside tsconfig, so running them IS the proof — **then R1 on prod.**
 
 **Hold condition:** this story stays at `review` until **R1, R2 and R3** are discharged. R1 and R2
 are operator actions that cannot run from an uncommitted tree; R3 is a deliberate call about who
