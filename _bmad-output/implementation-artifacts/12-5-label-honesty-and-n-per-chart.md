@@ -1,8 +1,14 @@
 # Story 12.5: Label honesty + N-per-chart
 
-Status: review
+Status: done
 
-> ⚖️ **`done` → `review` AT ADJUDICATION 2026-08-20.** The code is accepted; the STATUS was wrong.
+> ✅ **CLOSED ON PROD 2026-08-20 — deploy SHA `836d1c7`.** The dashboard now divides
+> `businessOwnershipRate` by the people who ANSWERED the question: **31.8% → 45.5% at n=198**,
+> verified by executing `getHousehold()` on the VPS through the deployed build. R1 discharged, R2
+> ACCEPTED and handed to 12-6, R3/R4 closed at adjudication. §2a0 satisfied: a real deploy SHA and
+> no OPEN or DISCHARGE-ON-DEPLOY row.
+>
+> ⚖️ **STATUS HISTORY — `done` → `review` (adjudication) → `done` (deploy).** The code is accepted; the STATUS was wrong.
 > The story carried an explicit `⛔ PRE-DEPLOY RESIDUAL` in its own body with **no `## Residuals`
 > ledger and no `## Closing verdict`**, and §2a0 does not permit `done` while an item is unresolved.
 > This is the **second** consecutive story to arrive this way (12-4, 2026-08-18), which makes it the
@@ -231,7 +237,25 @@ withAnswers≈271**, so the dashboard's ~32% should land near the public page's
 > | dashboard **after** (`has_business_n`) | 286 | **199** | **45.7%** |
 > | public page (already shipped) | 272 | 191 | 45.5% |
 >
-> ➜ **Expect 45.7%, not 45.5%.** A ~0.2pp gap from the public page is the CORRECT outcome. The gap
+> ⛔ **CORRECTED AGAIN 2026-08-20, AFTER DEPLOY — THIS PREDICTION WAS WRONG, AND THE DEPLOYED CODE
+> WAS RIGHT.** `getHousehold()` executed on prod through the deployed build returns **45.5% at
+> n=198**, not the 45.7% / n=199 predicted here. The cause is mine: `buildWhereFragments` carries
+> **TWO** conditions — `s.raw_data IS NOT NULL` **and `s.respondent_id IS NOT NULL`** — and the
+> prediction query reproduced only the first. Prod holds **2 orphan submissions** (13-57's known
+> pair); one of them answered `has_business = 'yes'`, so including it inflated both numerator and
+> denominator by exactly one row. Excluding it gives 90/198 = **45.5%**, which is what shipped.
+>
+> **§2z(d) a second time in one day: naming the right TABLE is not reproducing the whole PREDICATE.**
+> The prediction discipline still did its job — it is precisely because a prediction can be wrong
+> that this was caught at all, and what it caught was the adjudicator's query, not the code.
+>
+> ⚠️ **And the two surfaces DO both read 45.5 today — by ROUNDING COINCIDENCE, not by agreement.**
+> Public page: 87/191 = 45.55. Dashboard: 90/198 = 45.45. Different populations, different true
+> values, same rounded figure. The structural point below stands — they are different grains and
+> will diverge again the moment either population shifts — so **do not read today's match as proof
+> that they are the same number.**
+>
+> ~~➜ **Expect 45.7%, not 45.5%.**~~ A ~0.2pp gap from the public page is the CORRECT outcome. The gap
 > exists because ~14 people carry more than one answer-bearing submission, so the dashboard counts
 > them twice relative to the respondent-anchored page — pre-existing, out of 12-5's scope, and the
 > structural reason the two can never be identical.
@@ -502,14 +526,14 @@ Per the §2a0 three states. **`done` is not permitted while any row is OPEN or D
 
 | # | Sev | Item | State | Re-runnable evidence | Owner | Reopen trigger |
 |---|---|---|---|---|---|---|
-| **R1** | **High** | **The corrected dashboard rate is not on prod.** R-E's defect is still live on the internal dashboard: `businessOwnershipRate` divides by everyone with ANY answers, so a respondent never *asked* about business ownership sits in the divisor and *not asked* silently reads as *does not own a business*. | **DISCHARGE-ON-DEPLOY** | **Predicted read-only on prod 2026-08-20, control first:** the old formula reproduces the live **31.8%** exactly, which is what makes the new figure trustworthy; the new formula gives **45.7% at n=199**. **Discharge by:** deploy, then confirm the dashboard publishes **45.7%**, not merely that it moved. ⚠️ **Do NOT expect it to equal the public page's 45.5%** — different table, different grain (see the corrected callout above). | adjudication | The dashboard reading 31.8% an hour after deploy, or landing on a value that is neither 45.7% nor explicable by new registrations. |
+| **R1** | **High** | **The corrected dashboard rate is not on prod.** R-E's defect is still live on the internal dashboard: `businessOwnershipRate` divides by everyone with ANY answers, so a respondent never *asked* about business ownership sits in the divisor and *not asked* silently reads as *does not own a business*. | ✅ **DISCHARGED ON PROD 2026-08-20, deploy `836d1c7`** — verified by EXECUTING `getHousehold()` on the VPS through the deployed build, not by re-deriving the number in SQL. It returns **`businessOwnershipRate = 45.5`, `denominators.businessOwnership = 198`**, up from the live 31.8%. The coarse denominator is gone from the dashboard. ⚠️ **The predicted figure (45.7 / n=199) was WRONG and the code was right** — see the corrected callout above; the prediction query omitted `s.respondent_id IS NOT NULL` and so counted one orphan submission. | **Predicted read-only on prod 2026-08-20, control first:** the old formula reproduces the live **31.8%** exactly, which is what makes the new figure trustworthy; the new formula gives **45.7% at n=199**. **Discharge by:** deploy, then confirm the dashboard publishes **45.7%**, not merely that it moved. ⚠️ **Do NOT expect it to equal the public page's 45.5%** — different table, different grain (see the corrected callout above). | adjudication | The dashboard reading 31.8% an hour after deploy, or landing on a value that is neither 45.7% nor explicable by new registrations. |
 | **R2** | Med | **The dashboard double-counts multi-submission respondents.** 286 answer-bearing submissions against 272 answer-bearing respondents — ~14 people carry more than one, so every submissions-anchored dashboard rate weights them twice. | **ACCEPTED** | Measured 2026-08-20: `submissions` with answers = **286**; `registry_unified` with answers = **272**. Pre-existing, not introduced here, and out of 12-5's scope — 12-5 fixes the *divisor*, not the *grain*. | 12-6, or a follow-up that re-points `survey-analytics.service` onto `registryUnifiedSource` | Anyone citing the dashboard and the public page as though they were the same population. |
 | **R3** | Low | The story's own success criterion said the two surfaces must agree, and that a gap means "not finished". | ✅ **CLOSED at adjudication 2026-08-20** | Corrected in place with the measurement attached, rather than deleted, so a reader can see the severity moved. §2z(d). | adjudication | — |
 | **R4** | Low | `Status: done` was set while a pre-deploy residual was live and no ledger existed. | ✅ **CLOSED at adjudication 2026-08-20** | Status moved to `review` on the story and the board; this ledger written. **The CI guard did not catch it** — `lint-story-residuals` scanned table rows only, and this story had no table. Guard fixed in the same change, with this story as its regression test. | adjudication | — |
 
 ## Closing verdict
 
-**NOT CLOSED — `review`, closing on deploy. Deploy SHA: ⏳ PENDING.**
+**✅ CLOSED. Deploy SHA: `836d1c7`.** CI run 32385487114, all 10 jobs green, prod health 200.
 **Until that line carries a real SHA and R1 is discharged, `Status:` must not read `done`.**
 
 | Gate | Evidence — run by adjudication, not accepted from the dev |
