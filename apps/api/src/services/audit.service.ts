@@ -267,12 +267,35 @@ export const AUDIT_TARGETS = {
    * MFA/auth/staff audit values is a different blast radius and a different
    * story.
    *
-   * Because of that, the prod row migration is scoped to the two ACTIONS this
-   * story owns (`email.suppression_lifted`, `user.email_corrected`) rather than
-   * to every row spelled 'users' — migrating the rest while 26 sites still
-   * write the plural would manufacture a THIRD state instead of removing the
-   * second. `targetResource` is NOT in the hash payload, so that migration
-   * cannot invalidate the chain (verified against `computeHash` above).
+   * ⛔ THE PROD ROW MIGRATION WAS ATTEMPTED AND IS IMPOSSIBLE BY DESIGN — and
+   * that is the guarantee working, not an obstacle. `audit_logs` is append-only:
+   * `trg_audit_logs_immutable` blocks UPDATE **and** DELETE. Proven by execution
+   * on prod 2026-08-22, not predicted — `_ops-migrate-audit-target-users-to-user.ts
+   * --apply` failed with `P0001` raised from `audit_logs_immutable()` line 3 and
+   * the transaction rolled back, leaving all 4 rows untouched at 'users'.
+   *
+   * ⚠️ THE SCRIPT'S DRY-RUN COULD NEVER HAVE CAUGHT THAT. It printed a confident
+   * "PREDICTION: 4 row(s) will change" because it read the input and never
+   * attempted the write. A preview that does not exercise the operation is a
+   * restatement of the input, not a preview.
+   *
+   * ➜ RETIRED ON AWWAL'S RULING 2026-08-22; the script is deleted. And the
+   * project had already decided this: the audit-target convention says migration
+   * is a bare constant swap at each SITE with **no data backfill**, and that any
+   * plural-outlier site with live rows carries an inline cutover comment instead
+   * — so a future NDPA forensic auditor can resolve "why does the audit chain
+   * carry both spellings?" without spelunking git history. This block is that
+   * comment.
+   *
+   * SO THE HISTORICAL RECORD STANDS, DELIBERATELY: 4 rows
+   * (`email.suppression_lifted` x3, `user.email_corrected` x1) are spelled
+   * 'users' because that is what the code wrote when it wrote them. Rewriting
+   * them to look tidy is exactly what immutability exists to prevent. The drift
+   * belongs to the WRITERS (26 live sites, stated residual above) and to any
+   * READER grouping on `targetResource`, which should normalise on read.
+   *
+   * (`targetResource` is NOT in the hash payload, so none of this could have
+   * invalidated the chain either way — verified against `computeHash` above.)
    */
   USER: 'user',
 } as const;
