@@ -653,6 +653,37 @@ observed `route-resolution '/login'` failure — twice as a timeout, once as an 
 the only failure is `31737577114` (`test-api`, a real defect). **`test-web` has never failed.** A test
 that fails only on one Windows laptop and never on a dedicated runner is not a flaky test.
 
+#### 2aa.2 ⭐ THE VARIABLE IS FREE RAM, NOT PROCESS COUNT — and the hog was a BROWSER
+*Added 2026-08-22. Awwal had found this in an earlier session; it was never written down, so it cost
+a second round of pushes. **An undiagnosed cause gets re-diagnosed; an undocumented one gets
+re-discovered.***
+
+| | free RAM |
+|---|---|
+| at rest (2026-08-14 baseline) | 3.7 GB |
+| during ONE single-file vitest run (2026-08-14) | **0.95 GB** |
+| **during the FULL suite, Firefox CLOSED (2026-08-22)** | **4.53 GB** |
+
+**Running the entire suite with the browser closed leaves MORE headroom than the old baseline had
+while idle.** Top consumers during that run: `vmmemWSL` 483 MB, Memory Compression 440 MB, four
+`claude` processes ≈370–430 MB. **No node process was in the top six.** The 2026-08-14 note already
+said *"node is not the hog"* — correct, and nobody asked what was.
+
+- ⭐ **So "one vitest at a time" was treating a symptom.** The real predicate is **free RAM**, and a
+  browser with many tabs costs more than a second vitest ever did. **Check the number, not the
+  process list:** `(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB` — want **>3 GB**
+  before starting a full suite.
+- ⚠️ **`turbo run test` runs `api:test` and `web:test` CONCURRENTLY**, so the pre-push gate is
+  *inherently* two vitest processes. That is structural, not a mistake — which is why headroom, not
+  process count, is the thing to control. If the flake persists with RAM free, the real lever is
+  `--concurrency=1` on the pre-push turbo call, **not** a fourth timeout raise.
+- **The tell that separates the two failure modes:** a contended web run **COLLECTS FEWER FILES**
+  (271 vs 273 — worker forks die with *"Timeout waiting for worker to respond"*). **Compare the FILE
+  COUNT, not just the pass count.** A run that collects 273 and fails one test is a different
+  animal from one that collects 271.
+- **Still true and unchanged:** when a test fails only locally, `gh run list` the CI history BEFORE
+  touching the test. `test-web` has never failed in CI.
+
 **Measured on this machine (2026-08-14):**
 
 | | |

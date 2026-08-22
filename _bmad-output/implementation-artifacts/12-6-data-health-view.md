@@ -1,6 +1,17 @@
 # Story 12.6: Data Health view
 
-Status: review
+Status: done
+
+> ✅ **CLOSED ON PROD 2026-08-22 — deploy SHA `9039ab3`.** CI 32568214669, all 10 jobs green, health
+> 200. **R1 discharged against the prediction table, by EXECUTING the deployed code** on the VPS, not
+> by re-deriving the number: `getHousehold()` returns `businessOwnershipRate = 45.5` with
+> `denominators.businessOwnership = 191` — the population moved **198 → 191 exactly as predicted**
+> and the rate **held at 45.5**, which is the fix landing rather than failing to land.
+>
+> ⭐ **AND THE TWO SURFACES HAVE CONVERGED.** Dashboard **45.5 @ n=191**; public page **45.5 @
+> n=191** — the SAME population, verified through the public API. 12-5's ledger recorded that these
+> were different grains and would diverge permanently; **fixing the grain is what ended it.** They now
+> agree because they read the same thing, not because they round to the same figure.
 
 > 🔗 **Consumes the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (anchored 2026-07-01; **12-4** is the derivation MODEL). This story RENDERS the honest breakdowns from the 12-4 model: **by-completeness** (139 → 76 `full` / 63 `partial`) + **by-verification** + **by-source**, and the **"+N in progress (drafts)"** funnel line. _Amendment only — ACs unchanged._
 
@@ -194,7 +205,7 @@ Awwal's instruction. Every code fix is RED-verified by mutation (each reds exact
 
 | # | item | state |
 |---|---|---|
-| **R1** | The grain re-point moves published dashboard figures. Discharge by PREDICTION, not by movement. | ✅ **PREDICTED 2026-08-21 against prod, read-only. Control reproduces the CURRENT live figures EXACTLY.** Table below. Closes on deploy by comparing. |
+| **R1** | The grain re-point moves published dashboard figures. Discharge by PREDICTION, not by movement. | ✅ **DISCHARGED ON PROD 2026-08-22, deploy `9039ab3`.** Predicted 2026-08-21 read-only with a control that reproduced the CURRENT live figures exactly; verified after deploy by **EXECUTING `getHousehold()` on the VPS through the deployed build** — `businessOwnership` n **198 → 191 exactly as predicted**, rate **held at 45.5**. ⭐ The dashboard and the public page now both read **45.5 @ n=191, the SAME population** — confirmed through the public API. |
 | **R2** | 12-4 R4 — `registry_unified` is dropped by `db:push` each deploy, harmless only while nothing runtime reads the physical VIEW. | ✅ **STILL HARMLESS.** Everything this story added composes the INLINE canonical source (`registryUnifiedSource`); verified by grep — no runtime reference to `REGISTRY_UNIFIED_VIEW_NAME` / `getRegistryUnifiedViewRows` outside tests and the view-init runner. |
 | **R3** | Four rate-bearing aggregates left on the submission grain at first dev pass. | ✅ **CLOSED — all four re-pointed** on Awwal's "resolve everything" instruction (2026-08-21). `FROM submissions s` 46 → 6, every survivor attributed below. |
 | **R4** | ⛔ **Cached analytics payloads outlive the deploy that corrects them** — found by the adversarial code review (H1), not by the dev pass. | ✅ **CLOSED IN CODE.** All seven analytics caches now compose `ANALYTICS_CACHE_VERSION` (`v2`) from `analytics-cache-keys.ts`, so the deploy retires every stale entry instead of serving pre-fix figures for up to an hour. ⚠️ **This one is load-bearing for R1**: unversioned, the discharge-on-deploy comparison would have read PRE-deploy numbers out of Redis and could have been recorded as "the fix did not land". Guarded by a test that reds on any unversioned `analytics:` literal. |
