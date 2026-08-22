@@ -17,7 +17,7 @@ import { getRoleDisplayName } from '@oslsr/types';
 import { getStaffActivationCopy } from './staff-activation-copy.js'; // Story 13-59
 import { getEmailProvider, getEmailConfigFromEnv } from '../providers/index.js';
 import { NotificationMeter } from './notification-meter.service.js';
-import type { NotificationCategory } from './notification-category.js';
+import { classifyEmailSubject, type NotificationCategory } from './notification-category.js';
 import { buildListUnsubscribeHeaders, isMarketingCategory } from './list-unsubscribe.js';
 import { recordCampaignSend } from './campaign-contact.service.js'; // Story 13-24 (AC3a)
 
@@ -110,11 +110,33 @@ export class EmailService {
      */
     campaignId?: string,
   ): Promise<EmailResult> {
+    /**
+     * Story 13-46 (review A4 / finding H4) — RESOLVE THE CATEGORY ONCE, HERE, FOR EVERYTHING BELOW.
+     *
+     * ⚠️ THE BUG THIS CLOSES: the cap gated on the caller-DECLARED `category`, while
+     * `recordEmailSend` fell back to `classifyEmailSubject(subject)` when the caller declared none.
+     * So a send with no declared category could be COUNTED into the marketing bucket and never
+     * CAPPED — "counted but not capped". Two consequences, both bad in the same direction:
+     * transactional traffic could exhaust the marketing ceiling and cause real thank-yous to be
+     * refused, and the `marketingHeadroom` the AC3 burst alert publishes would be wrong.
+     *
+     * Proven live by the reviewer against the real classifier: the supplemental-survey subject at
+     * `magic-link.service.ts:420` classifies as `supplemental-survey` (marketing) and is sent at
+     * `:377` with NO category. Dormant only because nothing calls it with that purpose today — one
+     * caller away, and nothing guarded it.
+     *
+     * ⚠️ THIS DELIBERATELY WIDENS 13-13 AND 13-24 TOO, and that is stated rather than slid in: an
+     * uncategorised send whose SUBJECT classifies as marketing now also gets the List-Unsubscribe
+     * header and a `campaign_sends` ledger row. That is the correct reading of both stories — the
+     * category is a property of the mail, not of how carefully the caller filled in an argument.
+     */
+    const resolvedCategory = category ?? classifyEmailSubject(data.subject);
+
     // Story 13-13 (AC3/AC4) — attach List-Unsubscribe headers for MARKETING categories only. The
     // category lives here (not in the provider), so this is the single decision point; the provider
     // stays a thin transport that forwards whatever headers it's handed. Returns undefined (→ no
     // headers) for transactional / ops mail.
-    const headers = buildListUnsubscribeHeaders(category, data.to);
+    const headers = buildListUnsubscribeHeaders(resolvedCategory, data.to);
 
     /**
      * ATTRIBUTION TAG — default to the category so NO send is untagged (2026-08-04).
@@ -137,14 +159,46 @@ export class EmailService {
      * `^[A-Za-z0-9_-]+$` tag rule (`resend.provider.ts:21`), so the default can never be
      * silently dropped as an invalid tag. An explicit campaignId still wins.
      */
-    const attributionTag = campaignId ?? category;
+    const attributionTag = campaignId ?? resolvedCategory;
+
+    /**
+     * Story 13-46 (AC1) — THE MARKETING SEND CAP, CONSULTED BEFORE THE PROVIDER CALL.
+     *
+     * ⚠️ POSITION IS THE WHOLE REQUIREMENT. `NotificationMeter.recordEmailSend(...)` below runs
+     * AFTER `getProvider().send(...)` and its return value is discarded — by the time the meter
+     * knows about a send, the send has left the building ("Counted, not blocked: the send already
+     * happened", notification-meter.service.ts). A cap is therefore a NEW PRE-SEND CHECK, not a
+     * new constant, and moving this call below the provider silently disarms it.
+     *
+     * CATEGORY-AWARE BY CONSTRUCTION: `checkCap` returns allowed for everything outside
+     * MARKETING_CATEGORIES, so a magic link, a password reset and a critical alert keep today's
+     * fail-open behaviour exactly. That is not an oversight to tidy up later — fail-open is the
+     * CORRECT default for transactional mail, and a global cap would be a regression.
+     *
+     * Fail-open on infrastructure, fail-closed on the limit (see `checkCap`).
+     */
+    const capDecision = await NotificationMeter.checkCap(resolvedCategory);
+    if (!capDecision.allowed) {
+      await NotificationMeter.reportCapRefusal(capDecision, data.to);
+      // A STRUCTURED failure, not a swallowed no-op: the caller learns the send did not happen.
+      return {
+        success: false,
+        // A2/H2 — a typed marker, not a parseable message: a refusal is a DECISION, not a fault.
+        refusedByCap: true,
+        error: `Marketing send cap reached (${capDecision.reason}: ${capDecision.count}/${capDecision.cap} in the ${capDecision.window} window)`,
+      };
+    }
+
     const result = await this.getProvider().send({ ...data, campaignId: attributionTag, headers });
     if (result.success) {
       // Count only real sends; bounce/complaint reconciliation is a later task.
+      // A4/H4 — pass the RESOLVED category so the thing that gates and the thing that counts can
+      // never disagree again. (`recordEmailSend` would classify identically; passing it explicitly
+      // is what makes the invariant local and testable rather than coincidental.)
       await NotificationMeter.recordEmailSend({
         subject: data.subject,
         recipient: data.to,
-        category,
+        category: resolvedCategory,
       });
 
       // Story 13-24 (AC3a) — record the marketing contact HERE, at the one chokepoint, rather than
@@ -156,11 +210,11 @@ export class EmailService {
       // MARKETING categories only, reusing the 13-13 set: you don't "already contacted" someone out
       // of a password reset or a magic link. Fail-soft inside recordCampaignSend — instrumentation
       // must never change send behaviour or the returned EmailResult.
-      if (isMarketingCategory(category)) {
+      if (isMarketingCategory(resolvedCategory)) {
         await recordCampaignSend({
           email: data.to,
           campaignId: campaignId ?? null,
-          category: category ?? null,
+          category: resolvedCategory ?? null,
           channel: 'email',
           messageId: result.messageId ?? null,
         });

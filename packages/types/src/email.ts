@@ -11,6 +11,21 @@ export interface EmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  /**
+   * Story 13-46 (review A2 / finding H2) — TRUE when the send was DELIBERATELY REFUSED by the
+   * marketing send cap, rather than having failed.
+   *
+   * ⚠️ WHY A TYPED FLAG AND NOT A STRING MATCH ON `error`: callers must branch on this, and a
+   * caller that greps the message would silently stop branching the day the copy is reworded.
+   * The 13-21 auto-send monitor treats ANY falsy `success` as a failure and pages
+   * "Registration auto-emails are FAILING… the loop may be down" at its 5th occurrence — so
+   * without this flag a WORKING cap produces a wrong-diagnosis page, routes around the cap's own
+   * one-page-per-window cooldown, and pollutes 13-21's failure metric with successes.
+   *
+   * A refusal is NOT a failure: nothing is broken, no retry will help, and the operator has
+   * already been told by `notification.cap_exceeded`.
+   */
+  refusedByCap?: boolean;
 }
 
 /**

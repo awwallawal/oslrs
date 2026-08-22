@@ -104,15 +104,32 @@ export async function getRecentlyContactedEmails(
   emails: string[],
   gapDays?: number,
   now: Date = new Date(),
+  /**
+   * Story 13-46 (review A3 / finding H3) — OPTIONAL narrowing to specific categories.
+   *
+   * Omitted (the default, and what all four blast/backfill scripts use) = ANY marketing contact,
+   * i.e. 13-24's original cross-campaign semantics, unchanged.
+   *
+   * Supplied = "was this address contacted by THESE campaigns". The registration auto thank-you
+   * passes its own category, because the broad read was suppressing a genuine thank-you for anyone
+   * a *different* campaign had touched inside the window — permanently, since nothing re-drives it.
+   * Cross-campaign suppression is right for a blast (two campaigns in a week is double-contact);
+   * it is wrong for a receipt the person's own action just triggered.
+   */
+  options: { categories?: string[] } = {},
 ): Promise<Set<string>> {
   if (emails.length === 0) return new Set();
   const cutoff = gapCutoff(resolveGapDays(gapDays), now);
   const lowered = [...new Set(emails.map(toCanonicalEmail))].filter(Boolean);
   if (lowered.length === 0) return new Set();
+  const predicates = [inArray(campaignSends.email, lowered), gte(campaignSends.sentAt, cutoff)];
+  if (options.categories?.length) {
+    predicates.push(inArray(campaignSends.category, options.categories));
+  }
   const rows = await db
     .select({ email: campaignSends.email })
     .from(campaignSends)
-    .where(and(inArray(campaignSends.email, lowered), gte(campaignSends.sentAt, cutoff)));
+    .where(and(...predicates));
   return new Set(rows.map((r) => r.email));
 }
 

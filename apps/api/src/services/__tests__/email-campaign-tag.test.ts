@@ -4,7 +4,17 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // → dispatch → provider.send. We assert it lands on the provider payload using the mock
 // provider singleton. NotificationMeter is stubbed so the test has no DB/redis side-effects.
 vi.mock('../notification-meter.service.js', () => ({
-  NotificationMeter: { recordEmailSend: vi.fn().mockResolvedValue(undefined) },
+  NotificationMeter: {
+    recordEmailSend: vi.fn().mockResolvedValue(undefined),
+    // Story 13-46 (AC1) — dispatch() now consults a pre-send cap. Stubbed ALLOW: this file is not
+    // about the cap (see notification-cap.test.ts / email-send-cap.test.ts), but a partial mock
+    // missing a new export fails at the call site, not at import.
+    // ⚠️ PLAIN async fn, NOT vi.fn().mockResolvedValue(...): vitest.base.ts sets `mockReset: true`,
+    // which strips an implementation set inside a vi.mock factory before every test — the stub would
+    // then return undefined and dispatch would throw on `.allowed`. A plain function cannot be reset.
+    checkCap: async () => ({ allowed: true, reason: 'not-marketing' }),
+    reportCapRefusal: async () => undefined,
+  },
 }));
 // Story 13-24 — dispatch() now also writes the marketing contact ledger. Stubbed here for the same
 // reason the meter is: this test is about tag threading and should stay side-effect-free. The
@@ -61,10 +71,28 @@ describe('EmailService.sendGenericEmail campaign tag threading (Story 13-9 AC5)'
     expect(getMockEmailProvider().getLastEmail()?.campaignId).toBe('draft-adoption-2026-08');
   });
 
-  it('stays undefined when there is no category either — nothing to attribute to', async () => {
-    await EmailService.sendGenericEmail(payload);
+  it('falls back to the CLASSIFIED category when the caller declared none — nothing goes untagged', async () => {
+    /**
+     * ⚠️ CHANGED BY Story 13-46 (review A4 / finding H4). This used to assert `undefined`.
+     *
+     * `dispatch` now resolves the category ONCE at the top — `category ?? classifyEmailSubject(subject)`
+     * — because the cap gated on the DECLARED category while the meter counted the CLASSIFIED one, so
+     * an uncategorised send could be counted into the marketing bucket and never capped.
+     *
+     * The knock-on here is an improvement on its own terms: this block's own docblock says the tag
+     * defaults to the category "so NO send is untagged", and the 2026-08-04 incident it cites was
+     * seven citizen emails that bounced untraceably because they carried no tag. An unmatched
+     * subject now tags `other` — still a legal Resend tag — instead of nothing at all.
+     */
+    const result = await EmailService.sendGenericEmail({
+      to: 'nobody@example.test',
+      subject: 'Some entirely unrecognised subject line',
+      html: '<p>hi</p>',
+      text: 'hi',
+    });
 
-    expect(getMockEmailProvider().getLastEmail()?.campaignId).toBeUndefined();
+    expect(result.success).toBe(true);
+    expect(getMockEmailProvider().getLastEmail()?.campaignId).toBe('other');
   });
 
   /**

@@ -52,6 +52,8 @@ function renderPage() {
 const fullData: PublicInsightsData = {
   totalRegistered: 5000,
   withAnswers: 4200,
+  // Story 13-46 (AC5) — the Axis-3 split is REQUIRED on the payload.
+  byVerification: { nin_on_file: 40, self_declared: 50, pending_nin: 8, unverified_import: 2 },
   lgasCovered: 33,
   // Story 12-4 / R-E: each rate carries the n it was computed from, and they
   // legitimately differ from each other and from withAnswers.

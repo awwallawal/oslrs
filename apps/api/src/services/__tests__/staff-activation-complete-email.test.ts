@@ -18,7 +18,17 @@ const { recordEmailSend } = vi.hoisted(() => ({
   recordEmailSend: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../notification-meter.service.js', () => ({
-  NotificationMeter: { recordEmailSend },
+  NotificationMeter: {
+    recordEmailSend,
+    // Story 13-46 (AC1) — dispatch() now consults a pre-send cap. Stubbed ALLOW: this file is not
+    // about the cap (see notification-cap.test.ts / email-send-cap.test.ts), but a partial mock
+    // missing a new export fails at the call site, not at import.
+    // ⚠️ PLAIN async fn, NOT vi.fn().mockResolvedValue(...): vitest.base.ts sets `mockReset: true`,
+    // which strips an implementation set inside a vi.mock factory before every test — the stub would
+    // then return undefined and dispatch would throw on `.allowed`. A plain function cannot be reset.
+    checkCap: async () => ({ allowed: true, reason: 'not-marketing' }),
+    reportCapRefusal: async () => undefined,
+  },
 }));
 vi.mock('../campaign-contact.service.js', () => ({
   recordCampaignSend: vi.fn().mockResolvedValue(undefined),

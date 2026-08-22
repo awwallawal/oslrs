@@ -79,11 +79,41 @@ export default function PublicInsightsPage() {
             Oyo State Labour Force at a Glance
           </h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/*
+              Story 13-46 (AC5) — REGISTERED vs the TRUST TIERS, so the headline survives inflation.
+              Until now this was a single unqualified count with no verification filter anywhere
+              behind it, on an UNAUTHENTICATED endpoint, fed by a public write path: one bot row was
+              a government-facing number within one cache TTL. A registration burst now moves
+              "Total Registered" and leaves "NIN on file" untouched — which is the truth, and is
+              honest-display RULE 5 (verified and pending are never blended in a registry-size
+              claim).
+
+              ⚠️ THE LABEL IS "NIN on file", NEVER "Verified" (12-4 AC9 / ruling R1). A NIN is
+              CAPTURED, never validated — there is no NIMC check available and NINs carry no check
+              digit, so calling it "verified" would be a claim the system cannot support. The
+              taxonomy has no `verified` tier for exactly this reason; do not add one to the copy.
+
+              Read defensively (`?.` + `?? 0`): a payload cached before this deploy has no
+              `byVerification` at all, and an `undefined.nin_on_file` on the public page is the
+              failure the CACHE_KEY bump exists to avoid — belt as well as braces.
+
+              ⚠️ ALL FOUR TIERS ARE RENDERED (review A10 / finding M3). The first cut showed only
+              `nin_on_file` while the shared type made all four REQUIRED — i.e. three computed,
+              required, shipped fields that no component read. That is three-quarters of the exact
+              12-5 defect this story's notes claimed to have avoided, and because no test asserted
+              the subtitle, deleting the one rendered tier would have left the web suite green.
+            */}
             <StatCard
               icon={Users}
               label="Total Registered"
               value={data.totalRegistered}
-              subtitle={`${(data.withAnswers ?? 0).toLocaleString()} with complete survey responses`}
+              subtitle={[
+                `${(data.byVerification?.nin_on_file ?? 0).toLocaleString()} with NIN on file`,
+                `${(data.byVerification?.self_declared ?? 0).toLocaleString()} self-declared`,
+                `${(data.byVerification?.pending_nin ?? 0).toLocaleString()} awaiting NIN`,
+                `${(data.byVerification?.unverified_import ?? 0).toLocaleString()} imported, unverified`,
+                `${(data.withAnswers ?? 0).toLocaleString()} with complete survey responses`,
+              ].join(' · ')}
             />
             <StatCard
               icon={MapPin}

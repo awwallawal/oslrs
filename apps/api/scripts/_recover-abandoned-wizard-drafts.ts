@@ -48,6 +48,9 @@ import { db } from '../src/db/index.js';
 import { wizardDrafts } from '../src/db/schema/index.js';
 import { MagicLinkService } from '../src/services/magic-link.service.js';
 import { EmailService } from '../src/services/email.service.js';
+// Story 13-46 (review A6) — the SHARED marketing cohort guard: suppression + the
+// recent-contact gap inherited from one place, never re-implemented per script (13-24 AC3b).
+import { filterMarketingCohort } from '../src/services/campaign-contact.service.js';
 import { AuditService, AUDIT_ACTIONS } from '../src/services/audit.service.js';
 
 const logger = pino({ name: 'recover-abandoned-wizard-drafts' });
@@ -303,13 +306,43 @@ async function main() {
     process.exit(1);
   }
 
-  const cohort = await selectCohort(args);
+  const rawCohort = await selectCohort(args);
+
+  /**
+   * Story 13-46 (review A6 / finding M1) — INHERIT THE SHARED MARKETING COHORT FILTER.
+   *
+   * ⚠️ THIS CHANGES WHO THIS SCRIPT MAILS, deliberately. Declaring the category above made this a
+   * MARKETING sender — which is what it always was in substance — and 13-24's invariant is that
+   * every marketing cohort routes through `filterMarketingCohort` so suppression and the
+   * recent-contact gap are inherited together and cannot be half-adopted. The existing guard
+   * `scripts/__tests__/blast-dedupe-inheritance.test.ts` caught this within one run of declaring
+   * the category, which is exactly what it exists for.
+   *
+   * Practical effect: addresses that are suppressed (bounced / complained / unsubscribed) or that
+   * this programme already contacted inside the gap are now skipped. Both counts are logged and
+   * printed, because a cohort that silently shrinks is worse than one that shrinks loudly — the
+   * operator needs to see WHY, not just a smaller number.
+   */
+  const filtered = await filterMarketingCohort(rawCohort, (r) => r.email);
+  const cohort = filtered.cohort;
   logger.info({
     event: 'recover_drafts.cohort_selected',
     count: cohort.length,
+    rawCount: rawCohort.length,
+    suppressedSkipped: filtered.suppressedSkipped,
+    recentlyContactedSkipped: filtered.recentlyContactedSkipped,
+    duplicatesSkipped: filtered.duplicatesSkipped,
+    gapDays: filtered.gapDays,
     dryRun: args.dryRun,
     since: args.since?.toISOString() ?? null,
   });
+  if (rawCohort.length !== cohort.length) {
+    console.log(
+      `Cohort filtered ${rawCohort.length} → ${cohort.length} ` +
+        `(suppressed ${filtered.suppressedSkipped}, contacted within ${filtered.gapDays}d ` +
+        `${filtered.recentlyContactedSkipped}, duplicate addresses ${filtered.duplicatesSkipped}).`,
+    );
+  }
 
   if (cohort.length === 0) {
     console.log('Cohort is empty — no abandoned drafts with questionnaire answers. Exiting.');
@@ -388,7 +421,15 @@ async function main() {
         subject: emailContent.subject,
         html: emailContent.html,
         text: emailContent.text,
-      });
+      },
+      // Story 13-46 (review A6 / finding M1) — DECLARE THE CATEGORY.
+      // This script mails the abandoned-draft cohort (293 live drafts). Sent with no category it
+      // classified as 'other': invisible to the marketing cap (reported as 0 used), no
+      // List-Unsubscribe header, and NO campaign_sends row — so the AC2 per-address gap could not
+      // suppress a thank-you to those addresses afterwards either. The story's whole thesis is a
+      // ceiling on outbound marketing volume; it cannot hold for one of the largest sends we make.
+      'reengagement-blast',
+    );
 
       if (result.success) {
         sent++;

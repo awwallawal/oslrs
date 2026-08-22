@@ -79,6 +79,18 @@ vi.mock('../../middleware/magic-link-rate-limit.js', () => ({
 }));
 vi.mock('../../middleware/wizard-draft-rate-limit.js', () => ({
   wizardDraftRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  // Story 13-46 (AC4) — the per-EMAIL draft limiter. Same lesson as the submit limiter below: a
+  // mock that omits an export the module now has fails at IMPORT, which is how this catches a real
+  // wiring break rather than hiding one.
+  wizardDraftEmailRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+}));
+// Story 13-46 (AC3) — the burst watch is mounted on the wizard submit. Stubbed to a pass-through:
+// this file asserts ROUTE WIRING, and the middleware's own "never blocks" property is pinned in
+// `middleware/__tests__/registration-burst.test.ts`.
+vi.mock('../../middleware/registration-burst.js', () => ({
+  registrationBurstWatch: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  recordRegistration429: vi.fn(),
+  recordRegistrationAutoSend: vi.fn(),
 }));
 vi.mock('../../middleware/registration-rate-limit.js', () => ({
   registrationRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),

@@ -38,6 +38,13 @@ import {
   isUnclassifiedSubject,
   isUndeliverableRecipient,
 } from './notification-category.js';
+// Story 13-46 (AC1) — the cap keys off the SAME marketing taxonomy the List-Unsubscribe headers
+// use (13-13). One set, one meaning: if a category is marketing enough to carry an unsubscribe
+// link, it is marketing enough to be capped.
+import { MARKETING_CATEGORIES, isMarketingCategory } from './list-unsubscribe.js';
+// A refusal PAGES. The channel self-vetoes in dev/test via `isAlertSendEnabled`, so importing it
+// here cannot make the meter page from a unit test (9-15 self-page incident).
+import { sendTelegramMessage, isAlertSendEnabled } from './alerting/telegram-channel.js';
 
 const logger = pino({ name: 'notification-meter' });
 
@@ -61,6 +68,126 @@ interface RecordArgs {
 const DAILY_TTL_SECONDS = 48 * 60 * 60;
 /** TTL (seconds) for the per-month key — 35 days covers a full month + slack. */
 const MONTHLY_TTL_SECONDS = 35 * 24 * 60 * 60;
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Story 13-46 (AC1) — MARKETING SEND CAPS. The meter now ENFORCES, not just counts.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Why these exist: every public registration fires an outbound thank-you SYNCHRONOUSLY
+ * (`submission-processing.service.ts` → `EmailService.dispatch`). A radio jingle pointed at
+ * the public wizard therefore converts a registration burst directly into a send burst, and
+ * the asset at risk is the SENDING DOMAIN — which, unlike a database row, cannot be deleted
+ * and re-earned. Rows are cheap and revocable; a burned domain takes every cohort blast,
+ * every magic link and every password reset with it.
+ *
+ * ⚠️ MARKETING ONLY. Transactional mail keeps the module's fail-OPEN contract (`:23-25`)
+ * completely unchanged — blocking a magic link on a counter is a WORSE outcome than an
+ * uncounted send. `checkCap` returns `not-marketing` for everything outside
+ * `MARKETING_CATEGORIES`, so the transactional path cannot be reached by this ceiling.
+ *
+ * ⚠️ ONE bucket for all three marketing categories, not one cap each. The domain burns from
+ * combined marketing volume; three per-category caps would let the system send 3× the ceiling.
+ */
+
+/**
+ * Daily marketing ceiling.
+ *
+ * DERIVATION — MEASURED ON PROD 2026-08-21 (AC7), not invented at the keyboard:
+ *   busiest marketing day in the register's history .... 177 sends (2026-08-04)
+ *   second busiest ..................................... 86 sends (2026-08-05)
+ *   busiest registration day ever ...................... 168 submissions (2026-08-04)
+ *   register size ...................................... 327 respondents
+ *
+ *   2,000/day = ~11× the observed peak marketing day, and enough for a FULL-register blast (327)
+ *   plus ~1,670 auto thank-yous in the same day — ~10× the busiest registration day ever.
+ *
+ * ✅ THE CAP WOULD NOT HAVE BOUND ON THE BUSIEST DAY THIS SYSTEM HAS EVER HAD (177 ≪ 2,000).
+ * That is the check that matters: a cap which would have blocked real history is a cap that will
+ * block real users.
+ *
+ * ⚠️ WHAT IS STILL UNKNOWN: the JINGLE's peak. No campaign of that shape has ever run, so the
+ * headroom multiple above is a judgement, not an extrapolation. AC7's AFTER count (first jingle
+ * window) is the input that closes this, and it cannot exist until the jingle airs.
+ *
+ * FAILS TOWARD: refusing a real thank-you to a real registrant. That direction is deliberate
+ * and is made survivable by two things — the registration itself still succeeds (the send is
+ * fail-soft downstream), and every refusal is LOUD (logged + paged), so a cap set too low is
+ * visible within minutes instead of silently costing goodwill. The opposite direction (set too
+ * high) is invisible until the domain is already burned.
+ *
+ * REOPEN TRIGGER: the register passes ~5,000 people, OR a planned blast cohort exceeds 2,000
+ * addresses, OR this cap refuses on a day with no incident. Any of those means re-derive against a
+ * fresh `campaign_sends` day-count, the same query AC7 used.
+ */
+export const MARKETING_DAILY_CAP = 2_000;
+
+/**
+ * Monthly marketing ceiling — THE ceiling that actually binds.
+ *
+ * DERIVATION: the daily cap alone does not bind under the plan quota (2,000 × 30 = 60,000 >
+ * the Resend Pro 50,000/month ceiling), so a month of sustained daily-cap traffic would exhaust
+ * the QUOTA rather than trip a control of ours. 20,000 is 40% of the plan, deliberately leaving
+ * ~30,000/month for TRANSACTIONAL mail, which this cap never touches and which must never be
+ * squeezed by marketing volume.
+ *
+ * MEASURED ON PROD 2026-08-21 (AC7): the busiest calendar month of marketing sending in the
+ * system's history is 2026-08 with **300 sends**. 20,000 is ~67× that. The remaining ~30,000 of
+ * the plan is left for TRANSACTIONAL mail, which this cap never touches; today's transactional
+ * volume is orders of magnitude below that (the register is 327 people).
+ *
+ * FAILS TOWARD: refusing marketing mail for the remainder of a calendar month once 20,000 have
+ * gone out. Loud, and recoverable by an operator raising `MARKETING_MONTHLY_CAP`. Context §6:
+ * a bigger quota makes this cap MORE important, not less — the quota was never the control.
+ */
+export const MARKETING_MONTHLY_CAP = 20_000;
+
+/** Cap resolution — env override with committed defaults. Invalid/zero/negative → the default. */
+export function resolveMarketingCaps(): { daily: number; monthly: number } {
+  return {
+    daily: positiveIntEnv('MARKETING_DAILY_CAP', MARKETING_DAILY_CAP),
+    monthly: positiveIntEnv('MARKETING_MONTHLY_CAP', MARKETING_MONTHLY_CAP),
+  };
+}
+
+/**
+ * ⚠️ NEVER falls back to 0. A zero cap would refuse EVERY marketing send while looking like a
+ * configured value — the inverse failure of `resolveGapDays` (`campaign-contact.service.ts:41`),
+ * where 0 would silently DISABLE the guard. Both round-trip to the committed default instead.
+ */
+function positiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** Why a send was allowed or refused — carried into the log line and the operator page. */
+export type CapReason =
+  | 'not-marketing'
+  | 'within-cap'
+  | 'meter-unavailable'
+  | 'daily-cap-exceeded'
+  | 'monthly-cap-exceeded';
+
+export interface CapDecision {
+  allowed: boolean;
+  reason: CapReason;
+  category?: NotificationCategory;
+  window?: 'daily' | 'monthly';
+  /** Marketing sends already counted in that window (the whole bucket, not one category). */
+  count?: number;
+  cap?: number;
+}
+
+export interface MarketingHeadroom {
+  dailyUsed: number;
+  dailyRemaining: number;
+  dailyCap: number;
+  monthlyUsed: number;
+  monthlyRemaining: number;
+  monthlyCap: number;
+}
 
 function dateKey(now: Date): string {
   return now.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -227,6 +354,209 @@ export class NotificationMeter {
       recipient: args.recipient,
       event: args.event,
     });
+  }
+
+  /**
+   * Story 13-46 (AC1) — THE PRE-SEND CHECK. Read-only and side-effect-free, so it is unit-testable
+   * and so consulting it can never itself change what is counted.
+   *
+   * Consulted by `EmailService.dispatch` **BEFORE** `getProvider().send(...)` — which is the whole
+   * point. `recordEmailSend` runs AFTER the provider returns and discards its result, so the meter
+   * as it stood could never refuse anything: by the time it counted, the send had happened
+   * ("Counted, not blocked: the send already happened", `:150-153`).
+   *
+   * Two failure directions, deliberately opposite:
+   * - **Infrastructure** (no Redis / read throws) → ALLOW. Preserves the module's fail-OPEN
+   *   contract; a Redis hiccup must never block mail.
+   * - **The limit itself** (cap evaluated and exceeded) → REFUSE. A cap that fails open on its
+   *   own limit is not a cap.
+   */
+  static async checkCap(
+    category?: NotificationCategory,
+    now: Date = new Date(),
+  ): Promise<CapDecision> {
+    // Transactional / ops / uncategorised mail never reaches the ceiling.
+    if (!isMarketingCategory(category)) return { allowed: true, reason: 'not-marketing' };
+
+    const redis = this.resolveRedis();
+    if (!redis) return { allowed: true, reason: 'meter-unavailable', category };
+
+    const caps = resolveMarketingCaps();
+    try {
+      const { dailyUsed, monthlyUsed } = await this.readMarketingUsage(redis, now);
+
+      if (dailyUsed >= caps.daily) {
+        return {
+          allowed: false,
+          reason: 'daily-cap-exceeded',
+          category,
+          window: 'daily',
+          count: dailyUsed,
+          cap: caps.daily,
+        };
+      }
+      if (monthlyUsed >= caps.monthly) {
+        return {
+          allowed: false,
+          reason: 'monthly-cap-exceeded',
+          category,
+          window: 'monthly',
+          count: monthlyUsed,
+          cap: caps.monthly,
+        };
+      }
+      return { allowed: true, reason: 'within-cap', category };
+    } catch (err) {
+      // Fail OPEN on infrastructure — same principle as `record`'s catch.
+      logger.warn({
+        event: 'notification.cap_check_failed',
+        category,
+        error: err instanceof Error ? err.message : String(err),
+        note: 'cap could not be evaluated — allowing the send (fail-open on infrastructure)',
+      });
+      return { allowed: true, reason: 'meter-unavailable', category };
+    }
+  }
+
+  /**
+   * Story 13-46 (AC1) — A REFUSAL IS LOUD.
+   *
+   * ⚠️ Silence here would reproduce [[pattern-ship-a-fix-that-never-fires]] in its worst form: a
+   * cap that refuses mail while nobody learns the mail stopped. That is exactly the failure
+   * `recordCampaignSend`'s fail-soft catch already demonstrates in this codebase
+   * (`campaign-contact.service.ts:89-96` — "dedupe for this address is degraded", logged and
+   * forgotten). A structured ERROR log plus an operator page is the minimum.
+   *
+   * COOLDOWN, per window not per send: a burst that trips the cap trips it on EVERY subsequent
+   * send. Paging per refusal would put thousands of Telegram messages behind one incident and
+   * bury the signal it exists to raise — the same per-kind discipline as `cf-traffic-watch.ts:39-49`.
+   * Fail-OPEN: a cooldown read error lets the page through (loud-on-failure).
+   */
+  static async reportCapRefusal(decision: CapDecision, recipient: string): Promise<void> {
+    logger.error({
+      event: 'notification.cap_exceeded',
+      category: decision.category,
+      window: decision.window,
+      count: decision.count,
+      cap: decision.cap,
+      reason: decision.reason,
+      recipientHash: hashRecipient(recipient),
+      note: 'MARKETING send refused at the cap — the send did NOT happen',
+    });
+
+    // AC1 — page THROUGH the existing 9-15 gate. Checked explicitly (and BEFORE the cooldown, so a
+    // suppressed dev page cannot burn the slot that a real prod page would need).
+    if (!isAlertSendEnabled()) return;
+    if (!(await this.winCapAlertCooldown(decision.reason))) return;
+
+    const cooldownMinutes = positiveIntEnv('NOTIFY_CAP_COOLDOWN_MINUTES', 360);
+    const delivered = await sendTelegramMessage(
+      `🔴 MARKETING SEND CAP REACHED\n\n` +
+        `Category: ${decision.category}\n` +
+        `Window: ${decision.window} — ${decision.count} sent, cap ${decision.cap}\n\n` +
+        `Marketing mail is now being REFUSED. Transactional mail (magic links, password resets) ` +
+        `is unaffected.\n\n` +
+        `If this is a legitimate volume day, raise MARKETING_${decision.window === 'daily' ? 'DAILY' : 'MONTHLY'}_CAP. ` +
+        `If it is not, the send path is looping — check registration volume.\n` +
+        `(Further cap pages suppressed for ${cooldownMinutes} min.)`,
+    );
+
+    /**
+     * Story 13-46 (review A7 / finding M5) — DO NOT BURN THE SLOT ON A PAGE THAT NEVER LANDED.
+     *
+     * `winCapAlertCooldown` claims the slot BEFORE the send, and `sendTelegramMessage` never
+     * throws — it returns `false` on a missing token, a non-2xx from Telegram, or a fetch failure.
+     * Discarding that boolean meant one transient failure, at the exact moment the cap first binds,
+     * cost the operator the page for the whole cooldown (default 6h) while `logger.error` kept
+     * firing per refused send. That is the "logged and forgotten" shape this method exists to
+     * prevent, reproduced inside the method itself.
+     *
+     * Releasing the key is fail-soft: if the DEL fails we are no worse off than before.
+     */
+    if (!delivered) {
+      try {
+        await this.resolveRedis()?.del(`notify:cap:cooldown:${decision.reason}`);
+        logger.warn({
+          event: 'notification.cap_page_undelivered',
+          reason: decision.reason,
+          note: 'Telegram dispatch returned false — cooldown slot released so the next refusal can retry the page',
+        });
+      } catch {
+        /* fail-soft: a stuck cooldown is bad, an exception here would be worse */
+      }
+    }
+  }
+
+  /** `SET key 1 EX <cooldown> NX` — true iff we WON the slot. Fail-OPEN → allow the page. */
+  private static async winCapAlertCooldown(kind: string): Promise<boolean> {
+    const redis = this.resolveRedis();
+    if (!redis) return true;
+    try {
+      const seconds = positiveIntEnv('NOTIFY_CAP_COOLDOWN_MINUTES', 360) * 60;
+      const res = await redis.set(`notify:cap:cooldown:${kind}`, '1', 'EX', seconds, 'NX');
+      return res === 'OK';
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Story 13-46 (AC1/AC3) — current marketing headroom. AC3's burst alert carries this so the
+   * operator sees, in the same message, both how big the burst is and how much sending budget
+   * is left to absorb it. Fail-OPEN → reports full headroom (never fabricates pressure).
+   */
+  static async marketingHeadroom(now: Date = new Date()): Promise<MarketingHeadroom> {
+    const caps = resolveMarketingCaps();
+    const redis = this.resolveRedis();
+    const empty: MarketingHeadroom = {
+      dailyUsed: 0,
+      dailyRemaining: caps.daily,
+      dailyCap: caps.daily,
+      monthlyUsed: 0,
+      monthlyRemaining: caps.monthly,
+      monthlyCap: caps.monthly,
+    };
+    if (!redis) return empty;
+
+    try {
+      const { dailyUsed, monthlyUsed } = await this.readMarketingUsage(redis, now);
+      return {
+        dailyUsed,
+        dailyRemaining: Math.max(0, caps.daily - dailyUsed),
+        dailyCap: caps.daily,
+        monthlyUsed,
+        monthlyRemaining: Math.max(0, caps.monthly - monthlyUsed),
+        monthlyCap: caps.monthly,
+      };
+    } catch {
+      return empty;
+    }
+  }
+
+  /**
+   * Sum the marketing bucket for the current day + month. ONE `mget` over the six known keys
+   * (3 categories × 2 windows) — no SCAN, because this runs on the send hot path and a SCAN per
+   * email would put an unbounded Redis walk in front of every marketing send.
+   */
+  private static async readMarketingUsage(
+    redis: Redis,
+    now: Date,
+  ): Promise<{ dailyUsed: number; monthlyUsed: number }> {
+    const date = dateKey(now);
+    const month = monthKey(now);
+    const cats = [...MARKETING_CATEGORIES];
+
+    const dailyKeys = cats.map((c) => METER_KEYS.daily('email', c, date));
+    const monthlyKeys = cats.map((c) => METER_KEYS.monthly('email', c, month));
+    const values = await redis.mget(...dailyKeys, ...monthlyKeys);
+
+    const sum = (slice: Array<string | null>): number =>
+      slice.reduce<number>((acc, v) => acc + (parseInt(v || '0', 10) || 0), 0);
+
+    return {
+      dailyUsed: sum(values.slice(0, dailyKeys.length)),
+      monthlyUsed: sum(values.slice(dailyKeys.length)),
+    };
   }
 
   /**

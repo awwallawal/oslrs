@@ -35,6 +35,20 @@ import { EmailService } from './email.service.js';
 import { getSuppressedEmails } from './email-events.service.js'; // Story 13-12 (13-9 suppression)
 import { buildThankYouEmail, buildThankYouReferralUrl, firstNameFrom } from './thankyou-email.js'; // Story 13-12
 import { recordAutoSendFailure } from './email-autosend-monitor.js'; // Story 13-21 (AC4)
+// Story 13-46 (AC2) — the SAME gap query + gap constant the four blast/backfill scripts inherit via
+// `filterMarketingCohort`; this is the one in-request path that never consumed it.
+import { getRecentlyContactedEmails, resolveGapDays } from './campaign-contact.service.js';
+import { toCanonicalEmail } from '../lib/canonical-email.js';
+import {
+  recordRegistrationAutoSend,
+  recordThankYouSuppressed,
+} from '../middleware/registration-burst.js'; // Story 13-46 (AC3 / review A3)
+
+/**
+ * Story 13-46 (review A3) — the ONLY category the auto thank-you's gap read considers.
+ * Deliberately NOT the whole marketing set; see the block in `sendThankYouReferralEmail`.
+ */
+const AUTO_SEND_GAP_CATEGORY = 'thankyou-referral';
 import pino from 'pino';
 
 const logger = pino({ name: 'submission-processing-service' });
@@ -1526,6 +1540,103 @@ export class SubmissionProcessingService {
         return;
       }
 
+      /**
+       * Story 13-46 (AC2) — PER-ADDRESS THROTTLE. This is the ONE marketing path that skips the
+       * shared cohort guard: `filterMarketingCohort` is inherited by all four blast/backfill
+       * scripts and by NO in-request path.
+       *
+       * ⚠️ WHY THE EXISTING GUARDS DO NOT COVER THIS. The send-once marker above is stamped on the
+       * RESPONDENT row, and there is no `email` column on `respondents` at all — the address lives
+       * in `submissions.raw_data` and `users.email`, and the wizard's user insert is
+       * `onConflictDoNothing`, so it REUSES an account rather than rejecting the registration.
+       * A second registration with the same address therefore mints a NEW respondent row that
+       * walks straight past the marker. One address, N registrations, N emails — the mail cannon.
+       * The ADDRESS is the only key that holds.
+       *
+       * Reuses `getRecentlyContactedEmails` — the exact gap query `filterMarketingCohort` runs
+       * (`campaign-contact.service.ts:179-188`) — and `MARKETING_CONTACT_GAP_DAYS`. A second gap
+       * constant here would drift from the blasts' within days.
+       *
+       * ─── THE FAIL-SOFT-LEDGER DIRECTION, DECIDED AND RECORDED (AC2's warning) ───
+       * `recordCampaignSend` is fail-soft: a ledger write can fail and only log
+       * (`campaign-contact.service.ts:89-96`). So a MISSING row is genuinely ambiguous — it can
+       * mean "never contacted" or "contacted, write failed" — and reading it as the former is what
+       * licenses a send.
+       *
+       * CHOSEN: on a ledger READ ERROR, and on a missing row, ALLOW the send.
+       * WHY, explicitly:
+       *   - The opposite direction converts a degraded INSTRUMENTATION event into total loss of a
+       *     citizen-facing email. If the ledger is unavailable, "treat everyone as recently
+       *     contacted" silently stops every thank-you the jingle earns, and nothing distinguishes
+       *     that from the feature working.
+       *   - The residual risk of the permissive direction is BOUNDED by AC1's cap, which is
+       *     evaluated independently at `EmailService.dispatch` from Redis, not from this ledger.
+       *     Two guards with two different failure modes: the address gap fails open, the volume
+       *     cap fails closed. The cap is what makes this direction survivable.
+       *   - A soft-failed ledger write is already LOUD (`campaign_contact.record_failed` at error),
+       *     so the ambiguous state is detectable rather than silent.
+       */
+      const canonicalEmail = toCanonicalEmail(args.email);
+      try {
+        /**
+         * Story 13-46 (review A3 / finding H3) — SCOPED TO THIS CATEGORY. ⚖️ Awwal's ruling, 2026-08-22.
+         *
+         * ⚠️ THIS READ USED TO SPAN ALL MARKETING CATEGORIES, AND THAT LOST REAL EMAIL. Because
+         * `dispatch` ledgers EVERY marketing send, a re-engagement blast on Monday suppressed the
+         * thank-you for someone who registered on Tuesday — permanently, since nothing re-drives it
+         * and the blast script applies the same gap. That is the growth loop the jingle exists to
+         * feed, silently dropped.
+         *
+         * The narrower read is also the MORE PRECISE guard for AC2's own stated threat. AC2 exists
+         * to stop the mail cannon — *one address, N registrations, N thank-yous* — so the question
+         * is "has this address already had a THANK-YOU recently", not "has it had any marketing at
+         * all". Scoped this way the only suppressed send is a DUPLICATE thank-you, which is not
+         * mail anyone wants redelivered late; it is mail that should be dropped. That is why the
+         * defer-and-catch-up alternative was NOT built — it would be machinery whose job is to
+         * eventually deliver email that should not be sent, plus an unbounded-deferral failure mode
+         * (every new marketing contact inside the window re-defers).
+         *
+         * ⚠️ Blast-then-register now yields two emails inside the gap. That is intended: "please
+         * finish registering" followed by "thanks, you're registered" is a conversation, not two
+         * campaigns.
+         *
+         * ⚠️ TOCTOU, NAMED (review A14 / finding L1): this reads `campaign_sends` BEFORE the send,
+         * and the row is written AFTER it. Two registrations for the same address landing inside the
+         * same instant therefore both pass this check and both send — which is precisely the burst
+         * shape the story is written for. The window is milliseconds and the overshoot is one extra
+         * email, so it is accepted rather than closed: an atomic reserve-then-send would have to
+         * decide what to do when the reserve fails, and every answer there is worse than a duplicate
+         * thank-you. Stated because every other number in this story carries its derivation, and a
+         * guard's bound deserves the same treatment.
+         */
+        const recentlyContacted = await getRecentlyContactedEmails([args.email], undefined, undefined, {
+          categories: [AUTO_SEND_GAP_CATEGORY],
+        });
+        if (recentlyContacted.has(canonicalEmail)) {
+          // COUNTED, not just logged — the half of the defer-and-catch-up instinct that survives.
+          // If this ruling is wrong we learn it from a rising counter, not from a citizen who never
+          // got their referral link. REOPEN TRIGGER: a non-trivial count on a day with no
+          // duplicate-registration activity.
+          recordThankYouSuppressed();
+          logger.info({
+            event: 'thankyou_referral_auto.skipped_duplicate_thankyou',
+            respondentId: args.respondentId,
+            gapDays: resolveGapDays(),
+            category: AUTO_SEND_GAP_CATEGORY,
+            note: 'this ADDRESS already had a thank-you inside the gap — the mail-cannon case AC2 exists for',
+          });
+          return;
+        }
+      } catch (gapErr) {
+        // Fail-OPEN, per the decision recorded above. Loud so a persistent failure is visible.
+        logger.warn({
+          event: 'thankyou_referral_auto.contact_gap_check_failed',
+          respondentId: args.respondentId,
+          error: gapErr instanceof Error ? gapErr.message : String(gapErr),
+          note: 'contact-gap read failed — ALLOWING the send; AC1 volume cap remains the ceiling',
+        });
+      }
+
       const referralUrl = buildThankYouReferralUrl(AUTO_CAMPAIGN_ID);
       const content = buildThankYouEmail(firstNameFrom(r.firstName), referralUrl);
       const result = await EmailService.sendGenericEmail(
@@ -1534,6 +1645,26 @@ export class SubmissionProcessingService {
         AUTO_CAMPAIGN_ID,
       );
       if (!result.success) {
+        /**
+         * Story 13-46 (review A2 / finding H2) — A DELIBERATE CAP REFUSAL IS NOT A FAILURE.
+         *
+         * `recordAutoSendFailure` pages at its 5th occurrence with "Registration auto-emails are
+         * FAILING… the confirmation + thank-you/referral loop may be down. Check the Resend
+         * dashboard." Routing cap refusals into it would hand the operator the WRONG DIAGNOSIS at
+         * the exact moment the right one matters, bypass `reportCapRefusal`'s one-page-per-window
+         * cooldown, and corrupt 13-21's failure metric with the system working as designed.
+         *
+         * The operator has already been told, once per window, by `notification.cap_exceeded`.
+         */
+        if (result.refusedByCap) {
+          logger.warn({
+            event: 'thankyou_referral_auto.refused_by_cap',
+            respondentId: args.respondentId,
+            reason: result.error,
+            note: 'marketing cap refused this send — NOT an auto-send failure; no marker stamped, so it can be re-driven once the cap clears',
+          });
+          return;
+        }
         // Story 13-21 (AC4) — was a swallowed warn; now a counted ERROR that can page.
         await recordAutoSendFailure({
           kind: 'thankyou',
@@ -1542,6 +1673,11 @@ export class SubmissionProcessingService {
         });
         return;
       }
+
+      // Story 13-46 (AC3) — count a DISPATCHED auto thank-you for the burst alert's
+      // "auto-sends in window". Counted here, after a confirmed send, so a refused or failed send
+      // never inflates the number the operator uses to judge outbound pressure.
+      recordRegistrationAutoSend();
 
       // Stamp the send-once marker only after a confirmed dispatch (JSONB merge preserves siblings).
       // Story 13-21 (review M1) — the email already dispatched; a stamp failure

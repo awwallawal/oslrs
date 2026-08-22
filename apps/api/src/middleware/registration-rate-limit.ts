@@ -1,6 +1,9 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
+// Story 13-46 (AC3) — a refusal is counted so the burst breaker can SEE a 429 wall. Until now the
+// only trace of a turned-away listener was the `logger.warn` below, which nobody was asked to read.
+import { recordRegistration429 } from './registration-burst.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'registration-rate-limit' });
@@ -63,6 +66,7 @@ export const registrationRateLimit = rateLimit({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       attempts: (req as any).rateLimit?.current,
     });
+    recordRegistration429(); // Story 13-46 (AC3)
     res.status(429).json(options.message);
   },
   standardHeaders: true,
@@ -133,6 +137,7 @@ export const registrationEmailRateLimit = rateLimit({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       attempts: (req as any).rateLimit?.current,
     });
+    recordRegistration429(); // Story 13-46 (AC3)
     res.status(429).json(options.message);
   },
   standardHeaders: true,

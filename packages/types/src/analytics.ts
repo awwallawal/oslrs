@@ -385,6 +385,21 @@ export interface PublicInsightsData {
    * + `pending_nin`).
    */
   withAnswers: number;
+  /**
+   * Story 13-46 (AC5) — the VERIFICATION / TRUST split of `totalRegistered`, so the public headline
+   * stops being a single unqualified count.
+   *
+   * ⚠️ WHY THIS MATTERS THE DAY A JINGLE AIRS: a registration burst (or a bot flood) moves
+   * `totalRegistered` immediately — an unverified row is a government-facing number within one
+   * cache TTL — while leaving the trustworthy tiers untouched. Publishing both means the page tells
+   * the truth under inflation instead of quietly absorbing it. Honest-display RULE 5: verified and
+   * pending are never blended in a registry-size claim.
+   *
+   * ⚠️ THERE IS NO `verified` MEMBER, DELIBERATELY (12-4 AC9 / ruling R1). A NIN is CAPTURED, never
+   * validated — there is no NIMC check and NINs carry no check digit. The top tier is
+   * `nin_on_file` and the UI must never label it "Verified".
+   */
+  byVerification: Record<RegistryVerification, number>;
   lgasCovered: number;
   genderSplit: FrequencyBucket[];
   ageDistribution: FrequencyBucket[];

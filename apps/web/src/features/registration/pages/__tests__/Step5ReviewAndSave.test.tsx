@@ -42,6 +42,20 @@ function fullState(overrides: Partial<WizardDraftData> = {}): WizardDraftData {
   };
 }
 
+/** Story 13-46 — same as renderStep5 but exposes rerender, for asserting a state transition. */
+function renderStep5Rerenderable(formData: WizardDraftData, mergeFields = vi.fn()) {
+  const onGoToStep = vi.fn();
+  const onSubmit = vi.fn();
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const tree = (fd: WizardDraftData) => (
+    <QueryClientProvider client={qc}>
+      <Step5ReviewAndSave formData={fd} mergeFields={mergeFields} onGoToStep={onGoToStep} onSubmit={onSubmit} onBack={vi.fn()} />
+    </QueryClientProvider>
+  );
+  const r = render(tree(formData));
+  return { onGoToStep, onSubmit, mergeFields, rerender: (fd: WizardDraftData) => r.rerender(tree(fd)) };
+}
+
 function renderStep5(formData: WizardDraftData, mergeFields = vi.fn()) {
   const onGoToStep = vi.fn();
   const onSubmit = vi.fn();
@@ -226,5 +240,145 @@ describe('Step5ReviewAndSave — acquisition-question prominence (Story 13-29 AC
     renderStep5(fullState());
     expect(screen.getByTestId('attribution-channel-select')).toHaveValue('');
     expect(screen.getByTestId('wizard-save-button')).not.toBeDisabled();
+  });
+});
+
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Story 13-46 (AC10) — the DENOMINATOR fix and the non-blocking nudge.
+ *
+ * AC10 and the nudge are ONE deliverable: the placeholder recovers WHO WAS ASKED, the nudge lifts
+ * HOW MANY ANSWER. Every test below that touches the nudge also asserts the submit still happens,
+ * because "never blocks" is the guardrail 13-1 recorded and this story must not reverse.
+ * ───────────────────────────────────────────────────────────────────────────── */
+describe('Step5ReviewAndSave — attribution denominator + de-biased order (13-46 AC10a/b)', () => {
+  it('defaults to a real "— Select —" PLACEHOLDER, not to a pre-selected decline', () => {
+    renderStep5(fullState());
+
+    const select = screen.getByTestId('attribution-channel-select') as HTMLSelectElement;
+    expect(select).toHaveValue('');
+    expect(select.options[0].text).toBe('— Select —');
+  });
+
+  it('offers "Prefer not to say" as an EXPLICIT choice with a stored value', () => {
+    renderStep5(fullState());
+
+    const select = screen.getByTestId('attribution-channel-select') as HTMLSelectElement;
+    const decline = [...select.options].find((o) => o.text === 'Prefer not to say');
+    // The bug: it used to be `value=""` AND first, so declining and ignoring were the same row.
+    expect(decline).toBeDefined();
+    expect(decline!.value).toBe('Prefer not to say');
+  });
+
+  it('an explicit decline WRITES a value — declined is distinguishable from untouched', () => {
+    const mergeFields = vi.fn();
+    renderStep5(fullState(), mergeFields);
+
+    fireEvent.change(screen.getByTestId('attribution-channel-select'), {
+      target: { value: 'Prefer not to say' },
+    });
+
+    expect(mergeFields).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extras: expect.objectContaining({ acquisition: { channel: 'Prefer not to say' } }),
+      }),
+    );
+  });
+
+  it('does NOT put Radio first — first position must not anchor the channel we are measuring', () => {
+    renderStep5(fullState());
+
+    const select = screen.getByTestId('attribution-channel-select') as HTMLSelectElement;
+    // options[0] is the placeholder; options[1] is the first real channel.
+    expect(select.options[1].text).not.toBe('Radio');
+    expect([...select.options].some((o) => o.text === 'Radio')).toBe(true);
+  });
+});
+
+describe('Step5ReviewAndSave — attribution prominence, NOT interception (13-46 AC10c)', () => {
+  const save = () => fireEvent.click(screen.getByTestId('wizard-save-button'));
+
+  /* ⚠️ THE GUARANTEE THIS BLOCK EXISTS FOR: nothing about the acquisition question can delay or
+   * prevent a registration. An earlier build intercepted the first Save press when the question was
+   * untouched; it was dropped on review (Awwal, 2026-08-21) because a lost registration is permanent
+   * and an unanswered question costs one data point. The first three tests would each have FAILED
+   * against that build — they are the regression guard against re-introducing it. */
+
+  it('SUBMITS ON THE FIRST PRESS with the question UNTOUCHED', () => {
+    const { onSubmit } = renderStep5(fullState());
+
+    save();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('SUBMITS ON THE FIRST PRESS with a channel chosen', () => {
+    const { onSubmit } = renderStep5(
+      fullState({ extras: { acquisition: { channel: 'Radio' } } } as Partial<WizardDraftData>),
+    );
+
+    save();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('SUBMITS ON THE FIRST PRESS on an explicit decline', () => {
+    const { onSubmit } = renderStep5(
+      fullState({ extras: { acquisition: { channel: 'Prefer not to say' } } } as Partial<WizardDraftData>),
+    );
+
+    save();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('every press submits — pressing twice calls onSubmit twice, nothing is ever swallowed', () => {
+    const { onSubmit } = renderStep5(fullState());
+
+    save();
+    save();
+
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  it('HIGHLIGHTS the card and shows one line of copy while the question is unanswered', () => {
+    renderStep5(fullState());
+
+    expect(screen.getByTestId('step5-attribution')).toHaveAttribute('data-unanswered', 'true');
+    expect(screen.getByTestId('attribution-unanswered-hint')).toBeInTheDocument();
+  });
+
+  it('drops the highlight once a channel is chosen', () => {
+    renderStep5(fullState({ extras: { acquisition: { channel: 'Radio' } } } as Partial<WizardDraftData>));
+
+    expect(screen.getByTestId('step5-attribution')).toHaveAttribute('data-unanswered', 'false');
+    expect(screen.queryByTestId('attribution-unanswered-hint')).not.toBeInTheDocument();
+  });
+
+  it('drops the highlight on an explicit decline — declining IS answering', () => {
+    renderStep5(
+      fullState({ extras: { acquisition: { channel: 'Prefer not to say' } } } as Partial<WizardDraftData>),
+    );
+
+    expect(screen.getByTestId('step5-attribution')).toHaveAttribute('data-unanswered', 'false');
+    expect(screen.queryByTestId('attribution-unanswered-hint')).not.toBeInTheDocument();
+  });
+
+  it('clears the highlight as soon as the user picks something', () => {
+    const mergeFields = vi.fn();
+    const { rerender } = renderStep5Rerenderable(fullState(), mergeFields);
+    expect(screen.getByTestId('step5-attribution')).toHaveAttribute('data-unanswered', 'true');
+
+    rerender(fullState({ extras: { acquisition: { channel: 'Radio' } } } as Partial<WizardDraftData>));
+
+    expect(screen.getByTestId('step5-attribution')).toHaveAttribute('data-unanswered', 'false');
+  });
+
+  it('leaves NO interception affordance behind — the skip button is gone with the nudge', () => {
+    renderStep5(fullState());
+    save();
+
+    expect(screen.queryByTestId('attribution-nudge')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attribution-nudge-skip')).not.toBeInTheDocument();
   });
 });

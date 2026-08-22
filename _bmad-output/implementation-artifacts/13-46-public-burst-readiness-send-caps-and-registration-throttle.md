@@ -1,6 +1,6 @@
 # Story 13-46: Public-burst readiness — cap the SEND, not the SIGNUP (radio-jingle traffic controls)
 
-Status: ready-for-dev
+Status: review
 
 <!-- ✅ PREP CONFIRMED 2026-08-16 (adjudication) — NO PREP PASS WAS NEEDED, and this marker exists so
 nobody concludes otherwise from the file's shape. It already carries 11 fully-specified ACs with
@@ -405,14 +405,27 @@ rate without taxing the funnel at its most expensive moment.
      the retired threat model is how a future reviewer restores the old value.**
    - The supplemental-survey route shares this limiter (`registration.routes.ts:56-59`) — state
      whether the change is intended there too, do not let it ride silently.
-5. **AC5 — `/insights` publishes REGISTERED vs VERIFIED, so the public number survives inflation.**
+5. **AC5 — `/insights` publishes REGISTERED vs the TRUST TIERS, so the public number survives inflation.**
+   > ⚠️ **WORDING AMENDED 2026-08-21 (SM, discharging residual R4) — the requirement is unchanged.**
+   > This AC previously read *"REGISTERED vs **VERIFIED**"* and cited a taxonomy containing a `verified`
+   > tier. **There is no `verified` tier, and deliberately never was one after 12-4:** Story 12-4 (AC9 /
+   > ruling R1) deleted it because a NIN is **CAPTURED, never validated** — no NIMC integration exists and
+   > NINs carry no check digit ([[nin-validation-mod11-invalid]]). The shipped tiers are exactly
+   > `nin_on_file` / `self_declared` / `pending_nin` / `unverified_import`
+   > (`registry-totals.service.ts:196-205`, whose own comment states *"There is no `verified`"*), and the
+   > public label reads **"with NIN on file"**, never "Verified". **The requirement was always the SPLIT
+   > — a single unqualified count must not silently absorb a registration burst — and the split is what
+   > shipped; only the word was wrong**, and using it would have published a claim the system cannot
+   > support. If NIMC access ever arrives, a real tier is added ABOVE `nin_on_file` and the label changes
+   > then; nothing built here blocks that.
    The public headline must stop being a single unqualified count (today: no verification filter at all,
    summary with no WHERE at `public-insights.service.ts:132`).
-   - **Use the taxonomy that already exists.** Axis 3 (VERIFICATION / TRUST) defines
-     `verified` / `nin_on_file` / `self_declared` / `pending_nin` / `unverified_import`, and
-     honest-display **Rule 5** already binds: *"Verified vs pending are never blended in any 'registry
+   - **Use the taxonomy that already exists.** Axis 3 (VERIFICATION / TRUST) defines the four tiers above,
+     and honest-display **Rule 5** already binds: *"Verified vs pending are never blended in any 'registry
      size' claim"* (`_bmad-output/planning-artifacts/registry-data-status-taxonomy.md`, Axis 3 +
-     Honest-display RULES). This AC is enforcing a contract already written, not minting a new one.
+     Honest-display RULES) — a rule against BLENDING trust levels into one published number, which binds
+     identically whether the top tier is called `verified` or `nin_on_file`. This AC is enforcing a
+     contract already written, not minting a new one.
    - **Follow 13-25's slice pattern, do not wait for Epic 12.** `public-insights.service.ts:15,98-99`
      already consumes `getRegistryCountCore()` from `registry-totals.service.ts` — 13-25's shared
      count-core, explicitly the *"Seed of 12-4"* (`:98`). Extend **that** core with the Axis-3 split so
@@ -571,59 +584,59 @@ that tests all three at once**: a traffic burst, into a throttle, on a box with 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Cap the send** (AC: #1, #8)
-  - [ ] Add cap constants + a pure `checkCap(category, …)` to `notification-meter.service.ts` beside the
+- [x] **Task 1 — Cap the send** (AC: #1, #8)
+  - [x] Add cap constants + a pure `checkCap(category, …)` to `notification-meter.service.ts` beside the
         TTLs (`:60,62`); keep it read-only and side-effect-free so it is unit-testable.
-  - [ ] Consult it in `EmailService.dispatch` **before** the `await this.getProvider().send(...)` call (currently `email.service.ts:141`; anchor on the SYMBOL — the line has drifted twice),
+  - [x] Consult it in `EmailService.dispatch` **before** the `await this.getProvider().send(...)` call (currently `email.service.ts:141`; anchor on the SYMBOL — the line has drifted twice),
         branching on `isMarketingCategory` exactly as `:133-141` already does. Preserve the fail-open
         contract for everything else and pin it with a test.
-  - [ ] Loud refusal: structured result + `notification.cap_exceeded` log + Telegram via
+  - [x] Loud refusal: structured result + `notification.cap_exceeded` log + Telegram via
         `isAlertSendEnabled`.
-- [ ] **Task 2 — Per-address auto-send throttle** (AC: #2, #8)
-  - [ ] Consult the contact ledger in `sendThankYouReferralEmail`
+- [x] **Task 2 — Per-address auto-send throttle** (AC: #2, #8)
+  - [x] Consult the contact ledger in `sendThankYouReferralEmail`
         (`submission-processing.service.ts:1048-1074`) using `MARKETING_CONTACT_GAP_DAYS`
         (`campaign-contact.service.ts:39`). Prefer reusing `filterMarketingCohort`'s gap query over a
         second implementation of the same rule.
-  - [ ] Decide and document the fail-soft-ledger direction (AC2's warning).
-- [ ] **Task 3 — Global burst breaker that alerts** (AC: #3)
-  - [ ] Rolling global counter on registration submits + a per-kind cooldown, modelled on
+  - [x] Decide and document the fail-soft-ledger direction (AC2's warning).
+- [x] **Task 3 — Global burst breaker that alerts** (AC: #3)
+  - [x] Rolling global counter on registration submits + a per-kind cooldown, modelled on
         `cf-traffic-watch.ts:39-49`; dispatch through the existing Telegram path gated by
         `isAlertSendEnabled`.
-  - [ ] Compose the one-message payload (submits / 429s / auto-sends / cap headroom).
-- [ ] **Task 4 — Rescope the signup limits** (AC: #4) — ⚠️ **BLOCKED until Tasks 1 + 2 are merged.**
-  - [ ] Re-key and re-size `registrationRateLimit` (`registration-rate-limit.ts:25-51`) per AC7's
+  - [x] Compose the one-message payload (submits / 429s / auto-sends / cap headroom).
+- [x] **Task 4 — Rescope the signup limits** (AC: #4) — ⚠️ **BLOCKED until Tasks 1 + 2 are merged.** (Precondition satisfied: Tasks 1 + 2 landed first, in this same working tree, before any limiter was touched.)
+  - [x] Re-key and re-size `registrationRateLimit` (`registration-rate-limit.ts:25-51`) per AC7's
         derivation; do the same analysis for `wizardDraftRateLimit`
         (`wizard-draft-rate-limit.ts:30-58`).
-  - [ ] Correct the stale docblocks + route comments (`registration.routes.ts:22-24,48-50`) and rule on
+  - [x] Correct the stale docblocks + route comments (`registration.routes.ts:22-24,48-50`) and rule on
         the shared supplemental route (`:56-59`).
-- [ ] **Task 5 — Registered vs verified on /insights** (AC: #5)
-  - [ ] Extend `getRegistryCountCore` (`registry-totals.service.ts`, consumed at
+- [x] **Task 5 — Registered vs verified on /insights** (AC: #5)
+  - [x] Extend `getRegistryCountCore` (`registry-totals.service.ts`, consumed at
         `public-insights.service.ts:15,98-99`) with the Axis-3 verification split; surface it in
         `computeInsights` + the web insights page. One counting source only.
-- [ ] **Task 6 — Operator gate + runbook edits** (AC: #6) — **no new file**
-  - [ ] `pre-viral-push-checklist.md` §1 + §3: add the registration-scoped WAF rule and **correct the
+- [x] **Task 6 — Operator gate + runbook edits** (AC: #6) — **no new file**
+  - [x] `pre-viral-push-checklist.md` §1 + §3: add the registration-scoped WAF rule and **correct the
         `exclude /api/*` remedy** (`:27`, `:50`); restate Bot Fight Mode = OFF unchanged.
-  - [ ] `13-3-cutover-and-failover.md:17-22`: add arming the rule to the one-time pre-jingle setup,
+  - [x] `13-3-cutover-and-failover.md:17-22`: add arming the rule to the one-time pre-jingle setup,
         beside the parked redirect rule.
-  - [ ] `roadmap-to-launch.md:115-124`: add it to the pre-flight gate that gates paid spend.
-- [ ] **Task 7 — Measure + record** (AC: #7)
+  - [x] `roadmap-to-launch.md:115-124`: add it to the pre-flight gate that gates paid spend.
+- [ ] **Task 7 — Measure + record** (AC: #7) — ◨ **HALF DONE. The BEFORE baseline is COLLECTED (prod, 2026-08-21); the AFTER count cannot exist until the jingle airs.** Window 2026-08-07 20:31Z → 2026-08-21 13:30Z (15 retained pm2 out-logs): `registration.rate_limit_exceeded` **23 — all pre-hotfix** (`attempts=6…25`, only possible while `max` was still 5), so **ZERO in the 13 days since**; `registration.email_rate_limit_exceeded` **13** (11 the same evening, then 1 on 08-09 and 1 on 08-14, **both `attempts=4`** — one retry over the limit of 3, i.e. a real person, not a script); `wizard_draft.rate_limit_exceeded` **0**. Volume baseline: 327 respondents, 1-8 submissions/day, busiest day ever **168 submissions / 177 marketing sends (2026-08-04)**, busiest month **300 sends**. These figures are now the derivation shown at each constant. ⚠️ Remaining: the AFTER count from the first jingle window — [[pattern-verification-that-cannot-run-yet]].
   - [ ] BEFORE counts of `registration.rate_limit_exceeded` + `wizard_draft.rate_limit_exceeded` from
         prod logs (record window + command). Publish every derived number with its arithmetic.
   - [ ] AFTER counts from the first jingle window → the turn-away delta.
-- [ ] **Task 8 — Attribution liveness dry run** (AC: #9) — ⚠️ **the pre-jingle GATE; independent of
+- [x] **Task 8 — Attribution liveness dry run** (AC: #9) — ✅ **DISCHARGED ON PROD 2026-08-21.** `OSL-2026-9F4TRH` / submission `01a0253d-bae4-769a-ab1c-491585cdc04f`: stored `channel='Radio'` **and** `getCampaignBreakdown()` returned it. Torn down child-first, all traces 0, re-measured 327/286/25. 🔴 The run proved AC9's own teardown wording incomplete — it would have orphaned `users`, `magic_link_tokens`, `marketplace_profiles` and `campaign_sends`. Full record in `13-3-cutover-and-failover.md`. — ⚠️ **the pre-jingle GATE; independent of
       Tasks 1-7 and dischargeable before any of them.**
   - [ ] One live public registration selecting "Radio" through the pinned public form; assert the
         stored `raw_data->'campaign_source'->>'channel'` **and** that `getCampaignBreakdown()` returns
         the row.
   - [ ] Teardown by id / reference code — **never** by restoring a count. Record the result in
         `13-3-cutover-and-failover.md`'s pre-jingle setup.
-- [ ] **Task 9 — Attribution instrument quality** (AC: #10)
-  - [ ] Real `— Select —` placeholder default + explicit "Prefer not to say" choice
+- [x] **Task 9 — Attribution instrument quality** (AC: #10)
+  - [x] Real `— Select —` placeholder default + explicit "Prefer not to say" choice
         (`Step5ReviewAndSave.tsx:239,247`); decide and record how an explicit decline is treated by
         `getCampaignBreakdown` (`report.service.ts:89,93`).
-  - [ ] Reorder `ACQUISITION_CHANNELS` (`attribution.ts:15-25`) so Radio is not first.
-  - [ ] Web tests for the three states; submit must succeed in all three.
-  - [ ] (Only if Awwal takes the SM recommendation) the non-blocking submit nudge, with a test pinning
+  - [x] Reorder `ACQUISITION_CHANNELS` (`attribution.ts:15-25`) so Radio is not first.
+  - [x] Web tests for the three states; submit must succeed in all three.
+  - [x] (Only if Awwal takes the SM recommendation) the non-blocking submit nudge, with a test pinning
         that it never blocks.
 
 ## Dev Notes
@@ -737,7 +750,7 @@ launch-adjacent item parked without a trigger becomes invisible debt.
   `src/services/submission-processing.service.ts` (per-address gate in `sendThankYouReferralEmail`),
   `src/middleware/registration-rate-limit.ts` + `src/middleware/wizard-draft-rate-limit.ts` (AC4, after
   AC1+AC2), `src/routes/registration.routes.ts` (comments), `src/services/registry-totals.service.ts` +
-  `src/services/public-insights.service.ts` (AC5).
+  `src/services/public-insights.service.ts` (AC5 — the Axis-3 split; label is `nin_on_file` / "with NIN on file", **never "verified"**, per 12-4 R1).
 - **New (API):** the burst breaker (AC3) — place the pure evaluator in `src/lib/` with the thin runner
   beside `scripts/cf-traffic-watch.ts`, per the `osv-prod-gate` / `registry-read-drift` core+runner
   convention. `apps/api/tsconfig.json` sets `rootDir: ./src`, so logic under `scripts/` is neither
@@ -827,10 +840,223 @@ launch-adjacent item parked without a trigger becomes invisible debt.
   accessor (`:89`) and the `campaign_source IS NOT NULL` filter (`:93`) that AC10a's explicit-decline
   value would move decliners inside; the UTM campaign read at `:133`]
 
+## Dev Agent Record
+
+### Context Reference
+
+- This story file — 914 lines, read in full. **Not regenerated** (`*create-story` would have destroyed the ruling, the AC ordering note, AC11's discharge and the attribution findings).
+- The ⚖️ ruling of 2026-08-11 read **before Task 1**, as its header requires.
+
+### Implementation Plan (as executed)
+
+Built in the story's leverage order, which is load-bearing rather than stylistic: **cap the send (1) → throttle the address (2) → alert on burst (3) → only THEN loosen the signup limits (4)**. AC4's precondition was honoured literally: Tasks 1 and 2 were complete and green in this working tree before any limiter value was touched. Until the send is capped and the address throttled, the per-IP limit is the only thing bounding a flood, and loosening it first converts a registration burst straight into a mail burst.
+
+### Debug Log
+
+| What happened | Outcome |
+|---|---|
+| RED phase, Task 1 | 18/18 cap tests failed on missing symbols, then passed. At dispatch level exactly the 4 refusal tests failed while the 5 "allowed direction" tests passed — the correct baseline, since today everything sends. |
+| RED phase, Task 2 | 3 of 10 failed, and precisely the mail-cannon cases (same address, brand-new respondent row). The AC8 cap tests passed on the first run, which is the evidence that Task 1's cap is genuinely reached from the real send chain. |
+| Six partial module mocks broke | `NotificationMeter` gained `checkCap`, so four files stubbing the meter for `dispatch` failed, plus the registration route mock missing `wizardDraftEmailRateLimit` and the burst middleware. **This is the mechanism working** — the same one AC-RL item 3 records. Each stub now carries a comment saying why it exists. |
+| `email-campaign-ledger` failed on a DB connection | Environmental, not the change: DB-backed files need `NODE_ENV=test DATABASE_URL=…/app_test`. Green against `app_test`. |
+| 🔴 **Four files passed in isolation and failed in the full suite** | **Root cause: I had been running `pnpm vitest run <path>` from the REPO ROOT, and there is no root vitest config — so `vitest.base.ts`'s `mockReset: true` never applied.** Under the real per-package config, `mockReset` strips any implementation set inside a `vi.mock` factory before each test, so `checkCap: vi.fn().mockResolvedValue(...)` returned `undefined` and `dispatch` threw on `.allowed`. Fixed by making those stubs **plain async functions**, which no reset can clear. ⚠️ All new tests were then re-verified under the correct config (67/67). The same trap as the recorded "never `pnpm vitest run` from root for web" rule — it applies to the API package too. |
+| `getRegistryCountCore` unit fixtures | Failed once the query became `GROUPING SETS`. Fixtures updated to the real shape; grand-total detection loosened to `== null` so a driver omitting the key is not read as a tier row. Two tests added (zero-fill, unknown-tier rejection). |
+| Two pre-existing Step 5 tests | Genuinely changed by the nudge — they clicked Save once with the question untouched. Updated to state the new behaviour explicitly rather than paper over it. |
+
+### Completion Notes
+
+**Shipped — Tasks 1–6 and 9:**
+
+1. **AC1 — the meter now ENFORCES, it does not only count.** `NotificationMeter.checkCap()` is a pure, read-only pre-send check consulted by `EmailService.dispatch` **before** `getProvider().send(...)`. Anchored on the symbol rather than a line number — the story's own warning, since that anchor had already rotted twice. Marketing categories only: a test pins that a magic link still sends with the cap fully exhausted **and** with Redis unreachable. Fail-OPEN on infrastructure, fail-CLOSED on the limit. A refusal returns a structured failure, logs `notification.cap_exceeded`, and pages Telegram through `isAlertSendEnabled` with a per-window cooldown — one page per window, not one per refused send.
+2. **AC2 — per-address throttle** on the registration auto thank-you, reusing `getRecentlyContactedEmails` (the exact gap query the four blast scripts inherit) and `MARKETING_CONTACT_GAP_DAYS`. No second gap constant. **The fail-soft-ledger direction is decided and recorded in code:** a missing or unreadable ledger row ALLOWS the send, because the opposite direction converts degraded instrumentation into total loss of a citizen-facing email — and the residual risk is bounded by AC1's cap, which reads Redis rather than this ledger. Two guards, two deliberately opposite failure directions.
+3. **AC3 — a burst breaker that alerts and never blocks.** Pure evaluator plus DI orchestration in `lib/registration-burst.ts` (9-52's shape), Redis and Express wiring in `middleware/registration-burst.ts`. `next()` is called **synchronously, first**; a test asserts it still is when Redis throws. One message carries submits / 429s / auto-sends / marketing headroom. It also fires on a **429 wall at ordinary throughput** — the signal 9-52 is structurally blind to, and the one that went unnoticed in August until a registrant emailed to say he could not finish.
+4. **AC4 — signup limits.** ⚠️ **Most of this AC was already shipped by the 2026-08-07 hotfix** (IP 5→50, per-email limiter, IPv6-safe key). What was still outstanding, and is now done: the **stale route prose** (the header still described "5/IP/15min per the legacy `/auth/public/register` discipline" — prose is not type-checked, and that comment is how a future reviewer restores the old value); the **supplemental-route ruling**, stated rather than left to ride silently (it keeps the IP flood-stop and deliberately does **not** take the per-email limiter — it is magic-link-token-gated and its payload carries no email, so the limiter would silently re-impose a second per-IP bucket on a CGNAT address, the exact failure August removed); and **`wizardDraftRateLimit`**, re-sized 120 → 1,200/IP with a new per-email dimension (300). The draft limiter matters most of the three because it fails FIRST and SILENTLY — a lost draft looks like a user who simply did not finish, so nobody reports it.
+5. **AC5 — registered vs verified.** `getRegistryCountCore` extended with the Axis-3 split **inside the same query** (GROUPING SETS), so there is still exactly ONE counting source and 12-4 inherits it. It is **rendered on the public page**, not merely added to the shared type — shipping a required field no component reads is the 12-5 defect this project has already paid for once.
+6. **AC6 — operator gate.** The `exclude /api/*` remedy corrected in **both** places it appears (§1 posture and §3 spike playbook), a `registration-wizard-burst` rule specified (30/min/IP, **Managed Challenge** not block — decided, with carrier CGNAT as the stated reason), and arming it added to the 13-3 pre-jingle setup and the roadmap's paid-spend gate. Bot Fight Mode stays OFF. No new runbook.
+7. **AC10 — denominator + de-bias shipped; the nudge became PROMINENCE, not interception.** A real `— Select —` placeholder, an explicit "Prefer not to say" that stores a value, and `ACQUISITION_CHANNELS` reordered alphabetically with `Other` last so **Radio is no longer first**. **How an explicit decline is treated by `getCampaignBreakdown` is decided and recorded: its own reported row**, not excluded — excluding it would drop decliners back into the same invisible bucket as the people who ignored the question, re-creating one layer down the exact denominator loss AC10 exists to close.
+   ⚠️ **The submit-time nudge was built, reviewed, and DROPPED (ruling R1, Awwal 2026-08-21).** It intercepted the first Save press when the question was untouched. What ships instead is purely visual: an unanswered question gets a highlighted card and one line of copy, and `onSubmit` is wired straight through exactly as before this story. **Four regression tests assert the first press submits in all three states**, and two assert the interception affordances are gone — so the behaviour cannot creep back. The response-rate half is now residual **R2**, deliberately gated on measuring whether prominence alone moves the rate. **How an explicit decline is treated by `getCampaignBreakdown` is decided and recorded: its own reported row**, not excluded — excluding it would drop decliners back into the same invisible bucket as the people who ignored the question, re-creating one layer down the exact denominator loss AC10 exists to close.
+
+### ✅ PROD WORK COMPLETED 2026-08-21 (authorised by Awwal; read-only except the AC9 dry run)
+
+**Task 8 / AC9 — DISCHARGED. Both halves passed, on the real pinned public form.**
+`OSL-2026-9F4TRH` → submission `01a0253d-bae4-769a-ab1c-491585cdc04f` stored
+`{"utm": {}, "channel": "Radio"}`, **and** `getCampaignBreakdown()` returned `Radio|1`. Checking only
+the write would have been the `getCampaignFunnel` failure again. Torn down child-first (every trace
+re-checked at 0) and **re-measured, not restored**: 327 / 286 / 25, `Radio` gone. Prod SHA `fd5fe2e`.
+⭐ Before this run `Radio` had **never once** been selected on prod.
+
+🔴 **THE DRY RUN FOUND A DEFECT IN AC9 ITSELF.** Its teardown wording — *"delete that respondent +
+submission BY ID"* — is **incomplete for the public-wizard path**. The run created four rows it would
+have orphaned: `users`, `magic_link_tokens`, `marketplace_profiles`, `campaign_sends`. The child-first
+chain (already verified against the code on 2026-08-06 in the enumerator smoke runbook) is now written
+into `13-3-cutover-and-failover.md`. ⚠️ `campaign_sends` matters most **because of this story**: the new
+AC2 throttle reads that ledger, so a leftover row silently suppresses the next real thank-you to that
+address for the whole gap window.
+
+🔴 **ONE REGISTRATION SENDS THREE EMAILS, NOT ONE** (magic link + reference confirmation + thank-you
+outreach, all confirmed delivered). Context §4 says "N simultaneous registrations become N provider HTTP
+calls on the API's own event loop" — it is **3N**, so that capacity argument is three times sharper than
+written. The cap design is unaffected and vindicated: only the outreach is marketing (capped +
+throttled); the magic link and confirmation are transactional and stay uncapped, which is exactly what
+AC1's category-awareness exists to protect.
+
+⏱️ **Context §4's synchronous-send timing reproduced exactly:** submission `16:53:17.676Z`,
+`campaign_sends` row `16:53:18.039Z` — **0.36 s later, same request.**
+
+**Task 7 / AC7 — BEFORE baseline COLLECTED; the AFTER half cannot exist yet.**
+Window 2026-08-07 20:31Z → 2026-08-21 13:30Z (15 retained pm2 out-logs):
+
+| Event | Count | Shape |
+|---|---|---|
+| `registration.rate_limit_exceeded` | 23 | **all 2026-08-07 20:31-20:39Z**, 2 carrier IPs, `attempts=6…25` |
+| `registration.email_rate_limit_exceeded` | 13 | 11 that evening; then 1 on 08-09, 1 on 08-14 — **both `attempts=4`** |
+| `wizard_draft.rate_limit_exceeded` | **0** | never fired |
+
+⭐ **The 23 are PRE-hotfix**: `attempts` above 5 can only be refused while `max` was still 5, so they
+predate the 5→50 restart that evening. **Since the hotfix the IP limiter has fired zero times in 13
+days** — the hotfix worked and the raised ceiling is not turning anyone away. The per-email limiter's
+only two organic hits are both **one retry over a limit of 3**, which is what a real person retrying
+looks like, not a script. First time anyone has read these events.
+
+**Volume baseline (read-only SQL):** 327 respondents · 1-8 submissions/day · busiest day ever **168
+submissions and 177 marketing sends (2026-08-04)** · busiest month **300 sends (2026-08)**.
+
+**⭐ These figures REPLACED the invented numbers at every constant.** The daily cap is now stated as
+~11× the busiest marketing day the system has ever had, and the check that matters is recorded in the
+code: **the cap would NOT have bound on 2026-08-04**, the biggest real day. The burst threshold likewise
+would not have paged on it (~0.6 submits per 5-min window even that day).
+
+⚠️ **What is STILL an assumption, said plainly:** the JINGLE's peak. No campaign of that shape has ever
+run, so the headroom multiples are a judgement, not an extrapolation — and the draft limiter's measured
+zero proves only that it was never under load (1-8 submissions/day), **not** that the old 120 was safe.
+
+**⛔ STILL NOT DONE:**
+
+- **Task 7's AFTER count** — the turn-away delta from the first jingle window. It requires an event that
+  has not happened: [[pattern-verification-that-cannot-run-yet]]. It stays on the roadmap pre-flight
+  gate rather than being closed on a zero.
+- **AC11** was already discharged on 2026-08-01 (recorded in this file); untouched.
+
+**⚠️ Deviation a reviewer should look at — AC5 says "REGISTERED vs VERIFIED", and there is no `verified` tier.** Story 12-4 (AC9 / ruling R1) removed it deliberately: a NIN is CAPTURED, never validated — there is no NIMC check available and NINs carry no check digit. The split therefore ships against the real taxonomy and the public label reads **"with NIN on file"**, never "Verified". AC5's mechanism and honest-display RULE 5 are both satisfied; only the word differs, and using the AC's word would have published a claim the system cannot support. Flagged rather than silently resolved.
+
+**⚠️ Second item RESOLVED on review — the nudge no longer intercepts anything.** It originally took the first Save press when the question was untouched. Dropped on 2026-08-21 (residual R1) because the risk is asymmetric: a lost registration is permanent, an unanswered question costs one data point, and on a slow phone a swallowed first press reads as a broken button at the exact moment of conversion. What tipped the decision is that **per-station vanity links already attribute a registration even when the listener never answers** (`buildCampaignSource` writes on channel OR utm) — so the marginal value of squeezing the response rate at the conversion moment is smaller than the conversion risk. Those vanity paths are now residual **R3**, and they carry a hard pre-jingle deadline because a URL read on air cannot be retrofitted.
+
+**⚠️ Read the residual ledger below before adjudicating.** Eight rows, in the format `lint-story-residuals.ts` parses, so an OPEN row blocks `Status: done` at pre-commit rather than relying on anyone remembering. Three are OPEN: **R2** (post-submit ask — evidence-triggered, do not build before the measurement), **R3** (vanity paths — hard deadline, gates the jingle's measurability), **R7** (6 mis-bucketed hemorrhage rows), plus **R8** (AC7's AFTER count, which needs an event that has not happened).
+
+### File List
+
+⚠️ **GENERATED FROM `git status --short`, not hand-maintained** (review A15 / finding M7). The
+hand-written version had drifted: three changed docs and two new story files were missing. A
+File List that is curated by memory drifts by construction — the whole tree is listed here, with
+the rows this story does not own marked, so a reviewer can see the boundary rather than guess it.
+
+**API**
+
+- `apps/api/scripts/_recover-abandoned-wizard-drafts.ts` (modified)
+- `apps/api/src/lib/registration-burst.ts` (new)
+- `apps/api/src/middleware/registration-burst.ts` (new)
+- `apps/api/src/middleware/registration-rate-limit.ts` (modified)
+- `apps/api/src/middleware/wizard-draft-rate-limit.ts` (modified)
+- `apps/api/src/routes/registration.routes.ts` (modified)
+- `apps/api/src/services/campaign-contact.service.ts` (modified)
+- `apps/api/src/services/email.service.ts` (modified)
+- `apps/api/src/services/notification-meter.service.ts` (modified)
+- `apps/api/src/services/public-insights.service.ts` (modified)
+- `apps/api/src/services/registry-totals.service.ts` (modified)
+- `apps/api/src/services/submission-processing.service.ts` (modified)
+
+**Tests — API**
+
+- `apps/api/src/lib/__tests__/registration-burst.test.ts` (new)
+- `apps/api/src/middleware/__tests__/registration-burst.test.ts` (new)
+- `apps/api/src/middleware/__tests__/wizard-draft-rate-limit-key.test.ts` (new)
+- `apps/api/src/routes/__tests__/registration.routes.test.ts` (modified)
+- `apps/api/src/services/__tests__/email-campaign-ledger.test.ts` (modified)
+- `apps/api/src/services/__tests__/email-campaign-tag.test.ts` (modified)
+- `apps/api/src/services/__tests__/email-send-cap.test.ts` (new)
+- `apps/api/src/services/__tests__/list-unsubscribe.test.ts` (modified)
+- `apps/api/src/services/__tests__/notification-cap.test.ts` (new)
+- `apps/api/src/services/__tests__/registry-totals.service.test.ts` (modified)
+- `apps/api/src/services/__tests__/registry-verification-sql-parity.integration.test.ts` (new)
+- `apps/api/src/services/__tests__/staff-activation-complete-email.test.ts` (modified)
+- `apps/api/src/services/__tests__/thankyou-autosend-throttle.integration.test.ts` (new)
+- `apps/api/src/services/__tests__/thankyou-gap-failopen.integration.test.ts` (new)
+
+**Shared types**
+
+- `packages/types/src/analytics.ts` (modified)
+- `packages/types/src/email.ts` (modified)
+
+**Web**
+
+- `apps/web/src/features/insights/pages/PublicInsightsPage.tsx` (modified)
+- `apps/web/src/features/registration/lib/attribution.ts` (modified)
+- `apps/web/src/features/registration/pages/Step5ReviewAndSave.tsx` (modified)
+
+**Tests — web**
+
+- `apps/web/src/features/insights/pages/__tests__/PublicInsightsPage.test.tsx` (modified)
+- `apps/web/src/features/insights/pages/__tests__/SkillsMapPage.test.tsx` (modified)
+- `apps/web/src/features/registration/pages/__tests__/Step5ReviewAndSave.test.tsx` (modified)
+
+**Docs**
+
+- `docs/roadmap-to-launch.md` (modified)
+- `docs/runbooks/13-3-cutover-and-failover.md` (modified)
+- `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md` (modified) — ⚠️ *not 13-46: authored by SM/PM in the same tree*
+- `docs/runbooks/pre-launch-operator-runbook.md` (modified) — ⚠️ *not 13-46: authored by SM/PM in the same tree*
+- `docs/runbooks/pre-viral-push-checklist.md` (modified)
+
+**Planning / tracking**
+
+- `_bmad-output/implementation-artifacts/13-46-public-burst-readiness-send-caps-and-registration-throttle.md` (modified)
+- `_bmad-output/implementation-artifacts/13-63-station-level-attribution-vanity-paths-and-a-readable-number.md` (new) — ⚠️ *not 13-46: authored by SM/PM in the same tree*
+- `_bmad-output/implementation-artifacts/13-64-data-loss-marker-tail-six-respondents-in-the-wrong-bucket.md` (new) — ⚠️ *not 13-46: authored by SM/PM in the same tree*
+- `_bmad-output/implementation-artifacts/13-65-registration-sends-off-the-request-path.md` (new) — ⚠️ *not 13-46: authored by SM/PM in the same tree*
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified)
+- `_bmad-output/planning-artifacts/epics.md` (modified) — ⚠️ *not 13-46: authored by SM/PM in the same tree*
+
+_45 paths total, of which 6 belong to 13-63 / 13-64 / 13-65 planning work._
+
+## Residual ledger (13-46)
+
+**Format is the one `lint-story-residuals.ts` parses** — ID · severity · STATE · evidence · owner.
+An OPEN row here BLOCKS `Status: done` at pre-commit, which is the point: these are the items that
+must not be lost between code review and adjudication.
+
+⚠️ **HANDED OFF ≠ ABANDONED, and it is not the same as OPEN.** Rows whose remaining work now belongs
+to a REGISTERED story (13-63 / 13-64 / 13-65) are marked CLOSED HERE with the story key. 13-46's
+obligation for those findings was to discover, root-cause, file and register them — which is done and
+verifiable in `sprint-status.yaml`. Leaving them OPEN would make THIS story's closure hostage to three
+other stories' schedules, which is how a ledger stops being read.
+
+**What genuinely keeps 13-46 out of `done`:** **R8** — AC7's AFTER count, which is 13-46's OWN
+acceptance criterion and needs the jingle to have aired. That alone is sufficient, and it is the
+honest blocker. **R3** (a media-buy decision) and **R12** (the falsifier for a ruling 13-46 made)
+stay open beside it.
+
+| Residual | Severity | State | Evidence | Owner |
+|---|---|---|---|---|
+| **R1** — The AC10c submit-time NUDGE was BUILT and then DROPPED. Shipped instead: non-intercepting prominence (highlighted card + one line) when the question is unanswered. | Med | **CLOSED — ruled by Awwal 2026-08-21.** Risk is asymmetric: a lost registration is permanent and costs a citizen 10-15 min of work; an unanswered question costs one data point. On a slow phone "I pressed Save and nothing happened" reads as BROKEN. 13-1's "prominence ≠ mandatory" is now honoured in the strongest sense — prominence is the only thing it does. | 4 regression tests assert the first press submits in ALL three states (untouched / chosen / declined); 2 assert the interception affordances are gone | Dev |
+| **R2** — The post-submit ask (attribution on the confirmation screen) is the stronger response-rate instrument and is NOT built. | Med | **CLOSED HERE — HANDED OFF to Story `13-65-registration-sends-off-the-request-path` (AC7), registered `ready-for-dev`.** 13-46's obligation was to discover, root-cause, file and register it; that is done. ⚠️ The trigger travels WITH the story and is written into it as a LOCK: it is EVIDENCE-TRIGGERED, not taste-triggered — Trigger: measure the public-rows-only `answered_rate` (query in `13-3-cutover-and-failover.md`) after AC10 deploys. If prominence does not move it, that justifies the ask; if it does, the funnel change is unnecessary. **Do NOT build it before that measurement exists.** | Runbook carries the exact query, scoped `r.source='public'` so staff captures cannot dilute the denominator | SM (Bob) to author · PM (John) to sequence |
+| **R3** — Per-station VANITY PATHS (`oyoskills.com/fresh` → 302 → `/?ref=fresh`) are the only station-level instrument that survives a listener who never answers the question. Not yet created. | **High** | **OPEN — but the TRIGGER IS RE-STATED against the real schedule (2026-08-22). NOT a gate for the 7-station test wave.** ⭐ The buy airs **one station per week, sequentially, 24 Aug → 9 Oct 2026, with clean gaps between weeks** — so a registration's TIMESTAMP already identifies its station with near-perfect fidelity. That is literally the first no-code option this story's own Dev Notes listed (*"sequence the stations so a registration spike attributes by time"*), and the media buy has already done it. ⚠️ **NEW TRIGGER: vanity paths become NECESSARY the moment two stations air in the SAME window** — i.e. the later 11-station wave, if it runs concurrently rather than staggered. Then timestamps stop identifying a station and the signal collapses to "radio worked". ⚠️ **Production cost, previously unstated:** the 21 airings look like **3 master recordings** (one per language) aired 7 times, so per-station URLs would mean **21 distinct masters instead of 3** — a 7× production cost to buy what the stagger gives free. Zero code: one Cloudflare Redirect Rule per station. `parseUtm` already consumes a bare `?ref`, and `buildCampaignSource` writes `campaign_source` on channel **OR** utm — so it attributes without asking. With 11 stations this is the difference between "radio worked" and *which of 11* earned the naira. | AC9 proved the channel half live 2026-08-21; the `?ref` half has still executed **0 times** on prod | PM (John) — sequencing vs paid spend |
+| **R4** — AC5's wording says "REGISTERED vs **VERIFIED**"; the taxonomy has no `verified` tier. | Med | **CLOSED — shipped against the real taxonomy.** 12-4 AC9 / ruling R1 deleted it deliberately: a NIN is CAPTURED, never validated (no NIMC path, no check digit). Public label reads "with NIN on file", never "Verified". If NIMC access ever arrives, a real tier is added ABOVE `nin_on_file` and the label changes then — nothing built here blocks that. | `registry-verification-sql-parity.integration.test.ts` asserts NO `verified` key is ever published | Dev · AC text to be amended by SM |
+| **R5** — AC9's own teardown wording ("delete that respondent + submission BY ID") is INCOMPLETE for the public-wizard path. | **High** | **CLOSED — corrected in `13-3-cutover-and-failover.md`.** Proven live, not theorised: the 2026-08-21 dry run created `users`(1), `magic_link_tokens`(1), `marketplace_profiles`(1) and `campaign_sends`(1) that the literal wording would have orphaned. ⚠️ `campaign_sends` matters *because of this story* — the AC2 throttle reads that ledger, so a leftover row silently suppresses the next real thank-you to that address for the whole gap window. | `DELETE n` counts recorded in the runbook run-record | Dev |
+| **R6** — Context §4 undercounts outbound volume: one registration sends **THREE** emails (magic link + confirmation + outreach), not one. | Med | **CLOSED as documented — but note the capacity implication.** "N registrations ⇒ N provider calls on the event loop" is really **3N**. The cap design is unaffected (only the outreach is marketing); the capacity argument is 3× sharper. **REOPEN TRIGGER:** 13-3's load test measured a READ endpoint (`/forms/public-active`), so the write path at 3N sends/registration has still never been load-tested — reopen if the jingle scale estimate rises. | Confirmed by delivery 2026-08-21; ledger row 0.36 s after submit, same request | PM (John) — is a write-path load test a paid-spend gate? |
+| **R7** — 6 respondents from the 9-26 soft-launch hemorrhage carry NO `questionnaire_data_lost` marker, so `deriveDataStatus` buckets them `no_submission` instead of `data_lost`. | Low | **CLOSED HERE — HANDED OFF to Story `13-64-data-loss-marker-tail-six-respondents-in-the-wrong-bucket`, registered `ready-for-dev`, sequenced by PM ruling 3 to ride immediately before 12-6.** All 6 are `source='public'`, created 2026-05-20 02:18-06:28Z — the tail of the hemorrhage on the morning of the fix, before it deployed. The marker backfill evidently keyed on `created_at < 2026-05-20`. Six people sit in the wrong bucket on a taxonomy this story now PUBLISHES. | `OSL-2026-BECYNP`, `4RRPPA`, `P9NESM`, `RKTVAR`, `99Y46Z`, `T50C36` · 49 of 55 orphans ARE correctly marked · 0 marked rows after 2026-05-20 | SM (Bob) to file |
+| **R11** — `import.service.integration.test.ts` collides on `users_email_unique` when two runs land in the same ~65-second bucket. | Low | **CLOSED HERE — pre-existing, NOT introduced by 13-46, and recorded for the backlog rather than carried as 13-46 work.** Its actor email is `_imp112_${uuidv7().slice(0,8)}`, and the first 8 hex chars are the HIGH 32 bits of a 48-bit ms timestamp — they only change every ~65s. It also never cleans up: **73 leftover rows in `app_test`, oldest 2026-08-07.** Passes in isolation (11/11); it failed once in a back-to-back full-suite run and would read as a flake. | Confirmed by re-running the file alone after a full-suite failure, and by counting the debris | Backlog |
+| **R12** — the AC2 gap is now scoped to `thankyou-referral`, so cross-campaign suppression no longer protects the auto thank-you. | Med | **OPEN as a WATCH, not as work — this is R1's falsifier.** `recordThankYouSuppressed()` counts every suppression. **REOPEN TRIGGER: a non-trivial suppression count on a day with no duplicate-registration activity** means the ruling was wrong and the broad gap should come back. Deliberately a counter rather than a catch-up queue: the alternative would be machinery whose job is to eventually deliver mail that should not be sent. | Counter wired in `middleware/registration-burst.ts`; event `thankyou_referral_auto.skipped_duplicate_thankyou` | Operator, first jingle window |
+| **R9** — `getCampaignBreakdown` has **ZERO callers** in `apps/`. AC9's assertion (b) was verified at SQL level, so the row IS returned — but no surface invokes the function, so no human can read the number. | **High** | **CLOSED HERE — HANDED OFF to Story `13-63` AC4, registered `ready-for-dev`. My own AC9 discharge was half-true and is corrected in the record.** AC9's stated intent was "prove the number a human will actually read"; I proved the query, not the readability. This is the `getCampaignFunnel` failure (computed, never consumed) reproduced *inside the check written to catch it*. Fix is Story **13-63 AC4**. | grep: only the definition at `report.service.ts:86` and one comment reference | SM (Bob) — carried by 13-63 |
+| **R10** — A `?ref` tag on the APEX (`oyoskills.com/?ref=fresh`) is DROPPED before it can be captured. | **High** | **CLOSED 2026-08-22 — the correction is PROPAGATED; the build is R3's.** Corrected in `roadmap-to-launch.md` gate item 6, `pre-viral-push-checklist.md` §0, and Story 13-63 AC1-AC3. ⚠️ Leaving this OPEN once the corrective action was complete was this ledger drifting from reality — the exact failure it exists to prevent. The BUILD is tracked by R3, which is the row with the deadline. `parseUtm` is called from exactly ONE place, `WizardPage.tsx:172` (mounted at `/register`), and every CTA is a bare `<Link to="/register">` that discards the query string. So a redirect to `/?ref=…` measures **nothing**. Target must be **`/register?ref=<slug>`** — still zero code. Same defect 13-9 AC1 already fixed on the `/auth/magic` hop. ⚠️ Had the rules been built from R3's original wording they would have been live, verified-as-redirecting, and silently attributing nothing. | Verified by grep: 1 `parseUtm` call site; 10+ bare `to="/register"` CTAs | PM (John) — before the buy |
+| **R8** — AC7's AFTER count (turn-away delta from the first jingle window). | Med | **OPEN — [[pattern-verification-that-cannot-run-yet]].** The BEFORE baseline is collected (2026-08-21). The AFTER half needs an event that has not happened. **Do not close this on a zero.** It sits on the roadmap paid-spend pre-flight gate. | BEFORE: IP limiter 0 in 13 days post-hotfix; per-email 2 organic hits, both `attempts=4`; draft limiter 0 | Operator, at the jingle |
+
 ## Change Log
 
 | Date | Change | By |
 |------|--------|-----|
+| 2026-08-21 | **AC5 WORDING AMENDED — residual R4 discharged on the AC text side. NOTHING ELSE IN THIS FILE CHANGED** (no status, no residual ledger, no Dev Agent Record). AC5 said `/insights` publishes *"REGISTERED vs **VERIFIED**"* and its first bullet cited an Axis-3 taxonomy including a `verified` tier. **That tier does not exist and its absence is deliberate:** 12-4 (AC9 / ruling R1) removed it because a NIN is CAPTURED, never validated — there is no NIMC integration and NINs carry no check digit — so the shipped tiers are exactly `nin_on_file` / `self_declared` / `pending_nin` / `unverified_import` (`registry-totals.service.ts:196-205`, whose own comment reads *"There is no `verified`"*) and the public label reads **"with NIN on file"**. The dev agent flagged the contradiction rather than silently resolving it (2026-08-20 row below) and shipped against the real taxonomy; this amendment makes the AC agree with what shipped, so the next reader does not hit the same conflict and "fix" the code to match a word. **The requirement is unchanged** — honest-display RULE 5 forbids BLENDING trust levels into one registry-size claim, which binds identically whichever name the top tier carries; the split is the AC, the word was the error. Also generalised the bullet so it names the four real tiers instead of the retired five. ➜ Follow-ups from the same ledger were filed as separate stories, not folded in here: **13-63** (R3 vanity paths + R2 post-submit ask) and **13-64** (R7 data-loss marker tail). | Bob (SM) |
+| 2026-08-21 | **PROD: AC9 DISCHARGED, AC7's BEFORE baseline COLLECTED, and every cap re-derived from measured data.** ✅ **AC9 passed both halves on the real pinned form** — `OSL-2026-9F4TRH` stored `{"utm": {}, "channel": "Radio"}` **and** `getCampaignBreakdown()` returned `Radio|1`; torn down child-first, all traces 0, **re-measured** to 327/286/25 (never restored to a number). Before this run `Radio` had never once been selected on prod. 🔴 **The run proved AC9's OWN teardown wording incomplete** — the public-wizard path created `users`, `magic_link_tokens`, `marketplace_profiles` and `campaign_sends` rows that "delete that respondent + submission BY ID" would have orphaned; the `campaign_sends` one matters *because of this story*, since the new AC2 throttle reads that ledger and a leftover row silently suppresses the next real thank-you to that address. 🔴 **One registration sends THREE emails, not one** (magic link + confirmation + outreach) — Context §4's "N registrations ⇒ N provider calls on the event loop" is really **3N**, though only the outreach is marketing and therefore capped. ⏱️ §4's synchronous-send timing reproduced exactly: submit `16:53:17.676Z` → ledger `16:53:18.039Z`, **0.36 s, same request**. **AC7 BEFORE baseline:** the 23 `registration.rate_limit_exceeded` events are ALL **pre-hotfix** (`attempts=6…25` is only refusable while `max` was 5), so the IP limiter has fired **zero** times in the 13 days since; the per-email limiter's two organic hits are both `attempts=4`, one retry over the limit — a person, not a script; `wizard_draft.rate_limit_exceeded` **0**. Volume: 327 respondents, busiest day ever 168 submissions / 177 marketing sends, busiest month 300 sends. ⭐ **Those figures replaced the invented numbers at every constant**, with the check that matters recorded in code: the cap would NOT have bound on the busiest real day. ⚠️ Still assumed, and said so: the jingle's own peak; and the draft limiter's measured zero proves only that it was never under load. ⛔ Task 7's AFTER count remains open — it needs an event that has not happened. Suite after the prod pass: **4104 API / 3006 web, 0 failed**; tsc + lint + 3 drift guards clean. | Claude (dev-story) |
+| 2026-08-20 | **DEV: Tasks 1-6 + 9 implemented; Tasks 7 + 8 NOT done (prod access).** Built in the story's leverage order, with AC4's precondition honoured literally — the send cap and the per-address throttle were green before any limiter value was touched. **AC1**: `NotificationMeter.checkCap()` is a pure pre-send check consulted by `dispatch` BEFORE the provider call (anchored on the symbol, not the line — that anchor had already rotted twice); marketing-only, fail-OPEN on infrastructure and fail-CLOSED on the limit; refusals are loud (structured failure + `notification.cap_exceeded` + one Telegram page per window). **AC2**: the auto thank-you now consults the SAME gap query the four blast scripts inherit — closing the mail cannon, where a new respondent row for the same address walked straight past the per-RESPONDENT marker; the fail-soft-ledger direction is decided in code (missing row ⇒ ALLOW, because the opposite turns degraded instrumentation into total loss of a citizen-facing email, and AC1's cap bounds the residual). **AC3**: a burst breaker that pages and **never blocks** (`next()` synchronously, first), which also fires on a 429 WALL at ordinary throughput — the signal 9-52 is structurally blind to. **AC4**: mostly already shipped by the 2026-08-07 hotfix; this finished the stale route prose, the supplemental-route ruling, and re-sized `wizardDraftRateLimit` 120 → 1,200/IP plus a new per-email dimension (it fails FIRST and SILENTLY — a lost draft looks like a user who didn't finish). **AC5**: the Axis-3 split computed inside the SAME count-core query (one counting source) and actually RENDERED, not just added to the type. **AC6**: the `exclude /api/*` remedy corrected in both places, plus a registration-scoped WAF rule (Managed Challenge, not block — CGNAT). **AC10 + the nudge shipped as ONE deliverable.** ⚠️ **Two things flagged for review rather than silently resolved:** (i) AC5 says "VERIFIED" but 12-4 R1 deleted that tier — a NIN is captured, never validated — so the public label reads "with NIN on file"; (ii) the nudge intercepts the first Save press when the question is untouched, which is a real funnel change and wants a look on a phone. ⚠️ **Every cap remains PROVISIONAL** — AC7's prod counts are the real derivation input and were not collectable here, so each constant ships with its arithmetic, its assumption named AS an assumption, its failure direction and a reopen trigger. Status → `review`. | Claude (dev-story) |
 | 2026-07-30 | **Station-attribution note completed + one citation corrected.** The per-station UTM bullet had closed on the wrong constraint — *"whether a station will read a URL on air"*. The real blocker is that **a listener cannot type a query string**: `oyoskills.com/?ref=fresh_fm` is unsayable on radio. Added the instrument that dissolves it — a **radio-sayable vanity path per station** (`oyoskills.com/fresh` → 302 → `/?ref=fresh`), which `parseUtm` already consumes because it treats a bare `?ref` as first-class (`attribution.ts:131` — ⚠️ corrected 2026-08-17; `:47` was a type declaration, the bare `?ref` read is `params.get('ref')` at `:131`). It is a **Cloudflare Redirect Rule — no code, no deploy, no story**. With **11 stations** on the buy (`roadmap-to-launch.md:107`) this is the difference between *"radio worked"* and *which of 11 stations* earned the naira, and it is the only station-level instrument that survives a listener who skips the question. Flagged as decide-BEFORE-the-buy: a URL read on air cannot be retrofitted. Also corrected `MagicLinkLandingPage.tsx:293` to its real path (`features/auth/pages/`, not `features/registration/pages/`) — the bare filename pointed readers at the wrong feature directory. | Claude (code-review/adjudication pass) |
 | 2026-07-30 | **Attribution addendum — +Context §9, +AC9, +AC10, +an OPEN DECISION block, +a station-attribution Dev Note, +2 non-goals.** ⚠️ **Corrects a wrong position held earlier in drafting: the "How did you hear about us?" question is NOT missing.** It is live on the Review step (`Step5ReviewAndSave.tsx:229`), the flag is ON (`attribution.ts:12`), **Radio is the first option** (`attribution.ts:15-25`), and the chain is complete end to end — web `extras.acquisition` (`Step5ReviewAndSave.tsx:240-245`) → `buildCampaignSource` (`registration.controller.ts:103-115`) → spread last into `raw_data` (`:735-738`) → `ReportService.getCampaignBreakdown` (`report.service.ts:86-95`). Story 13-1 shipped it. **The real gaps are narrower and different:** (1) the path has **executed zero times on prod** — `campaign_source` present on **0 of 82** submissions — so the pre-jingle gate is a **LIVENESS DRY RUN, not a form change** (new **AC9**, with teardown BY ID because "restore to baseline" is a data-deletion hazard, and with the read side asserted too so it cannot become another built-but-unconsumed `getCampaignFunnel`); (2) `<option value="">Prefer not to say</option>` is the pre-selected FIRST option (`:239,247`), so **"declined" and "ignored" are the same stored value** and the denominator for every channel conclusion is unrecoverable (new **AC10a**, incl. the consequence that an explicit decline moves decliners inside `getCampaignBreakdown`'s `IS NOT NULL` filter at `report.service.ts:93` — a decision to record, not discover); (3) **first-position bias sits on Radio**, the channel we most want to measure (new **AC10b**). Station-level attribution is deliberately absent (`attribution.ts:14`, 13-1 AC2.4) — recorded as a **media-buy** decision with three no-code alternatives, incl. per-station UTM links, which are already wired (`WizardPage.tsx:171`) and attribute **even when the listener never answers the question** (`registration.controller.ts:113`). **Making the question mandatory is an explicit OPEN DECISION for Awwal, NOT an AC** — it reverses a prior review ruling recorded in both files (`Step5ReviewAndSave.tsx:214` "prominence ≠ mandatory"; `attribution.ts:7` "NEITHER ever blocks a submit"), it sits at the most expensive point in the funnel, and forced choice with Radio first manufactures the very signal we are trying to detect. SM recommendation: keep it optional, ship AC10, add one **non-blocking** submit nudge. | Bob (SM) |
 | 2026-07-30 | **Story drafted**, EMERGENT from Awwal's decision to run a radio jingle at the public wizard before the email blasts. Framing: the code does not block the jingle, the CONTROLS are wrong in both directions — an auth-shaped 5/IP/15min limit on an accountless public survey endpoint (harmful under carrier NAT), and NO ceiling at all on the outbound email every registration fires synchronously in-request. 8 ACs / 7 Tasks, ordered by leverage per Awwal's accepted recommendation: cap the send → throttle the address → alert on burst → THEN loosen signup → publish registered-vs-verified → operator WAF gate → measure the turn-away. Status `ready-for-dev`, classified LAUNCH-ADJACENT (not post-launch). **Corrections made against the drafting brief, each verified:** (i) `respondents` has NO email column at all — the address lives in `submissions.raw_data` + `users.email`, and `users.email` IS unique but the wizard inserts `onConflictDoNothing`, so an email unique index is not merely missing but not expressible on the respondent side; (ii) the auto thank-you is **synchronous in-process**, never queued, so a burst is N provider calls on the API event loop; (iii) `NotificationMeter` cannot cap where it sits — `dispatch` calls it AFTER the provider and discards the result — and its fail-open contract is *correct* for transactional mail, so the cap must be category-aware; (iv) `wizardDraftRateLimit` (120/IP/15min) fails FIRST under CGNAT and its own comment states the "~5 wizards per shared NAT" assumption the jingle breaks; (v) a radio-jingle runbook **already exists** (`13-3-cutover-and-failover.md`) alongside `pre-viral-push-checklist.md` and roadmap-to-launch's paid-spend pre-flight gate — this story edits all three and creates none; (vi) 13-3's load test measured a READ endpoint, so its green verdict says nothing about the write path. **Preserved, not reopened:** no wizard captcha (magic link + captcha-gated login is the real gate), Bot Fight Mode OFF (9-20). | Bob (SM) |
@@ -912,3 +1138,322 @@ WHERE r.source = 'public' AND s.submitted_at >= '<AC10 DEPLOY>';
 ⚠️ **Computing that rate over ALL submissions would dilute it with staff captures that were never
 asked** — the same defect class as ruling R-E's denominator, on a different metric. **A rate's
 denominator is the set of people who were ASKED the question.**
+
+## Senior Developer Review (AI) — 2026-08-22
+
+**Reviewer:** adversarial code review (BMAD `code-review` workflow), on the UNCOMMITTED working tree
+of `story/13-46-burst-readiness`. **Outcome: CHANGES REQUESTED.** No code was modified and no status,
+ledger, Change Log or Dev Agent Record entry was touched by this pass.
+
+**What I ran (so a reader can separate proof from analysis):**
+`cd apps/api && pnpm vitest run` over the six unit files — **58/58 green**; and, against `app_test`,
+`registry-verification-sql-parity.integration.test.ts` + `thankyou-autosend-throttle.integration.test.ts`
+— **14/14 green**. Plus one throwaway `tsx` probe of the real `classifyEmailSubject` /
+`isMarketingCategory` (deleted; nothing left in the tree). Findings below are marked **CONFIRMED BY
+RUNNING** or **ANALYSIS**.
+
+### H1 — The 429-wall alert can only fire on a SERVED submit, so the incident AC3 cites would probably not have paged it
+
+`apps/api/src/middleware/registration-burst.ts:121-134` · `apps/api/src/routes/registration.routes.ts:72-78`
+**Severity: HIGH. CONFIRMED (single call site proven by grep); scenario is ANALYSIS.**
+
+`evaluateRegistrationBurst()` has exactly one caller — the body of `registrationBurstWatch`, mounted
+only on `POST /wizard`. `recordRegistration429()` (`:131-134`) only bumps a counter; it never
+evaluates. The draft limiters' refusals (`wizard-draft-rate-limit.ts:124,157`) come from `/draft`,
+where the watch is not mounted at all, so a pure draft-limiter wall can never trigger an evaluation
+from the route it happens on.
+
+**Failure scenario:** one carrier gateway spends its 50/15min budget; the next 10+ submits 429 inside
+one 5-minute window with no other served submit. `blocked429 = 10 >= blocked429PerWindow` — and nothing
+reads it. The minute buckets expire at `BUCKET_TTL_SECONDS = 600` (`:33`) and the wall is gone. This is
+structural, not a corner case: a limiter's refusals always come *after* the served traffic in a window,
+so the last evaluation in any burst runs one step too early. It is also exactly the August shape the
+module's own docblock cites (1-8 served submits/day, 27 refusals in one morning).
+
+**Fix (described, not applied):** fire `void evaluateRegistrationBurst()` from `recordRegistration429()`
+as well as from the submit path (both halves already swallow their own errors), or add a cheap interval
+runner. Add a middleware-level test that pages from a 429-only window.
+
+### H2 — A deliberate cap refusal pages the operator as "Registration auto-emails are FAILING… the loop may be down"
+
+`apps/api/src/services/submission-processing.service.ts:1599-1605` · `apps/api/src/services/email.service.ts:159-167` · `apps/api/src/services/email-autosend-monitor.ts:31,90-95,134-143`
+**Severity: HIGH. CONFIRMED BY RUNNING** — this line came out of the integration run above:
+`registration_autosend.failure kind=thankyou error="Marketing send cap reached (daily-cap-exceeded: 2000/2000 in the daily window)"`.
+
+The cap returns `{ success: false }`, and the caller treats any falsy success as a 13-21 auto-send
+FAILURE. `DEFAULT_THRESHOLD = 5`, so the fifth capped thank-you in a day pages
+*"CRITICAL — Registration auto-emails are FAILING… The confirmation + thank-you/referral loop may be
+down. Check the Resend dashboard."* Three consequences at once: the operator gets the wrong diagnosis at
+the exact moment the right one matters; it routes around `reportCapRefusal`'s deliberate one-page-per-window
+cooldown; and 13-21's failure metric is now polluted by refusals that are the system working.
+
+**Fix:** branch on the refusal before `recordAutoSendFailure` — skip it, or pass a distinct `kind`
+(`'thankyou_capped'`) with its own copy.
+
+### H3 — A blast-driven registrant loses the thank-you/referral email permanently, not "for N days"
+
+`apps/api/src/services/submission-processing.service.ts:1567-1580` · `apps/api/src/services/email.service.ts:176-186`
+**Severity: HIGH (product). ANALYSIS.**
+
+AC2 reads as a throttle; the implementation is a drop. On a hit the function `return`s with no marker
+stamped, and nothing re-drives `sendRegistrationAutoEmails` for that respondent — there is no deferred
+queue and no catch-up pass. Because `dispatch` writes `campaign_sends` for **every** marketing category,
+the gap fires for a *different* campaign's contact. So: the re-engagement blast goes out Monday; a
+listener registers Tuesday; their thank-you + referral ask — the growth loop the jingle exists to feed —
+is never sent. `_thankyou-referral-blast.ts` cannot recover them inside the same window either, since
+`filterMarketingCohort` applies the same 5-day gap. This is the primary launch flow (13-49 adopted 174
+through it), and no test or note states the consequence.
+
+**Fix options:** scope the gap read to the auto-send's own category/campaign; or stamp a
+`thankyou_referral_deferred_at` marker and run a catch-up after the gap.
+
+### H4 — Counted-but-not-capped: the cap's gate and the cap's counter resolve the category differently
+
+`apps/api/src/services/email.service.ts:158` vs `:171-175` · `apps/api/src/services/notification-meter.service.ts:307-309` · `apps/api/src/services/magic-link.service.ts:377,420`
+**Severity: MEDIUM-HIGH (latent today). CONFIRMED BY RUNNING the real classifier.**
+
+`checkCap(category)` uses the **caller-declared** category. `recordEmailSend({subject, category})` falls
+back to `classifyEmailSubject(subject)` when the caller declared none — and `sendGenericEmail`'s own
+docblock names subject classification as the supported default. Probe output:
+
+`{"subject":"One more step for your Oyo State Skills Registry profile (3 minutes)","category":"supplemental-survey","marketing":true}`
+
+— that is `magic-link.service.ts:420`, sent at `:377` **with no category**. Such a send is never capped
+but *does* consume the marketing bucket, so transactional traffic can exhaust the ceiling and refuse real
+thank-yous, and the `marketingHeadroom` the AC3 alert publishes is wrong. Currently dormant only because
+nothing calls `sendMagicLinkEmail` with that purpose — it is one caller away, and nothing guards it.
+
+**Fix:** resolve once at the top of `dispatch` (`const resolved = category ?? classifyEmailSubject(data.subject)`)
+and use `resolved` for `checkCap`, the List-Unsubscribe headers, the ledger write and `recordEmailSend`.
+Note this deliberately widens 13-13/13-24 behaviour too — worth stating rather than sliding in.
+
+### M1 — A bulk re-engagement script bypasses the new cap, the unsubscribe header and the AC2 ledger
+
+`apps/api/scripts/_recover-abandoned-wizard-drafts.ts:386,191`
+**Severity: MEDIUM. CONFIRMED BY RUNNING** (`'Complete your Oyo Skills Registry registration'` → `other`,
+`marketing:false`). It sends with no category to the abandoned-draft cohort (293 live drafts). Result: a
+bulk outbound run the cap reports as **0 used**, with no `List-Unsubscribe` header and **no
+`campaign_sends` row** — so AC2's per-address gap will not suppress a thank-you to those addresses
+afterwards either. Pre-existing, but this is the story whose whole thesis is a ceiling on outbound
+marketing volume, and it does not hold for one of the largest sends the project can make.
+
+### M2 — `wizardDraftEmailRateLimit` silently re-imposes a per-IP bucket 4x TIGHTER than the flood-stop it sits behind
+
+`apps/api/src/middleware/wizard-draft-rate-limit.ts:84-92,139-164` · `apps/api/src/routes/registration.routes.ts:58-59`
+**Severity: MEDIUM. ANALYSIS.**
+
+When no address is present the key falls back to `ip:` at `WIZARD_DRAFT_EMAIL_MAX = 300`, against
+`WIZARD_DRAFT_IP_MAX = 1200` on the limiter mounted immediately before it. `GET /draft` is token-only on
+the magic-link resume path (`apps/web/.../wizard.api.ts:99-107` sets `email` only when supplied), so
+resume hydration behind one carrier gateway shares a 300/15min bucket — and 300 was derived as a
+**per-person** ceiling ("300 sits far above the real band", `:63-65`), never as a per-gateway one. This is
+the identical mechanism the story explicitly and correctly refused for the supplemental route
+(`registration.routes.ts:93-97`); it rode silently here, on the limiter the story itself calls the one
+that "fails FIRST and SILENTLY". Compounding it: the handler logs `dimension: 'email'` (`:155`) even when
+the key was the IP fallback, so the one field an operator would use to diagnose it is wrong.
+
+**Fix:** skip the email limiter when the key had to fall back (or give the fallback its own, higher max),
+and log the dimension actually used.
+
+### M3 — AC5 publishes four tiers, renders one, and nothing tests the render
+
+`apps/web/src/features/insights/pages/PublicInsightsPage.tsx:100-105` · `packages/types/src/analytics.ts:388-403`
+**Severity: MEDIUM. CONFIRMED** (grep: `byVerification` appears in the two web fixtures with no assertion
+anywhere; `"NIN on file"` appears only in the component and its comment).
+
+The headline is still a single unqualified `totalRegistered`; the split is a subtitle showing
+`nin_on_file` only. `self_declared`, `pending_nin` and `unverified_import` are computed, made **required**
+on the shared type, shipped in the payload — and read by no component. That is three-quarters of the 12-5
+defect the Completion Notes say this avoided. And because no test asserts the subtitle text, reverting
+the one rendered tier leaves the web suite green.
+
+**Fix:** assert the rendered string in `PublicInsightsPage.test.tsx`, and either render the remaining
+tiers or say in the type why they are payload-only.
+
+### M4 — An unknown Axis-3 tier is dropped silently, and a unit test blesses the resulting inconsistency
+
+`apps/api/src/services/registry-totals.service.ts:129-138` · `apps/api/src/services/__tests__/registry-totals.service.test.ts` ("IGNORES an unknown tier string")
+**Severity: MEDIUM. CONFIRMED by reading both files (tests green).**
+
+`if (tier in byVerification)` discards anything outside the four tiers with no log. The unit test pins
+`total_respondents: 3` with the tiers summing to **0** — i.e. it enshrines a published split that does not
+add up to its own headline, which the integration test ("the tiers PARTITION the headline") declares
+unacceptable. Two tests, two contradictory invariants; in prod the silent one wins and the integration
+guard only fires if such a row happens to exist in the test DB.
+
+**Fix:** `logger.error({ event: 'registry.unknown_verification_tier', tier })` on the drop, so a taxonomy
+change is loud instead of arithmetic.
+
+### M5 — `reportCapRefusal` burns the 6-hour page slot even when the page was not delivered
+
+`apps/api/src/services/notification-meter.service.ts:449-474` · `apps/api/src/services/alerting/telegram-channel.ts:100-140`
+**Severity: MEDIUM. ANALYSIS.**
+
+`winCapAlertCooldown` claims the slot with `SET … NX` *before* the send, and `sendTelegramMessage`'s
+boolean return is discarded. That function never throws but returns `false` on a missing token, a non-2xx
+from Telegram, or a fetch failure. One transient failure at the moment the cap first binds therefore costs
+the operator the page for `NOTIFY_CAP_COOLDOWN_MINUTES` (default 360) while `logger.error` keeps firing per
+refused send — the "logged and forgotten" shape the docblock says this exists to prevent. The docstring's
+claim "Fail-OPEN: a cooldown read error lets the page through" covers the read, not the send.
+
+**Fix:** set the cooldown key only after a truthy dispatch, or `DEL` it when the dispatch returns false.
+
+### M6 — Two tests AC8 names by hand are missing
+
+`apps/api/src/services/__tests__/thankyou-autosend-throttle.integration.test.ts` · `apps/api/src/services/submission-processing.service.ts:1582-1590`
+**Severity: MEDIUM. CONFIRMED by reading the file.**
+
+AC8 asks for "a soft-failed ledger row behaves as specified" and for the RED-verify to be driven through
+`runPostSubmissionSideEffects`. Neither exists: the integration test enters one level lower, at
+`sendRegistrationAutoEmails`, and **nothing exercises the `catch (gapErr)` fail-open branch**. The
+deliberately-chosen failure direction — the one AC2 demanded be decided *and recorded* — is the single
+branch with no test. Deleting the whole `try/catch` would not redden the suite.
+
+### M7 — Three changed files are absent from the story's File List
+
+`docs/runbooks/enumerator-prod-smoke-and-golive-gate.md`, `docs/runbooks/pre-launch-operator-runbook.md`
+and `_bmad-output/planning-artifacts/epics.md` all carry uncommitted edits and appear nowhere in
+**Dev Agent Record → File List** (its Docs section names only three runbooks; Planning names only
+`sprint-status.yaml`). The two new story files (13-63 / 13-64) are described in the Change Log but also
+absent from the File List. **CONFIRMED** by `git status --short` vs the File List.
+
+### L1 — TOCTOU on both new guards, unstated in the derivations
+
+`checkCap` reads counters that `record()` only increments *after* the provider returns, so N concurrent
+marketing sends can all clear the ceiling; the overshoot is bounded by in-flight concurrency, not by the
+cap. Symmetrically, the AC2 gap check reads `campaign_sends` before the send while the row is written
+after it, so two simultaneous registrations on the same address both send — the exact burst shape the
+story is written for. Both are acceptable at these volumes; neither is named as a bound beside the
+numbers that are otherwise derived so carefully. **ANALYSIS.**
+
+### L2 — `blocked429` conflates submit refusals with autosave refusals under one threshold and one message
+
+`recordRegistration429()` is called from the submit limiter, the per-email submit limiter and **both**
+draft limiters, into a single counter. `lib/registration-burst.ts:141,168-169` then renders it as
+*"Registrations are being REFUSED… Registrations that reached the app HAVE been served; the refused ones
+were not"* — which may be describing autosaves: a different event, a different remedy, and a natural
+per-session volume 20-60x higher than submits, against a threshold of 10 derived from submit refusals
+only. **ANALYSIS.**
+
+### L3 — `BTRIM` vs `.trim()`: the parity test passes over exactly this hole
+
+`registry-totals.service.ts:336` uses `BTRIM(nin) <> ''` (ASCII spaces only) against TS
+`nin.trim() !== ''` (all Unicode whitespace), and `respondents.nin` is an unconstrained `text` column
+(`db/schema/respondents.ts:200`). A tab- or newline-only NIN reads `nin_on_file` in SQL and
+`self_declared` in TS. The parity test's `blanknin` seed is `'   '` — spaces, the one whitespace class
+where the two agree. The `LIKE 'imported\_%'` escape, by contrast, **is** correct under
+`standard_conforming_strings` and matches `startsWith('imported_')` exactly. **ANALYSIS.**
+**Fix:** `BTRIM(nin, E' \t\n\r\f\v')` (or a regex), and add a tab seed.
+
+### L4 — The burst evaluation runs on every served submit
+
+`middleware/registration-burst.ts:121-129`: each registration costs a pipeline INCR/EXPIRE, a 15-key
+MGET, a 6-key MGET for headroom and (on a finding) a SET NX — on the event loop that also hosts all ten
+BullMQ workers. It is all after `next()`, so it cannot delay a response, but the burst pays for its own
+measurement precisely when it is largest. Sampling, or moving the evaluation to an interval runner (which
+would also fix **H1**), costs nothing in fidelity. **ANALYSIS.**
+
+
+### Action Items (dev response to the review) — CRITICAL → LOW
+
+**Ordered by severity for reading; WORKED in dependency order** (noted per item), because AC4's
+category resolution changes what `checkCap` sees and must land before the refusal-shape fix.
+**Every item ships with a test that fails without it** — M6 and L3 are both "the guard has no test",
+and fixing them in a way that repeats that class would be self-defeating.
+
+| # | Sev | Finding | Fix | Order |
+|---|---|---|---|---|
+| ✅ **A1** | CRITICAL | **H1** — the 429-wall alert can only fire on a served submit, so a pure turn-away never pages | Fire `void evaluateRegistrationBurst()` from `recordRegistration429()` too. Test: a 429-ONLY window pages. | 3rd |
+| ✅ **A2** | CRITICAL | **H2** — a deliberate cap refusal pages "auto-emails are FAILING… loop may be down" | Branch on the refusal before `recordAutoSendFailure`; distinct `kind`, own copy, no false page | 2nd (needs A4) |
+| ✅ **A3** | CRITICAL | **H3** — a blast-suppressed registrant loses the thank-you PERMANENTLY | ⚖️ **RULED: scope the gap to the auto-send's OWN category**, + a counted/logged suppression so a wrong call surfaces. See the ruling note below. | 4th |
+| ✅ **A4** | CRITICAL | **H4** — `checkCap` uses the declared category, `recordEmailSend` falls back to the classifier ⇒ counted-but-not-capped | Resolve ONCE at the top of `dispatch`; use it for cap, headers, ledger and meter. State that it widens 13-13/13-24. | **1st** |
+| ✅ **A5** | HIGH | **M2** — the draft per-email limiter's IP fallback (300) is 4× TIGHTER than the 1,200 flood-stop before it | Skip the email limiter when the key fell back to IP; log the dimension actually used | 5th |
+| ✅ **A6** | HIGH | **M1** — `_recover-abandoned-wizard-drafts.ts` sends to 293 drafts with NO category ⇒ uncapped, unledgered, no unsubscribe header | Give it its explicit marketing category | 6th |
+| ✅ **A7** | MEDIUM | **M5** — `reportCapRefusal` burns the 6h page slot even when the page was NOT delivered | Claim the cooldown only after a truthy dispatch | 7th |
+| ✅ **A8** | MEDIUM | **M4** — an unknown Axis-3 tier is dropped silently, and a unit test enshrines a non-summing split | Log `registry.unknown_verification_tier` on the drop; correct the test's invariant | 8th |
+| ✅ **A9** | MEDIUM | **M6** — two tests AC8 names by hand are missing; the AC2 fail-open `catch` has NO test | Add both, incl. driving `runPostSubmissionSideEffects` | 9th |
+| ✅ **A10** | MEDIUM | **M3** — AC5 publishes four tiers, renders one, and nothing tests the render | Assert the rendered string; state why the other tiers are payload-only | 10th |
+| ✅ **A11** | LOW | **L3** — `BTRIM` (ASCII) vs `.trim()` (Unicode); the parity seed is `'   '`, the one class where they agree | Explicit whitespace class in SQL + a TAB seed | 11th |
+| ✅ **A12** | LOW | **L2** — `blocked429` conflates submit refusals with autosave refusals under one threshold and one message | Split the counters; name the split in the alert | 12th (with A1) |
+| ✅ **A13** | LOW | **L4** — the burst evaluation runs on EVERY served submit, on the shared event loop | Bound it with a short evaluation cooldown — fidelity unchanged over a 5-min window | 13th (with A1) |
+| ✅ **A14** | LOW | **L1** — TOCTOU on both new guards, unstated beside otherwise-careful derivations | Name the bound in the docblocks; no locking | 14th |
+| ✅ **A15** | LOW | **M7** — three changed files and two new story files absent from the File List | Regenerate the File List from `git status` rather than hand-maintaining it | last |
+
+#### ⚖️ Ruling on A3 / H3 — scope the gap, do NOT build defer-and-catch-up (Awwal, 2026-08-22)
+
+Awwal's first instinct was **defer-and-catch-up**, on the principle that we must not hide behind
+technical debt to avoid doing the right thing, and explicitly left the call open if the alternative
+were more right. It is, and the reason changes the calculus rather than dodging it:
+
+- **The broad gap is over-broad relative to AC2's OWN stated threat.** AC2 exists to stop the mail
+  cannon — *one address, N registrations, N thank-yous*. The precise guard for that is "has this
+  address already had a THANK-YOU recently", not "has this address had any marketing at all".
+- **Scoped that way, the only suppressed send is a DUPLICATE thank-you** to an address that already
+  received one. That is not an email anyone wants redelivered late — it is one that should be dropped.
+  So the catch-up machinery would exist to eventually deliver mail that should not be sent.
+- **The case the broad gap was "protecting" is the one that should NOT be suppressed.** Blast Monday
+  ("please finish registering") then register Tuesday ("thanks, you're registered") is a conversation,
+  not two campaigns. Suppressing the second is the defect, not the safeguard.
+- **Defer-and-catch-up also carries an unbounded-deferral failure mode** — each new marketing contact
+  inside the window re-defers — which is new machinery and a new failure surface days before a jingle.
+
+⚠️ **The half of Awwal's instinct that IS carried:** the suppression is now COUNTED and logged with its
+own event, so if this ruling is wrong we learn it from a rising counter rather than from a citizen who
+never got their referral link. **REOPEN TRIGGER:** a non-trivial suppression count on a day with no
+duplicate-registration activity.
+
+
+#### Outcome of the action-item pass — all 15 applied, 2026-08-22
+
+**Gates after the fixes:** full API suite **4110 passed / 0 test failures**; web suite green;
+`tsc --noEmit` clean on both packages; eslint clean; all three drift guards green.
+
+**Three things the fixes themselves surfaced — each worth more than the item that found them:**
+
+1. 🔴 **An EXISTING guard caught my own fix within one run.** Declaring the category on
+   `_recover-abandoned-wizard-drafts.ts` (A6) made it a MARKETING sender, and
+   `scripts/__tests__/blast-dedupe-inheritance.test.ts` immediately failed: 13-24's invariant is
+   that every marketing script routes its cohort through `filterMarketingCohort`. It was right —
+   A6 as first written closed the cap/header/ledger hole and left the DEDUPE hole open. The script
+   now inherits the shared filter.
+   ⚠️ **This changes who that operator script mails** (293 abandoned drafts): suppressed and
+   recently-contacted addresses are now skipped. The shrink is printed AND logged with its reasons,
+   because a cohort that quietly gets smaller is worse than one that visibly does.
+2. 🔴 **My own test harness was passing over a hole.** The burst middleware tests used ONE
+   `setImmediate` to "settle" a fire-and-forget chain that awaits five async steps, so every
+   NEGATIVE assertion ("does not page on ordinary volume") passed because nothing had run YET — not
+   because nothing would. The same defect class the review flagged in L3 and M6, in the tests
+   written to guard against it. Now a bounded 25-tick flush with the reason recorded.
+3. 🔴 **`mockReset: true` bit twice more.** `email-send-cap`'s Telegram mock resolved `undefined`
+   under reset, which (correctly, post-A7) reads as an undelivered page and releases the cooldown —
+   so a cooldown test failed for a reason unrelated to cooldowns. Both times the TEST was weaker
+   than it looked; neither time was the code wrong. See [[pitfall-vitest-from-repo-root-skips-mockreset]].
+
+**Two behaviour changes made deliberately, stated rather than slid in:**
+
+- **A4 widens 13-13 and 13-24**: an uncategorised send whose SUBJECT classifies as marketing now
+  also gets the List-Unsubscribe header and a `campaign_sends` row. That is the correct reading —
+  the category is a property of the mail, not of how carefully a caller filled in an argument.
+  Knock-on: an unmatched subject now tags `other` instead of going untagged, which is what
+  `dispatch`'s own docblock says it wants ("so NO send is untagged", after the 2026-08-04 incident
+  where seven citizen emails bounced untraceably).
+- **A10 was resolved toward RENDERING, not documenting.** The reviewer offered "render the remaining
+  tiers or say why they are payload-only". Given 12-5 is precisely the defect of a required field
+  nobody reads, keeping three of four unread with a justification attached would have been the same
+  mistake wearing an explanation. All four tiers render; two tests assert the strings, including one
+  that no tier is ever labelled "Verified".
+
+### What is genuinely good, recorded so the fixes do not undo it
+
+- The cap sits **before** the provider call (`email.service.ts:158` vs `:168`) and is category-aware; the
+  refused *and* allowed directions are both pinned, including a magic link surviving an exhausted cap with
+  Redis down. That is the AC1 requirement met on its own terms.
+- `registrationBurstWatch` calls `next()` synchronously and is tested for it, including Redis on fire.
+- The Step 5 regression block would genuinely fail if interception came back: `save()` asserts
+  `onSubmit` was called on the **first** press in all three states, and "pressing twice calls onSubmit
+  twice". These are real guards, not passes over a hole.
+- The `— Select —` placeholder / explicit-decline split is correct end to end: `campaignSource.channel`
+  is a bounded free string server-side (`validation/registration.schema.ts:73-87`), so the decline value
+  cannot reject a submit, and `buildCampaignSource` still omits the key for the untouched state.
+- The six updated mock stubs assert no less than before; the plain-async-function form is the right fix
+  for `mockReset: true`, and each carries the reason it exists.

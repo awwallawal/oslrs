@@ -11,20 +11,66 @@
  */
 export const ATTRIBUTION_ENABLED = true;
 
-/** The single plain-language channel list (no per-station sub-picker — AC2.4). */
+/**
+ * The single plain-language channel list (no per-station sub-picker — AC2.4).
+ *
+ * ⚠️ ORDER IS DE-BIASED, AND THAT IS LOAD-BEARING (Story 13-46 AC10b). Radio used to be FIRST —
+ * the exact channel a radio jingle exists to measure. First position anchors an answer, so the
+ * instrument would have manufactured the very signal it was meant to detect, on the campaign that
+ * matters most. The list is now ALPHABETICAL with `Other` pinned last (where a catch-all belongs),
+ * which is a rule rather than a taste: nobody has to argue about position again, and Radio's place
+ * falls out of the alphabet instead of out of what we hope to hear.
+ *
+ * ⚠️ DO NOT re-sort this by "most likely first", and do not restore Radio to the top.
+ */
 export const ACQUISITION_CHANNELS = [
-  'Radio',
-  'TV',
-  'Word of mouth',
   'Association / cooperative',
-  'Search engine',
   'Facebook',
   'Instagram',
+  'Radio',
+  'Search engine',
+  'TV',
   'Twitter / X',
+  'Word of mouth',
   'Other',
 ] as const;
 
 export type AcquisitionChannel = (typeof ACQUISITION_CHANNELS)[number];
+
+/**
+ * Story 13-46 (AC10a) — AN EXPLICIT DECLINE, STORED AS A VALUE.
+ *
+ * THE BUG THIS FIXES: `<option value="">Prefer not to say</option>` used to be the FIRST option and
+ * therefore pre-selected, so a person who never touched the control and a person who deliberately
+ * declined produced the IDENTICAL stored result — no `campaign_source` key at all. Every
+ * per-channel conclusion after the jingle would have rested on a denominator nobody could
+ * reconstruct: we could not say what share of registrants even answered.
+ *
+ * With a real placeholder as the default, the three states finally separate:
+ *   untouched → no key written  (was never answered)
+ *   declined  → channel = this constant  (answered: "I'd rather not say")
+ *   chosen    → channel = the channel
+ *
+ * ── HOW THE BREAKDOWN TREATS IT — DECIDED, NOT DISCOVERED (AC10a's warning) ──
+ * A decline writes a VALUE, so decliners move INSIDE `getCampaignBreakdown`'s
+ * `raw_data -> 'campaign_source' IS NOT NULL` filter (`report.service.ts`). Of the two options the
+ * AC offers, this ships **decline as its OWN reported row**, not excluded.
+ *
+ * WHY: excluding it would drop decliners straight back into the same invisible bucket as the people
+ * who ignored the question — re-creating the exact denominator loss this AC exists to close, one
+ * layer further down. As its own row the response rate is computable
+ * (answered = channels + declines) and the row is self-labelling, so no reader mistakes it for a
+ * marketing channel.
+ */
+export const ACQUISITION_DECLINED = 'Prefer not to say';
+
+/** The non-submitting placeholder. Its value is `''`, which writes NO key — that IS "untouched". */
+export const ACQUISITION_PLACEHOLDER_LABEL = '— Select —';
+
+/** True when the stored channel represents a deliberate decline rather than a channel. */
+export function isDeclinedChannel(channel?: string | null): boolean {
+  return channel === ACQUISITION_DECLINED;
+}
 
 export interface CapturedUtm {
   source?: string;

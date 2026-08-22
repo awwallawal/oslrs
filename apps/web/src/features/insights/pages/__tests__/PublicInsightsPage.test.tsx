@@ -84,6 +84,8 @@ function renderPage() {
 const fullData: PublicInsightsData = {
   totalRegistered: 5000,
   withAnswers: 4200,
+  // Story 13-46 (AC5) — the Axis-3 split is REQUIRED on the payload.
+  byVerification: { nin_on_file: 40, self_declared: 50, pending_nin: 8, unverified_import: 2 },
   lgasCovered: 33,
   // Story 12-4 / R-E: each rate carries the n it was computed from, and they
   // legitimately differ from each other and from withAnswers.
@@ -400,5 +402,28 @@ describe('PublicInsightsPage', () => {
     mockInsights.error = null;
     renderPage();
     expect(screen.getByText('Demographics')).toBeInTheDocument();
+  });
+});
+
+describe('Story 13-46 (AC5 / review A10) — the verification split is RENDERED, not just published', () => {
+  /* The 12-5 defect was a required payload field no component read. A split that ships in the type
+   * and never reaches the page is that defect wearing this story's name — and without an assertion
+   * on the text, deleting the render leaves the suite green. */
+
+  it('renders every Axis-3 tier the payload carries', async () => {
+    renderPage();
+
+    expect(await screen.findByText(/40 with NIN on file/)).toBeInTheDocument();
+    expect(screen.getByText(/50 self-declared/)).toBeInTheDocument();
+    expect(screen.getByText(/8 awaiting NIN/)).toBeInTheDocument();
+    expect(screen.getByText(/2 imported, unverified/)).toBeInTheDocument();
+  });
+
+  it('NEVER labels a tier "Verified" — a NIN is captured, never validated (12-4 ruling R1)', async () => {
+    renderPage();
+    await screen.findByText(/with NIN on file/);
+
+    expect(screen.queryByText(/verified/i)).not.toBeNull(); // "imported, unverified" contains it
+    expect(screen.queryByText(/\bVerified\b(?!,)/)).toBeNull();
   });
 });

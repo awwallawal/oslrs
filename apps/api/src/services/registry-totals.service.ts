@@ -85,6 +85,19 @@ export interface RegistryCountCore {
    * respondents; they converge under full 12-4.)
    */
   withAnswers: number;
+  /**
+   * Story 13-46 (AC5) — the Axis-3 (VERIFICATION / TRUST) split of `totalRespondents`.
+   *
+   * WHY IT LIVES HERE AND NOT IN A CONTROLLER: `getRegistryCountCore` is the ONE counting source
+   * (13-25's seed of 12-4). A second count computed beside it would recreate exactly the 76-vs-139
+   * drift 13-25/13-33 were written to kill. The tiers sum to `totalRespondents` by construction —
+   * they are a partition of the same rows in the same query, not a second read.
+   *
+   * ⚠️ THERE IS NO `verified` TIER, AND THAT IS DELIBERATE (12-4 AC9 / ruling R1): a NIN is
+   * CAPTURED, never validated — no NIMC check exists and NINs carry no check digit. `nin_on_file`
+   * is the top tier and must never be rendered to the public as "Verified".
+   */
+  byVerification: Record<RegistryVerification, number>;
 }
 
 /**
@@ -92,20 +105,70 @@ export interface RegistryCountCore {
  * @see RegistryCountCore
  */
 export async function getRegistryCountCore(): Promise<RegistryCountCore> {
+  /**
+   * Story 13-46 (AC5) — Axis-3 partition of the SAME rows, in the SAME query, so there remains ONE
+   * counting source and the split can never disagree with its own headline.
+   *
+   * ⚠️ THE TIER EXPRESSION IS PROJECTED IN A SUBQUERY AND GROUPED BY ITS ALIAS, deliberately.
+   * Writing `VERIFICATION_TIER_SQL` inline in both the SELECT and the GROUP BY emits the CASE twice
+   * — and since it now carries a BOUND PARAMETER (the trim-character set, review A11), the two
+   * copies land on different placeholders ($1 vs $2). Postgres then does not recognise them as the
+   * same expression and rejects the query. One projection, grouped by name, is both correct and
+   * cheaper.
+   */
   const result = await db.execute(sql`
     SELECT
       COUNT(*)::int AS total_respondents,
-      COUNT(ru.raw_data)::int AS with_answers
-    FROM ${registryUnifiedSource('ru')}
+      COUNT(t.raw_data)::int AS with_answers,
+      t.verification_tier AS verification_tier,
+      COUNT(*)::int AS tier_count
+    FROM (
+      SELECT ru.raw_data AS raw_data, ${VERIFICATION_TIER_SQL('ru')} AS verification_tier
+      FROM ${registryUnifiedSource('ru')}
+    ) t
+    GROUP BY GROUPING SETS ((), (t.verification_tier))
   `);
 
-  const row = result.rows[0] as
-    | { total_respondents: number | string; with_answers: number | string }
-    | undefined;
+  const rows = result.rows as Array<{
+    total_respondents: number | string;
+    with_answers: number | string;
+    verification_tier: string | null;
+    tier_count: number | string;
+  }>;
+
+  // The GROUPING SETS grand-total row is the one with a NULL tier; the rest are the partition.
+  // `== null` (not `===`): the grand-total row carries a NULL tier, and a driver that omits
+  // the key entirely rather than nulling it must not be read as a tier row.
+  const grandTotal = rows.find((r) => r.verification_tier == null);
+  const byVerification = Object.fromEntries(
+    REGISTRY_VERIFICATION_TIERS.map((t) => [t, 0]),
+  ) as Record<RegistryVerification, number>;
+  for (const r of rows) {
+    if (r.verification_tier == null) continue;
+    const tier = r.verification_tier as RegistryVerification;
+    if (tier in byVerification) {
+      byVerification[tier] = Number(r.tier_count ?? 0);
+    } else {
+      /**
+       * Story 13-46 (review A8 / finding M4) — a tier the SQL emits that the taxonomy does not know
+       * is DROPPED, which silently publishes a split that no longer adds up to its own headline.
+       * Loud, not arithmetic: `VERIFICATION_TIER_SQL` and `REGISTRY_VERIFICATION_TIERS` diverging
+       * is a taxonomy change, and a taxonomy change that announces itself as a quietly-wrong
+       * public number is the worst of both.
+       */
+      logger.error({
+        event: 'registry.unknown_verification_tier',
+        tier: r.verification_tier,
+        count: Number(r.tier_count ?? 0),
+        note: 'VERIFICATION_TIER_SQL emitted a tier absent from REGISTRY_VERIFICATION_TIERS — the published split will not sum to totalRespondents',
+      });
+    }
+  }
 
   return {
-    totalRespondents: Number(row?.total_respondents ?? 0),
-    withAnswers: Number(row?.with_answers ?? 0),
+    totalRespondents: Number(grandTotal?.total_respondents ?? 0),
+    withAnswers: Number(grandTotal?.with_answers ?? 0),
+    byVerification,
   };
 }
 
@@ -291,6 +354,47 @@ export function deriveVerification(input: {
   if (typeof input.nin === 'string' && input.nin.trim() !== '') return 'nin_on_file';
   return 'self_declared';
 }
+
+/**
+ * Story 13-46 (AC5) — `deriveVerification`, EXPRESSED IN SQL.
+ *
+ * ⚠️ ONE CONTRACT, TWO LANGUAGES — the same arrangement (and the same hazard) as
+ * `answeredFieldDenominator` above. The count-core has to bucket by verification tier inside a
+ * single aggregate query, because the alternative is loading every respondent row into Node just
+ * to tally four integers on a public, cached endpoint.
+ *
+ * The precedence below is `deriveVerification`'s, in order, including the deliberate
+ * pending_nin-beats-nin_on_file rule that surfaces a STALLED PROMOTE rather than smoothing it.
+ *
+ * ⚠️ THE DRIFT GUARD IS A TEST, NOT THIS COMMENT: `registry-verification-sql-parity` runs both
+ * implementations over the same matrix of rows and asserts they agree. Change one without the
+ * other and that test fails, which is the only property worth having — prose is not type-checked.
+ */
+/**
+ * Story 13-46 (review A11 / finding L3) — the whitespace class the TS atom actually strips.
+ *
+ * `String.prototype.trim()` removes ALL Unicode whitespace; bare SQL `BTRIM(x)` removes ASCII
+ * SPACES ONLY. `respondents.nin` is an unconstrained `text` column, so before this a TAB- or
+ * NEWLINE-only NIN classified as `nin_on_file` in SQL and `self_declared` in TS — the two
+ * implementations disagreeing on the exact input the parity test was meant to catch. That test
+ * seeded `'   '` (spaces), the one whitespace class where they already agreed: a guard passing over
+ * its own hole.
+ *
+ * Interpolated as a BOUND PARAMETER rather than written inline, because the escape sequences would
+ * otherwise be expanded by the JS template literal before Postgres ever saw them.
+ */
+const NIN_TRIM_CHARS = ' \t\n\r\f\v\u00a0\u2028\u2029\ufeff';
+
+export const VERIFICATION_TIER_SQL = (alias = 'ru'): SQL => sql`
+  CASE
+    WHEN ${sql.raw(alias)}.status = 'pending_nin_capture' THEN 'pending_nin'
+    WHEN ${sql.raw(alias)}.status = 'imported_unverified' THEN 'unverified_import'
+    WHEN ${sql.raw(alias)}.source LIKE 'imported\_%' THEN 'unverified_import'
+    WHEN ${sql.raw(alias)}.nin IS NOT NULL
+         AND BTRIM(${sql.raw(alias)}.nin, ${NIN_TRIM_CHARS}) <> '' THEN 'nin_on_file'
+    ELSE 'self_declared'
+  END
+`;
 
 /**
  * The R2 identity key for one row: NIN → E.164 phone → respondent.id.

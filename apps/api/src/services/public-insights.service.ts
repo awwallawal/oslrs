@@ -31,8 +31,11 @@ const logger = pino({ name: 'public-insights' });
  *
  * v2 (Story 12-4, 2026-08-17): added the required `rateDenominators`, and the
  * business-ownership + unemployment rates changed value.
+ * v3 (Story 13-46, 2026-08-20): added the required `byVerification` Axis-3 split. A cached v2
+ * payload has no such key, and the page renders it unconditionally — exactly the
+ * `undefined is not an object` this suffix exists to prevent.
  */
-const CACHE_KEY = 'analytics:public:insights:v2';
+const CACHE_KEY = 'analytics:public:insights:v3';
 const TRENDS_CACHE_KEY = 'analytics:public:trends';
 const CACHE_TTL = 3600; // 1 hour
 const PUBLIC_MIN_N = 10; // Stricter suppression for public data
@@ -328,6 +331,9 @@ export class PublicInsightsService {
       // Funnel subset: registered people with complete survey responses (~79).
       // Breakdowns below are computed over this subset (13-25 AC2).
       withAnswers: countCore.withAnswers,
+      // Story 13-46 (AC5) — from the SAME count-core call above, not a second query. A registration
+      // burst moves `totalRegistered` and leaves these tiers untouched, which is the truth.
+      byVerification: countCore.byVerification,
       lgasCovered: Number(summary?.lgas_covered ?? 0),
       genderSplit: suppressSmallBuckets(toBuckets(genderRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
       ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),

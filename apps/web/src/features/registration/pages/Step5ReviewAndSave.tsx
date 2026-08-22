@@ -2,7 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import { WizardNavigation } from '../components/WizardNavigation';
 import { fetchPublicLgas, derivePendingNin, type WizardDraftData } from '../api/wizard.api';
-import { ACQUISITION_CHANNELS, ATTRIBUTION_ENABLED } from '../lib/attribution'; // Story 13-1
+import {
+  ACQUISITION_CHANNELS,
+  ACQUISITION_DECLINED,
+  ACQUISITION_PLACEHOLDER_LABEL,
+  ATTRIBUTION_ENABLED,
+} from '../lib/attribution'; // Story 13-1, extended by 13-46 (AC10)
 
 /**
  * Story 9-18 Part C (AC#C1) — Step 5 is now a Review-and-Save summary.
@@ -80,6 +85,32 @@ export function Step5ReviewAndSave({
   incompleteQuestionnaire = false,
   missingStepIndex = null,
 }: Step5ReviewAndSaveProps) {
+  /**
+   * Story 13-46 (AC10c) — PROMINENCE, NOT INTERCEPTION.
+   *
+   * ⚠️ THIS DELIBERATELY DOES NOT TOUCH THE SUBMIT. An earlier build of this story intercepted the
+   * first Save press when the question was untouched (one prompt, then straight through). It was
+   * dropped on review — Awwal's call, 2026-08-21 — because the risk is asymmetric: a lost
+   * registration is permanent and costs a citizen who has just spent 10-15 minutes, while a missing
+   * attribution answer costs one data point. On a slow phone connection "I pressed Save and nothing
+   * happened" reads as BROKEN, not as PROMPTED, and this is the last screen before conversion on a
+   * phone-first audience.
+   *
+   * What tipped it: per-station vanity links (`oyoskills.com/fresh` → `/?ref=fresh`) already
+   * attribute a registration **even when the listener never answers this question** —
+   * `buildCampaignSource` writes on channel OR utm — so the marginal value of squeezing the response
+   * rate at the conversion moment is smaller than the conversion risk of doing it.
+   *
+   * So the nudge is now purely visual: an unanswered question gets a highlighted card and one line
+   * of copy. `onSubmit` is wired straight through, exactly as it was before this story.
+   *
+   * 13-1's guardrail — "prominence ≠ mandatory" — is honoured in the strongest available sense:
+   * prominence is now literally the ONLY thing this does.
+   */
+  const selectedChannel =
+    (formData.extras?.acquisition as { channel?: string } | undefined)?.channel ?? '';
+  const attributionUnanswered = ATTRIBUTION_ENABLED && !selectedChannel;
+
   const lgaQuery = useQuery({
     queryKey: ['wizard', 'lgas', 'public'],
     queryFn: fetchPublicLgas,
@@ -214,9 +245,14 @@ export function Step5ReviewAndSave({
           NEVER blocks submit (13-1 review guardrail: prominence ≠ mandatory). */}
       {ATTRIBUTION_ENABLED && (
         <section
-          className="mt-6 rounded-lg border border-primary-200 bg-primary-50/60 p-4"
+          className={
+            attributionUnanswered
+              ? 'mt-6 rounded-lg border-2 border-primary-400 bg-primary-50 p-4 shadow-sm'
+              : 'mt-6 rounded-lg border border-primary-200 bg-primary-50/60 p-4'
+          }
           aria-labelledby="attribution-heading"
           data-testid="step5-attribution"
+          data-unanswered={attributionUnanswered ? 'true' : 'false'}
         >
           {/* AI-Review L2 — a real heading (in the document outline for screen-
               reader `H` navigation), not a <label> styled to look like one. It
@@ -236,7 +272,7 @@ export function Step5ReviewAndSave({
             aria-labelledby="attribution-heading"
             data-testid="attribution-channel-select"
             className="mt-3 block w-full rounded-md border-neutral-300 bg-white px-3 py-2.5 text-base text-neutral-900 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-            value={(formData.extras?.acquisition as { channel?: string } | undefined)?.channel ?? ''}
+            value={selectedChannel}
             onChange={(e) => {
               const channel = e.target.value;
               mergeFields({
@@ -244,13 +280,28 @@ export function Step5ReviewAndSave({
               });
             }}
           >
-            <option value="">Prefer not to say</option>
+            {/* Story 13-46 (AC10a) — a REAL placeholder. It is not a channel and writes no key, so
+                "never touched this control" stays distinguishable from "chose not to say". */}
+            <option value="">{ACQUISITION_PLACEHOLDER_LABEL}</option>
             {ACQUISITION_CHANNELS.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
+            {/* An EXPLICIT decline — a real, stored answer, listed last so it reads as an opt-out
+                rather than as a default. */}
+            <option value={ACQUISITION_DECLINED}>{ACQUISITION_DECLINED}</option>
           </select>
+
+          {attributionUnanswered && (
+            <p
+              className="mt-2 text-sm font-medium text-primary-800"
+              data-testid="attribution-unanswered-hint"
+            >
+              One quick question before you finish — it stays optional, and it is the only way we
+              learn which channels actually reach people.
+            </p>
+          )}
         </section>
       )}
 
