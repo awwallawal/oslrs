@@ -17,13 +17,16 @@
 | **Capacity ready** (9-20) | ⏳ finalize | Step 2 |
 | **Blast infra** (Resend Pro + Termii) | ⏳ operator | Steps 3–4 |
 | **Wizard one-pass — no two-pass loop** (13-29 AC6) | ⏳ **MANUAL DRY-RUN** | Step 5b |
-| **🚦 4-point SPEND gate** (13-4) — incl. enumerator path proven on prod | ⏳ **OPERATOR** | `enumerator-prod-smoke-and-golive-gate.md` |
+| **🚦 7-point SPEND gate** (13-4, extended by 13-46 + 13-63) — incl. enumerator path proven on prod | ⏳ **OPERATOR** | `enumerator-prod-smoke-and-golive-gate.md` |
 
 > **Two different gates, deliberately.** The table above is *"may we fire the blasts?"* — the email
 > sends, which are cheap and reversible. `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md` is
-> *"may we BUY MEDIA?"* — radio and paid social, which are neither. Its four points span this
-> runbook (self-serve happy path = Step 5b) and stories 13-1 and 13-3, so it is a cross-cut over the
-> ordered steps below, not another step in them. **Enumerators go to field only after its gate item
+> *"may we BUY MEDIA?"* — radio and paid social, which are neither. Its **seven** points (four at
+> authoring; +1 from 13-46, +2 on 2026-08-21) span this runbook (self-serve happy path = Step 5b) and
+> stories 13-1, 13-3, 13-46 and 13-63, so it is a cross-cut over the ordered steps below, not another
+> step in them. ⚠️ **Gate item 6 (per-station vanity paths, 13-63 AC1–AC3) is the one item that is
+> PERISHABLE** — it must be live and dry-run-verified before the first jingle spot airs, because a URL
+> read on air cannot be retrofitted. **Enumerators go to field only after its gate item
 > 2 is green** — see Step 9.
 
 ---

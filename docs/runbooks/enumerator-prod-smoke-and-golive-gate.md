@@ -1,18 +1,24 @@
-# Enumerator Prod Smoke & the 4-Point Go/No-Go Gate
+# Enumerator Prod Smoke & the Media-Spend Go/No-Go Gate
 
 **Story:** 13-4 · **Created:** 2026-08-06 · **Owner:** Awwal (operator) · **Runs on:** prod, via Tailscale
 
 > **This does not fork the launch process.** `docs/runbooks/pre-launch-operator-runbook.md` remains the
-> ordered runway ("what next"). This runbook is the **spend gate** that sits across it: the four
+> ordered runway ("what next"). This runbook is the **spend gate** that sits across it: the
 > conditions that must be green before radio / paid social is bought, plus the procedure for the one
 > item nobody has ever actually exercised at scale — the enumerator path.
+>
+> ⚠️ **This gate was authored with FOUR items and now has SEVEN.** `docs/roadmap-to-launch.md`
+> § *Pre-flight gate* is **canonical**; this table is its operator-facing form, and it had drifted
+> three items behind (item 5 was added there by 13-46 on 2026-07-30 and never propagated here).
+> Harmonised 2026-08-21 (John/PM). **Add a gate item in both places in the same pass** —
+> [[pattern-a-record-about-the-work-is-not-the-work]].
 >
 > Campaign hub: `docs/runbooks/re-engagement-campaign-launch.md` · Teardown recipe this one extends:
 > `docs/runbooks/pre-blast-dry-run.md` §5.
 
 ---
 
-## 🚦 The gate — buy no media until all four are green
+## 🚦 The gate — buy no media until all seven are green
 
 | # | Gate item | How to verify | Verdict |
 |---|---|---|---|
@@ -20,6 +26,9 @@
 | 2 | **Enumerator path proven on prod** — 5–10 real submissions | This runbook, §B–§E. PASS = ≥5 verified rows, `source='enumerator'`, each with a `submissions` row, **and** the §C household pair yielding **two** respondent rows. | ⬜ GREEN ⬜ RED |
 | 3 | **Attribution capture live + verified** (Story 13-1) | ⚠️ **A fresh PUBLIC submission** carries `raw_data->>'campaign_source'`; `§A query 3` returns it non-null **on `source='public'` rows only**. ⛔ **DO NOT run this against enumerator rows.** The acquisition question exists only on the public wizard — on a staff-captured row the enumerator IS the channel, so `campaign_source` is correctly NULL. Reading a null there as a failure is what happened on 2026-08-13: six enumerator rows returned null and gate item 3 was briefly reported as not-green, on entirely correct behaviour. ⚠️ Nulls among PUBLIC rows are also expected — the question is **optional** by ruling R-B; 25 of 291 submissions carry it. Verify with **gate item 1**, not with this run. | ⬜ GREEN ⬜ RED |
 | 4 | **Capacity load-test green + static fallback deployed** (Story 13-3) | `docs/runbooks/13-3-launch-capacity-and-fallback.md` + `13-3-cutover-and-failover.md`. PASS = load test green **and** the Cloudflare Pages fallback answers with a confirmed KV round-trip. | ⬜ GREEN ⬜ RED |
+| 5 | **Burst controls armed** (Story 13-46) — all four sub-items | `docs/roadmap-to-launch.md` gate item 5. PASS = marketing send cap live (`MARKETING_DAILY_CAP`/`MARKETING_MONTHLY_CAP`), the registration-scoped WAF rule armed (`pre-viral-push-checklist.md` §1a), the attribution liveness dry run discharged (`13-3-cutover-and-failover.md` — done 2026-08-21), and the turn-away BEFORE baseline recorded. ⚠️ The dry-run sub-item is **independent of the rest** — discharge it regardless of how much else has shipped. | ⬜ GREEN ⬜ RED |
+| 6 | **Per-station vanity paths LIVE + the `?ref` dry run discharged** (Story 13-63, **AC1–AC3 only**) | Load a real vanity URL in a browser; confirm the final URL still carries `?ref=`, **then** confirm `wizard_drafts.form_data.extras.utm.ref` holds the slug. A 302 that lands and a tag that is *captured* are two different claims — assert the second. 🔴 **The target is `/register?ref=<slug>`, NOT `oyoskills.com/?ref=<slug>`** — the apex form is dropped at the first click (`parseUtm` runs only at `WizardPage.tsx:172`, mounted at `/register`), so those rules would redirect correctly and attribute nothing. ⚠️ **PERISHABLE — the only item in this table that cannot be discharged after the fact.** A URL read on air cannot be retrofitted: miss the first spot and the station dimension is gone for the whole flight, across all 11 stations on the buy. 13-63's AC4–AC7 do **not** gate spend. | ⬜ GREEN ⬜ RED |
+| 7 | **Write-path capacity evidence at the modelled peak** (Story **13-65**, `ready-for-dev`, authored 2026-08-22 by Bob/SM) | Item 4's green measured a **read** (`GET /api/v1/forms/public-active`); this is the write. One public registration fires **three** synchronous outbound emails (13-46 residual R6, measured on prod 2026-08-21), so the load is ~3N per registration on a 2GB VPS with **no swap** — an OOM kill, not a graceful degrade. Discharge by ANY ONE of: (a) a bounded write-path load test at a stated peak, same rig as 13-3, correct endpoint; (b) queueing the thank-you outreach so the in-request cost falls to the transactional sends; (c) a **written** peak estimate, with its basis, that 13-3's measured headroom bounds. ✍️ **13-65 takes (a) AND (b) together** — it queues ALL THREE registration sends onto the existing `email-notification` queue (unbounded fan-out becomes at most 5 concurrent), then runs the write-path test BEFORE and AFTER so the comparison is the evidence. ⚠️ Claim only what it buys: **bounded concurrency, durability, retry and backpressure — NOT CPU reduction and NOT event-loop isolation**, because all 10 workers run in the API process. ✅ **(c) still stands on its own** if 13-65 slips. ⛔ An unstated estimate is not (c). | ⬜ GREEN ⬜ RED |
 
 **Neither box ticked = NOT RUN, which is not the same as red and is definitely not green.** An empty
 row holds the spend exactly as a red one does; the difference matters only for knowing what is left
@@ -33,7 +42,7 @@ to do.
 
 ### The decision rule
 
-- **ALL FOUR green → fire radio / paid social.**
+- **ALL SEVEN green → fire radio / paid social.**
 - **ANY red → hold the spend.** Radio is movable on **24–48h** notice, which is precisely what gives
   this gate teeth: holding costs a schedule change, firing blind costs the budget.
 - A gate item is green only with **evidence recorded in §F** — an ID, a count, a screenshot. "I ran
@@ -397,13 +406,15 @@ would have survived a delete-by-RID — the 2026-07-30 leak, caught by the claus
 - Teardown `DELETE n` counts read and non-zero: ⬜
 - Baseline after teardown (`§A query 1` total): ___ (organic arrivals expected — do not reconcile to the before-figure)
 
-**Other three gate items:** record date + evidence pointer against the table at the top.
+**The other six gate items:** record date + evidence pointer against the table at the top.
 
 ---
 
 ## Provenance
 
 Story 13-4 (`_bmad-output/implementation-artifacts/13-4-enumerator-prod-smoke-and-golive-gate.md`),
-per SCP-2026-06-25-launch-campaign. The 4-point gate is quoted from that SCP §45–49; the decision
+per SCP-2026-06-25-launch-campaign. The ORIGINAL 4-point gate is quoted from that SCP §45–49 (items 5–7
+were added later — 5 by 13-46 on 2026-07-30, 6 and 7 by John/PM on 2026-08-21; `roadmap-to-launch.md`
+is canonical for the current list, and the SCP is left as the dated record it is). The decision
 rule from §43,49. §B/§C/§E carry the 2026-08-05 adjudication findings (ACs 1b/1c/1d) and the
 2026-08-06 verification of the teardown chain against the code.
