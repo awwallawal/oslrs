@@ -130,3 +130,10 @@ viral_launch_find.txt
 Screenshot_*.png
 Screenshot?20*.png
 screenshot-*.png
+
+# Side engagements (GRM, CRM) — DIFFERENT CLIENTS from Oyo State Government.
+# Working notes + cold-start log only; never source. Kept local deliberately so
+# another client's commercial detail cannot enter this repo's history or ride
+# the VPS deploy. Same precedent as SESSION_LOG.md above. If this work ever
+# needs committing, move it to its own repository — do not un-ignore it here.
+_client-projects/
