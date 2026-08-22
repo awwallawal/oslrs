@@ -15,6 +15,7 @@ import type {
   TrendDataPoint,
   RegistrySummary,
   RegistryTotals,
+  DataHealthData,
   PipelineSummary,
   TeamQualityData,
   PersonalStatsData,
@@ -79,6 +80,38 @@ export async function fetchRegistrySummary(params?: AnalyticsQueryParams): Promi
  */
 export async function fetchRegistryTotals(params?: AnalyticsQueryParams): Promise<RegistryTotals> {
   const result = await apiClient(`/analytics/registry-totals${buildQueryString(params)}`);
+  return result.data;
+}
+
+/** Story 12-6 — Data-Health knobs that sit outside the shared analytics filter. */
+export interface DataHealthQueryParams {
+  /** Which published form's schema supplies the per-field axis. Latest by default. */
+  formId?: string;
+  /** Page bound on the `data_lost` recovery drill. */
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Story 12-6 — per-field response rates + the `data_lost` recovery cohort.
+ *
+ * ⚠️ Does NOT return the funnel or the per-`data_status` breakdown: those come
+ * from {@link fetchRegistryTotals}, and fetching them twice would put two counts
+ * of one registry on one screen.
+ */
+export async function fetchDataHealth(
+  params?: AnalyticsQueryParams,
+  options?: DataHealthQueryParams,
+): Promise<DataHealthData> {
+  const qs = buildQueryString(params);
+  const extra = new URLSearchParams();
+  if (options?.formId) extra.set('formId', options.formId);
+  if (options?.limit != null) extra.set('limit', String(options.limit));
+  if (options?.offset != null) extra.set('offset', String(options.offset));
+  const extraQs = extra.toString();
+  const suffix = extraQs ? (qs ? `${qs}&${extraQs}` : `?${extraQs}`) : qs;
+
+  const result = await apiClient(`/analytics/data-health${suffix}`);
   return result.data;
 }
 

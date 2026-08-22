@@ -559,7 +559,17 @@ export interface ActivationFeature {
 }
 
 export interface ActivationStatusData {
-  totalSubmissions: number;
+  /**
+   * The answer-bearing RESPONDENT count the feature gates are measured against.
+   *
+   * ⚠️ Renamed from `totalSubmissions` by Story 12-6, together with the query
+   * behind it. The features gated here are the statistics in
+   * `getInferentialInsights`, which count people — so a submission-grained gate
+   * published a different n for the same threshold than the statistic it
+   * gated. Keeping the old name over the new number would have been the exact
+   * mislabel Epic 12 exists to remove.
+   */
+  totalRespondents: number;
   features: ActivationFeature[];
 }
 
@@ -631,4 +641,79 @@ export interface EnumeratorReliabilityData {
   enumerators: EnumeratorDistribution[];
   pairs: ReliabilityPair[];
   threshold: ThresholdStatus;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Story 12-6 — the Data-Health view
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** One questionnaire field's response rate among the answer-bearing cohort. */
+export interface DataHealthField {
+  /** The form schema's question name (the `raw_data` key). */
+  key: string;
+  /** The form schema's human label for that question. */
+  label: string;
+  /** Answer-bearing respondents who answered THIS question. */
+  answeredCount: number;
+  /**
+   * `answeredCount / withAnswers`, as a percentage to 1dp.
+   *
+   * ⚠️ The denominator is the answers-present cohort, NOT the registry total: a
+   * `data_lost` / `no_submission` respondent cannot answer a field, so including
+   * them would deflate every field uniformly and mislead. Always render this
+   * beside {@link DataHealthData.withAnswers}.
+   */
+  responseRate: number;
+}
+
+/**
+ * One recoverable respondent in the `data_lost` cohort.
+ *
+ * ⚠️ PII BOUNDARY: every field here is already exposed by the existing registry
+ * table and the unified export under the SAME roles (super-admin + government
+ * official). This is deliberately the existing projection, not a new wider one —
+ * a recovery list is a reason to reuse a projection, never to mint one.
+ */
+export interface DataHealthRecoveryRow {
+  respondentId: string;
+  referenceCode: string | null;
+  fullName: string | null;
+  lgaId: string | null;
+  lgaName: string | null;
+  /** ISO-8601. When the person was registered. */
+  registeredAt: string | null;
+  phoneNumber: string | null;
+}
+
+/** The `data_lost` recovery cohort: the count, plus one bounded page of it. */
+export interface DataHealthRecoveryCohort {
+  /**
+   * The whole cohort's size, from 12-4's `byDataStatus.data_lost` — NOT
+   * `rows.length`, which is one bounded page. A drill that reported its page
+   * size as the cohort size would understate the recoverable population.
+   */
+  total: number;
+  rows: DataHealthRecoveryRow[];
+  /** The page bound applied to `rows`, so the UI can say "showing N of total". */
+  limit: number;
+  offset: number;
+}
+
+/**
+ * The Data-Health view's own aggregate (Story 12-6).
+ *
+ * ⚠️ Deliberately does NOT carry the funnel or the per-`data_status` breakdown.
+ * Those come from {@link RegistryTotals} (12-4), which the tab already fetches —
+ * re-serving them here would be a second count of the registry, which is the
+ * whole class of defect Epic 12 exists to close.
+ */
+export interface DataHealthData {
+  /** The per-field denominator, from 12-4's `getRegistryTotals().withAnswers`. */
+  withAnswers: number;
+  /** The form whose schema supplied the field list + labels. */
+  formId: string | null;
+  formTitle: string | null;
+  /** Ascending by `responseRate` — the most under-answered questions first. */
+  fields: DataHealthField[];
+  recoveryCohort: DataHealthRecoveryCohort;
 }

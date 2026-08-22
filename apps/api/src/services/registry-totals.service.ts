@@ -224,8 +224,18 @@ void _verificationPinned;
  */
 export const EMPTY_ANSWER_TEXTS = ['', '[]', '{}'] as const;
 
-/** The TS half of {@link EMPTY_ANSWER_TEXTS}. */
-function hasAnswer(rawData: Record<string, unknown> | null, field: string): boolean {
+/**
+ * The TS half of {@link EMPTY_ANSWER_TEXTS} — "did this person answer this
+ * question?".
+ *
+ * Exported since Story 12-6: the per-field response rates need exactly this
+ * test, and the header above says why importing it is not optional. `hasAnswer`
+ * (TS) and `answeredFieldDenominator` (SQL) are the two languages of ONE
+ * contract; a per-field tally that rolled its own emptiness check would be the
+ * third definition of "answered" in a module written to end second definitions,
+ * and rows would read `partial` on Axis-2 while counting as answered in a rate.
+ */
+export function hasAnswer(rawData: Record<string, unknown> | null, field: string): boolean {
   if (rawData == null) return false;
   const value = rawData[field];
   if (value == null) return false;
@@ -371,16 +381,58 @@ function zeroFilled<K extends string>(keys: readonly K[]): Record<K, number> {
  *    filtering on it would silently drop exactly the people (`no_submission`,
  *    `data_lost`, `pending_nin`) this story exists to make visible.
  *
- * 2. **`personal` scope applies NO filter.** There is no per-enumerator
- *    registry — the register is one shared object, and `totalRegistered` is
- *    already published UNAUTHENTICATED on oyoskills.com/insights. Silently
- *    widening a personal scope would be a bypass worth flagging if the figure
- *    were sensitive; it is not, and the alternative (403 for enumerators)
- *    contradicts AC5.2's "all dashboard roles". Stated here so it is a decision
- *    on the record rather than an omission someone later mistakes for a hole.
+ * 2. **`personal` scope applies NO filter *by default*.** There is no
+ *    per-enumerator registry — the register is one shared object, and
+ *    `totalRegistered` is already published UNAUTHENTICATED on
+ *    oyoskills.com/insights. Silently widening a personal scope would be a
+ *    bypass worth flagging if the figure were sensitive; it is not, and the
+ *    alternative (403 for enumerators) contradicts AC5.2's "all dashboard
+ *    roles". Stated here so it is a decision on the record rather than an
+ *    omission someone later mistakes for a hole.
+ *
+ * ── Story 12-6: why this became shared ──────────────────────────────────────
+ * When `survey-analytics`'s rate-bearing aggregates moved onto the same
+ * canonical read (12-5 R2), they needed exactly this filter. Writing a second
+ * copy there would have re-created, inside the story that fixes a drift, the
+ * drift 13-33/13-37 exist to kill — so the filter is exported and shared.
+ *
+ * The ONE place the two callers genuinely differ is `personal` scope, and it is
+ * a real difference rather than an inconsistency: this module counts THE
+ * REGISTRY (a shared object, ruling 2 above), while the analytics aggregates
+ * describe *a user's own caseload* and have always narrowed for an enumerator.
+ * So the behaviour is a named parameter with both readings spelled out, instead
+ * of one caller quietly inheriting the other's decision.
  */
-function buildRegistryFilter(scope: AnalyticsScope, params: AnalyticsQueryParams): SQL {
+export type PersonalScopeMode =
+  /** Ruling 2: no filter — the register is one shared, already-public object. */
+  | 'unfiltered'
+  /**
+   * Narrow to the people this user registered (`respondents.submitter_id`).
+   *
+   * ⚠️ NOT "the submissions I filed", which is what the retired
+   * `buildWhereFragments` meant by `s.submitter_id`. On a respondent-anchored
+   * read the answerable question is about PEOPLE, and `r.submitter_id` is the
+   * attribution `productivity.service.ts` already reports staff counts from.
+   */
+  | 'submitter';
+
+export function buildRegistryFilter(
+  scope: AnalyticsScope,
+  params: AnalyticsQueryParams,
+  personalScope: PersonalScopeMode = 'unfiltered',
+): SQL {
   const conditions: SQL[] = [sql`TRUE`];
+
+  if (scope.type === 'personal' && personalScope === 'submitter') {
+    if (!scope.userId) {
+      throw new AppError(
+        'ANALYTICS_SCOPE_INVALID',
+        'AnalyticsScope type is "personal" but userId is undefined',
+        500,
+      );
+    }
+    conditions.push(sql`ru.submitter_id = ${scope.userId}`);
+  }
 
   if (scope.type === 'lga') {
     if (!scope.lgaCode) {
@@ -455,6 +507,25 @@ export function assertAxesPartition(
 export async function getRegistryTotals(
   scope: AnalyticsScope = { type: 'system' },
   params: AnalyticsQueryParams = {},
+  /**
+   * How `personal` scope is read — defaults to ruling 2 above (`'unfiltered'`),
+   * which is what `/registry-totals` means and must keep meaning.
+   *
+   * ⚠️ ADDED BY THE 12-6 REVIEW (M2). A caller that pairs this aggregate's
+   * `withAnswers` with its OWN answer-bearing query must pass the SAME mode its
+   * query used, or the two halves of one rate describe different populations:
+   * `getDataHealth` narrowed its numerator to one submitter via
+   * `buildRegistryFilter(..., 'submitter')` while taking its denominator from
+   * here, where `personal` applied no filter at all — so every per-field rate
+   * would have been divided by the whole register.
+   *
+   * That was unreachable through `/data-health` (super-admin and government
+   * official both resolve to `system` scope) and would have stayed silent if
+   * the route were ever widened. A named parameter is the point of
+   * {@link PersonalScopeMode}: a caller states its reading rather than
+   * inheriting another caller's by accident.
+   */
+  personalScope: PersonalScopeMode = 'unfiltered',
 ): Promise<RegistryTotals> {
   const [unified, drafts, registeredPhones] = await Promise.all([
     // Explicit projection, not `SELECT *`. This function returns COUNTS, so
@@ -466,7 +537,7 @@ export async function getRegistryTotals(
         ru.respondent_id, ru.lga_id, ru.source, ru.status,
         ru.nin, ru.phone_number, ru.metadata, ru.created_at, ru.raw_data
       FROM ${registryUnifiedSource('ru')}
-      WHERE ${buildRegistryFilter(scope, params)}
+      WHERE ${buildRegistryFilter(scope, params, personalScope)}
     `),
     // AC8 — drafts still in progress.
     //

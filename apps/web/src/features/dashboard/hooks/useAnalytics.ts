@@ -16,6 +16,7 @@ import {
   fetchTrends,
   fetchRegistrySummary,
   fetchRegistryTotals,
+  fetchDataHealth,
   fetchPipelineSummary,
   fetchTeamQuality,
   fetchPersonalStats,
@@ -27,7 +28,7 @@ import {
   fetchActivationStatus,
   fetchEnumeratorReliability,
 } from '../api/analytics.api';
-import type { TeamQualityQueryParams } from '../api/analytics.api';
+import type { TeamQualityQueryParams, DataHealthQueryParams } from '../api/analytics.api';
 
 export const analyticsKeys = {
   all: ['analytics'] as const,
@@ -38,6 +39,8 @@ export const analyticsKeys = {
   trends: (params?: AnalyticsQueryParams) => [...analyticsKeys.all, 'trends', params] as const,
   registrySummary: (params?: AnalyticsQueryParams) => [...analyticsKeys.all, 'registrySummary', params] as const,
   registryTotals: (params?: AnalyticsQueryParams) => [...analyticsKeys.all, 'registry-totals', params] as const,
+  dataHealth: (params?: AnalyticsQueryParams, options?: DataHealthQueryParams) =>
+    [...analyticsKeys.all, 'data-health', params, options] as const,
   pipelineSummary: (params?: AnalyticsQueryParams) => [...analyticsKeys.all, 'pipelineSummary', params] as const,
 };
 
@@ -102,14 +105,40 @@ export function useRegistrySummary(params?: AnalyticsQueryParams, enabled = true
  * the count of answer-bearing submissions — the number that used to be rendered
  * under the label "Total Respondents" while ~45% of registered people were
  * missing from it. Read `totalRespondents` from HERE for any total, and
- * `withAnswers` from here (not from registry-summary) for the answers subset:
- * registry-summary's is submission-scoped and can double-count a respondent
- * with more than one answer-bearing submission, so the two can drift.
+ * `withAnswers` from here (not from registry-summary) for the answers subset.
+ *
+ * ⚠️ Story 12-6 removed the GRAIN difference — `getRegistrySummary` now reads
+ * the same canonical respondent-anchored source, so it no longer double-counts a
+ * person with two answer-bearing submissions. The rule above still stands, for a
+ * different reason: this aggregate additionally resolves rows to PEOPLE via
+ * 12-4's identity key (NIN → E.164 phone), so a person holding two respondent
+ * rows is one here and two there. The remaining gap is duplicate REGISTRATIONS,
+ * which is what `identityAmbiguous` reports.
  */
 export function useRegistryTotals(params?: AnalyticsQueryParams, enabled = true) {
   return useQuery({
     queryKey: analyticsKeys.registryTotals(params),
     queryFn: () => fetchRegistryTotals(params),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+/**
+ * Story 12-6 — the Data-Health view's own aggregate: per-field response rates
+ * and the `data_lost` recovery cohort.
+ *
+ * ⚠️ The funnel and the per-`data_status` breakdown are NOT here — the tab reads
+ * those from {@link useRegistryTotals}. One registry, one count.
+ */
+export function useDataHealth(
+  params?: AnalyticsQueryParams,
+  options?: DataHealthQueryParams,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: analyticsKeys.dataHealth(params, options),
+    queryFn: () => fetchDataHealth(params, options),
     staleTime: 60_000,
     enabled,
   });

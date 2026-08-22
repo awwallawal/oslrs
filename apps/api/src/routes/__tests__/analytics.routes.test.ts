@@ -16,7 +16,7 @@ vi.mock('../../controllers/analytics.controller.js', () => ({
   AnalyticsController: {
     getDemographics: vi.fn(), getEmployment: vi.fn(), getHousehold: vi.fn(),
     getSkillsFrequency: vi.fn(), getTrends: vi.fn(), getRegistrySummary: vi.fn(),
-    getRegistryTotals: vi.fn(),
+    getRegistryTotals: vi.fn(), getDataHealth: vi.fn(),
     getPipelineSummary: vi.fn(), getCrossTab: vi.fn(), getSkillsInventory: vi.fn(),
     getInsights: vi.fn(), getEquity: vi.fn(), getActivationStatus: vi.fn(),
     getPolicyBrief: vi.fn(), getEnumeratorReliability: vi.fn(),
@@ -37,6 +37,13 @@ const { default: router } = await import('../analytics.routes.js');
 // Capture mock calls immediately after import — mockReset: true in base config
 // clears mock.calls before each test, so we must snapshot them here.
 const authorizeCalls = [...mockAuthorize.mock.calls];
+// Story 12-6: the RETURNED middleware for each authorize(...) call, snapshotted
+// alongside the args so a route can be matched to ITS OWN call by identity.
+// Matching on args alone finds whichever route called authorize with that role
+// set FIRST — /insights and /equity already use the exact super_admin +
+// government_official pair, so an args-only assertion passes even if the route
+// under test has no authorize at all.
+const authorizeResults = mockAuthorize.mock.results.map((r) => r.value);
 
 describe('Analytics Routes', () => {
   const routes = router.stack
@@ -166,5 +173,65 @@ describe('Analytics Routes', () => {
       expect(routes.find((r: { path: string }) => r.path === '/registry-summary')).toBeDefined();
       expect(routes.find((r: { path: string }) => r.path === '/registry-totals')).toBeDefined();
     });
+  });
+});
+
+/**
+ * Story 12-6 — the Data-Health route.
+ *
+ * ⚠️ The RBAC assertion here is the load-bearing one, not the registration
+ * assertion. Every other descriptive-analytics route inherits the router-wide
+ * role set (all six dashboard roles); this one carries respondent PII in its
+ * recovery drill, so it MUST be narrowed to the same pair /insights and /equity
+ * use. A route that merely exists is not the requirement — a route that is
+ * reachable by a supervisor or an enumerator would be a PII leak that passes
+ * every "is it registered?" test.
+ */
+describe('Analytics Routes — /data-health (Story 12-6)', () => {
+  const routes = router.stack
+    .filter((layer: { route?: { path: string; methods: Record<string, boolean> } }) => layer.route)
+    .map((layer: { route: { path: string; methods: Record<string, boolean> } }) => ({
+      path: layer.route.path,
+      methods: Object.keys(layer.route.methods),
+    }));
+
+  it('registers GET /data-health', () => {
+    const route = routes.find((r: { path: string }) => r.path === '/data-health');
+    expect(route).toBeDefined();
+    expect(route!.methods).toContain('get');
+  });
+
+  it('carries its own authorize middleware, not just the router-level chain', () => {
+    const layer = router.stack.find(
+      (l: { route?: { path: string } }) => l.route?.path === '/data-health',
+    );
+    expect(layer?.route?.stack?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('restricts to super_admin + government_official ONLY (PII in the recovery drill)', () => {
+    const layer = router.stack.find(
+      (l: { route?: { path: string } }) => l.route?.path === '/data-health',
+    ) as { route: { stack: Array<{ handle: unknown }> } } | undefined;
+    expect(layer).toBeDefined();
+
+    // Match THIS route's authorize call by the identity of the middleware it
+    // actually mounted, not by its arguments. An args-only search would find
+    // /insights' identical super_admin + government_official call and pass even
+    // if /data-health mounted nothing — the exact "test that passes over a hole"
+    // this repo keeps getting bitten by.
+    const handles = new Set(layer!.route.stack.map((s) => s.handle));
+    const index = authorizeResults.findIndex((mw) => handles.has(mw));
+    expect(index).toBeGreaterThanOrEqual(0);
+
+    const roles = authorizeCalls[index] as string[];
+    expect(roles).toEqual(
+      expect.arrayContaining(['super_admin', 'government_official']),
+    );
+    expect(roles).toHaveLength(2);
+    // Named individually so a failure says WHICH role leaked in.
+    expect(roles).not.toContain('supervisor');
+    expect(roles).not.toContain('enumerator');
+    expect(roles).not.toContain('data_entry_clerk');
+    expect(roles).not.toContain('verification_assessor');
   });
 });

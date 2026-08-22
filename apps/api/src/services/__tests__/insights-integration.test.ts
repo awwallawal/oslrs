@@ -21,6 +21,7 @@ vi.mock('../../db/index.js', () => ({
 }));
 
 import { SurveyAnalyticsService } from '../survey-analytics.service.js';
+import { PUBLIC_KEY_FINDINGS_CACHE_KEY } from '../analytics-cache-keys.js';
 
 function mockRows(rows: Record<string, unknown>[]) {
   return { rows };
@@ -290,7 +291,7 @@ describe('SurveyAnalyticsService — Story 8.7', () => {
 
       const result = await SurveyAnalyticsService.getActivationStatus(systemScope);
 
-      expect(result.totalSubmissions).toBe(75);
+      expect(result.totalRespondents).toBe(75);
       expect(result.features.length).toBe(17); // 8 Phase 4 + 9 Phase 5 (Story 8.8 added 4 dormant hooks)
       // Phase 5 always dormant
       const phase5 = result.features.filter(f => f.phase === 5);
@@ -344,7 +345,7 @@ describe('SurveyAnalyticsService — Story 8.7', () => {
       process.env.NODE_ENV = origNodeEnv;
     });
 
-    it('Gap 1: writes key findings to analytics:public:key-findings for system scope with N >= 100', async () => {
+    it('Gap 1: writes key findings to the SHARED versioned public key for system scope with N >= 100', async () => {
       const rows = generateInferentialRows(120);
       mockExecute
         .mockResolvedValueOnce(mockRows([{ total: '120' }]))
@@ -361,11 +362,21 @@ describe('SurveyAnalyticsService — Story 8.7', () => {
       const significantCount = result.chiSquare.filter(r => r.significant).length;
       expect(significantCount).toBeGreaterThan(0);
 
-      // Verify key findings were written to Redis
+      // Verify key findings were written to Redis under the SHARED constant.
+      //
+      // ⚠️ Asserted through the imported symbol, never a literal. This key is a
+      // BRIDGE: `getInferentialInsights` writes it and `PublicInsightsService`
+      // reads it. A version bump applied to only one side would leave the public
+      // page reading a key nothing writes — it would silently lose its key
+      // findings rather than show stale ones, which is quieter and worse. A
+      // literal here would go on passing through exactly that break.
       const keyFindingsCall = mockRedisSet.mock.calls.find(
-        (call: unknown[]) => call[0] === 'analytics:public:key-findings',
+        (call: unknown[]) => call[0] === PUBLIC_KEY_FINDINGS_CACHE_KEY,
       );
       expect(keyFindingsCall).toBeDefined();
+      // And the key is versioned at all — an unversioned analytics cache outlives
+      // the deploy that corrected its contents (Story 12-6 review H1).
+      expect(PUBLIC_KEY_FINDINGS_CACHE_KEY).toMatch(/:v\d+$/);
 
       const findings = JSON.parse(keyFindingsCall![1] as string);
       expect(Array.isArray(findings)).toBe(true);

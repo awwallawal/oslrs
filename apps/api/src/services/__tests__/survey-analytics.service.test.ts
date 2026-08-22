@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AnalyticsScope } from '../../middleware/analytics-scope.js';
 import type { AnalyticsQueryParams } from '@oslsr/types';
+import { CrossTabDimension } from '@oslsr/types';
+import {
+  analyticsCacheKey,
+  ANALYTICS_CACHE_VERSION,
+  PUBLIC_KEY_FINDINGS_CACHE_KEY,
+} from '../analytics-cache-keys.js';
 
 // Hoisted mock for db.execute
 const mockExecute = vi.hoisted(() => vi.fn());
@@ -471,12 +477,28 @@ describe('SurveyAnalyticsService', () => {
       // visible in the registry summary.
       expect(result.totalRespondents).toBe(43);
 
-      // No `s.source = ...` filter is bound when params.source is omitted — all
-      // sources (public/enumerator/clerk) are counted together. A regression
-      // that hard-codes a source restriction would surface here.
+      // No source filter is bound when params.source is omitted — all sources
+      // (public/enumerator/clerk) are counted together. A regression that
+      // hard-codes a source restriction would surface here.
       const sqlString = JSON.stringify(mockExecute.mock.calls[0][0]);
-      expect(sqlString).toContain('s.respondent_id IS NOT NULL');
-      expect(sqlString).not.toContain('s.source =');
+      expect(sqlString).not.toContain('source =');
+
+      // Story 12-6 — this used to assert `s.respondent_id IS NOT NULL`, the
+      // guard that kept orphan submissions out of the population. That
+      // condition is GONE, and its absence is the fix rather than a regression:
+      // the aggregate now reads the respondent-anchored canonical source, where
+      // a submission with no respondent cannot enter the population at all.
+      // Assert the grain that replaced it, not the guard that is no longer
+      // needed — a stale assertion here would have to be satisfied by
+      // reintroducing a submission-grained WHERE.
+      //
+      // ⚠️ The negative assertion names the RETIRED JOIN, not `FROM submissions`
+      // — the canonical read's own latest-non-empty LATERAL legitimately reads
+      // `FROM submissions sx`, so a bare `FROM submissions` check passes on a
+      // prefix and asserts nothing.
+      expect(sqlString).not.toContain('LEFT JOIN respondents r ON r.id = s.respondent_id');
+      expect(sqlString).toContain('ru.raw_data IS NOT NULL');
+      expect(sqlString).toContain('FROM respondents r');
     });
   });
 
@@ -602,5 +624,316 @@ describe('SurveyAnalyticsService', () => {
       const firstSqlString = JSON.stringify(mockExecute.mock.calls[0][0]);
       expect(firstSqlString).toContain('user-123');
     });
+  });
+});
+
+/**
+ * Story 12-6 (inherited 12-5 R2) — the GRAIN guard.
+ *
+ * 12-5 fixed the DIVISOR of the dashboard's published rates and left the GRAIN:
+ * `buildWhereFragments` read `FROM submissions s`, so a person holding more than
+ * one answer-bearing submission was weighted twice. Prod 2026-08-20 measured 286
+ * answer-bearing submissions against 272 answer-bearing people — ~14 people
+ * double-counted in every published rate.
+ *
+ * ⚠️ These assert the SQL, not an outcome, and that is deliberate. A mocked-DB
+ * test that only checks the returned numbers passes over this hole completely:
+ * the double-count lives in which rows the database would have returned, which a
+ * mock never exercises. Asserting the composed source is the only thing at this
+ * level that fails if the re-point is reverted.
+ *
+ * RED-VERIFY: point any method below back at `buildWhereFragments` and its case
+ * fails on the missing canonical source.
+ */
+describe('SurveyAnalyticsService — respondent grain (Story 12-6)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Every re-pointed method issues 1..9 queries; a bare `{ rows: [] }` for all
+    // of them is enough, because these cases assert the SQL that was SENT.
+    mockExecute.mockResolvedValue(mockRows([]));
+  });
+
+  /** The canonical read's unmistakable fingerprint (registry-unified.sql.ts). */
+  const CANONICAL_ANCHOR = 'FROM respondents r';
+  /** The retired submission-anchored join this story removed. */
+  const RETIRED_JOIN = 'LEFT JOIN respondents r ON r.id = s.respondent_id';
+
+  const REPOINTED: Array<[string, () => Promise<unknown>]> = [
+    ['getDemographics', () => SurveyAnalyticsService.getDemographics(systemScope)],
+    ['getEmployment', () => SurveyAnalyticsService.getEmployment(systemScope)],
+    ['getHousehold', () => SurveyAnalyticsService.getHousehold(systemScope)],
+    ['getSkillsFrequency', () => SurveyAnalyticsService.getSkillsFrequency(systemScope)],
+    ['getRegistrySummary', () => SurveyAnalyticsService.getRegistrySummary(systemScope)],
+    // Added when the ruling was extended to the full set. These four reach the
+    // canonical source only through their FIRST (threshold) query when the mock
+    // returns no rows — every later query is gated behind a threshold that an
+    // empty result cannot meet. That is why the per-method cases below drive
+    // them with counts high enough to open those gates.
+    ['getCrossTab', () => SurveyAnalyticsService.getCrossTab(
+      CrossTabDimension.GENDER, CrossTabDimension.EDUCATION, 'count', systemScope)],
+    ['getSkillsInventory', () => SurveyAnalyticsService.getSkillsInventory(systemScope)],
+    ['getInferentialInsights', () => SurveyAnalyticsService.getInferentialInsights(systemScope)],
+    ['getExtendedEquity', () => SurveyAnalyticsService.getExtendedEquity(systemScope)],
+  ];
+
+  it.each(REPOINTED)('%s reads every query from the canonical respondent source', async (_name, run) => {
+    await run();
+
+    expect(mockExecute.mock.calls.length).toBeGreaterThan(0);
+    for (const call of mockExecute.mock.calls) {
+      const sqlString = JSON.stringify(call[0]);
+      expect(sqlString).toContain(CANONICAL_ANCHOR);
+      expect(sqlString).not.toContain(RETIRED_JOIN);
+      // The answers-present cohort is now expressed on `ru`, and the orphan
+      // guard (`s.respondent_id IS NOT NULL`) is gone because the grain makes it
+      // unnecessary — an orphan submission cannot enter a respondent-anchored
+      // population at all.
+      expect(sqlString).toContain('ru.raw_data IS NOT NULL');
+      expect(sqlString).not.toContain('s.respondent_id IS NOT NULL');
+    }
+  });
+
+  it('scopes a personal request by the PEOPLE the user registered, not their submissions', async () => {
+    await SurveyAnalyticsService.getRegistrySummary(personalScope);
+
+    const sqlString = JSON.stringify(mockExecute.mock.calls[0][0]);
+    // `ru.submitter_id` — respondents.submitter_id, the attribution
+    // productivity.service.ts already reports staff counts from. The retired
+    // filter said `s.submitter_id`, which asked a question about submissions.
+    expect(sqlString).toContain('ru.submitter_id');
+    expect(sqlString).not.toContain('s.submitter_id');
+    expect(sqlString).toContain('user-123');
+  });
+
+  it('filters a date range on registration date, not submission date', async () => {
+    await SurveyAnalyticsService.getRegistrySummary(systemScope, {
+      dateFrom: '2026-01-01',
+      dateTo: '2026-02-01',
+    });
+
+    const sqlString = JSON.stringify(mockExecute.mock.calls[0][0]);
+    // A respondent-anchored read has no submitted_at to filter on, and this is
+    // what /registry-totals already meant by a date range — so the two endpoints
+    // now agree on what a date range selects.
+    expect(sqlString).toContain('ru.created_at');
+    expect(sqlString).not.toContain('s.submitted_at');
+  });
+
+  it('the submission-grained survivors are an ENUMERATED set, not a leftover (review L1/M4)', async () => {
+    // ⭐ WHY A COUNT IS PINNED HERE. Story 12-6's Dev Notes, its Change Log and
+    // the adjudication hand-off's §2ad backstop all quote this number as the
+    // evidence that the grain re-point landed — and all three drifted from it.
+    // The story said "46 → 7" while its own survivor table enumerated 6; the
+    // hand-off said "46 → 22", a mid-development count that phase 2 invalidated
+    // the same day. A number that three documents assert and nothing measures is
+    // a claim, not a check.
+    //
+    // So the check lives with the code. If a later sweep re-points one of the
+    // survivors, or a new submission-grained query appears, this reds and the
+    // prose has to be updated WITH it rather than after it.
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(
+      new URL('../survey-analytics.service.ts', import.meta.url),
+      'utf-8',
+    );
+
+    // ⚠️ Counted as "prefix minus the alias that shares it". `FROM submissions sx`
+    // is the canonical read's own latest-non-empty LATERAL, and a bare prefix
+    // match counts it as a survivor — the exact trap that made two of this
+    // story's own negative assertions assert nothing.
+    const prefix = src.split('FROM submissions s').length - 1;
+    const canonicalLateral = src.split('FROM submissions sx').length - 1;
+    const sites = { length: prefix - canonicalLateral };
+    // 1 doc comment + getPipelineSummary + getTrends + the inferential 90-day
+    // forecast + getEnumeratorReliability ×2. Every one is attributed in the
+    // story's "what did NOT move, and why" table.
+    expect(
+      sites.length,
+      'submission-grained site count changed — update Dev Notes AND the §2ad hand-off check, not just the code',
+    ).toBe(6);
+  });
+
+  it('leaves genuinely submission-grained surfaces alone', async () => {
+    // getTrends counts registration EVENTS per day and reads s.submitted_at;
+    // getPipelineSummary's subject IS the submission (processing, completion
+    // time). Re-pointing those would not be an honesty fix, it would be a
+    // different metric. The guard exists so a later sweep does not "finish the
+    // job" by moving them too.
+    await SurveyAnalyticsService.getTrends(systemScope);
+    expect(JSON.stringify(mockExecute.mock.calls[0][0])).toContain(RETIRED_JOIN);
+  });
+});
+
+/**
+ * Story 12-6 phase 2 — the four aggregates whose deeper queries sit BEHIND a
+ * suppression threshold.
+ *
+ * ⚠️ WHY THESE EXIST SEPARATELY. The `it.each` guard above drives each method
+ * with an empty mock, so every one of these four returns after its FIRST
+ * (threshold) query — the rest of the method never runs. That guard would
+ * therefore have stayed green with every re-pointed query below still reading
+ * `FROM submissions`. It asserts the safe OUTCOME and would pass with the fix
+ * deleted, which is the exact shape of a test passing over a hole.
+ *
+ * These cases feed counts high enough to OPEN the gates, so the queries that
+ * actually publish the rates get executed and inspected.
+ */
+describe('SurveyAnalyticsService — threshold-gated aggregates read the canonical source too', () => {
+  const CANONICAL_ANCHOR = 'FROM respondents r';
+  const RETIRED_JOIN = 'LEFT JOIN respondents r ON r.id = s.respondent_id';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Every query returns a row set that both clears the thresholds and is
+    // shaped plausibly enough for the in-memory maths that follows.
+    mockExecute.mockResolvedValue(
+      mockRows([
+        {
+          total: '500',
+          cell_count: '30',
+          count: '30',
+          skill: 'tailoring',
+          lga_id: 'ibadan_north',
+          lga_name: 'Ibadan North',
+          row_val: 'female',
+          col_val: 'sss',
+          gender: 'female',
+          employment_type: 'wage_private',
+          education_level: 'tertiary',
+          disability_status: 'no',
+          work_status: 'employed',
+          marital_status: 'married',
+          is_head: 'yes',
+          has_business: 'yes',
+          day: '2026-08-01',
+          employed: '20',
+        },
+      ]),
+    );
+  });
+
+  function everyCallCanonical(exceptIndexes: number[] = []) {
+    mockExecute.mock.calls.forEach((call, i) => {
+      if (exceptIndexes.includes(i)) return;
+      const s = JSON.stringify(call[0]);
+      expect(s, `query #${i} is not canonical`).toContain(CANONICAL_ANCHOR);
+      expect(s, `query #${i} still carries the retired join`).not.toContain(RETIRED_JOIN);
+    });
+  }
+
+  it('getCrossTab builds its matrix over people once past the n>=50 gate', async () => {
+    await SurveyAnalyticsService.getCrossTab(
+      CrossTabDimension.GENDER, CrossTabDimension.LGA, 'count', systemScope,
+    );
+    // Threshold query + the matrix query — the second only runs above 50.
+    expect(mockExecute.mock.calls.length).toBeGreaterThan(1);
+    everyCallCanonical();
+    // The LGA dimension joins lgas against the unified alias, not respondents.
+    expect(JSON.stringify(mockExecute.mock.calls[1][0])).toContain('l.code = ru.lga_id');
+  });
+
+  it('getSkillsInventory reads all four sections from the canonical source', async () => {
+    await SurveyAnalyticsService.getSkillsInventory(systemScope);
+    // 2 threshold + allSkills + byLga + 2 gap + diversity.
+    expect(mockExecute.mock.calls.length).toBeGreaterThanOrEqual(6);
+    everyCallCanonical();
+  });
+
+  it('getExtendedEquity computes disability gap, alignment and gini over people', async () => {
+    await SurveyAnalyticsService.getExtendedEquity(systemScope);
+    expect(mockExecute.mock.calls.length).toBeGreaterThanOrEqual(4);
+    everyCallCanonical();
+  });
+
+  it('getInferentialInsights re-points its n but keeps the FORECAST submission-grained', async () => {
+    await SurveyAnalyticsService.getInferentialInsights(systemScope);
+
+    // call 0 = the threshold count (n of every CI below), call 1 = the
+    // extraction, last = the 90-day enrolment forecast.
+    const calls = mockExecute.mock.calls.map((c) => JSON.stringify(c[0]));
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+
+    // ⚠️ Identify the forecast by its 90-day window, NOT by 'submitted_at':
+    // the canonical read's own latest-non-empty LATERAL orders by
+    // `sx.submitted_at`, so a substring search for the column name matches the
+    // canonical queries and points this assertion at the wrong one. (It did,
+    // the first time this was written.)
+    const forecastIndex = calls.findIndex((s) => s.includes("INTERVAL '90 days'"));
+    expect(forecastIndex).toBeGreaterThanOrEqual(0);
+
+    // Everything EXCEPT the forecast counts people...
+    everyCallCanonical([forecastIndex]);
+
+    // ...and the forecast is a time series of arrival EVENTS, so it keeps the
+    // submission grain AND its own submission-grained filter. Re-pointing it
+    // "for consistency" would turn a rate-of-arrival forecast into a different
+    // metric — and would reference `ru` with no `ru` in scope.
+    expect(calls[forecastIndex]).toContain(RETIRED_JOIN);
+    expect(calls[forecastIndex]).not.toContain('ru.raw_data IS NOT NULL');
+  });
+});
+
+/**
+ * Story 12-6 code review (H1) — every analytics Redis cache is VERSIONED.
+ *
+ * ⭐ THE DEFECT THIS EXISTS TO PREVENT. Deploys do not flush Redis: the prod
+ * instance is a long-lived `unless-stopped` container and the deploy chain never
+ * touches it. So a cached payload OUTLIVES the release that corrected it — for
+ * up to an hour on `/insights` and the public key-findings bridge. Story 12-6
+ * moved ten aggregates onto the respondent grain (284 → 272 answer-bearing) and
+ * renamed `ActivationStatusData.totalSubmissions` → `totalRespondents`, so six
+ * cached payloads changed value and one changed SHAPE — and not one key was
+ * bumped, because the discipline lived in a comment beside a single literal in
+ * `public-insights.service.ts` rather than in a shared constant.
+ *
+ * Concretely, unversioned: `/insights` publishes n=284 confidence intervals for
+ * an hour AFTER the fix that narrowed them; and `getActivationStatus` returns a
+ * cached object whose `totalRespondents` is `undefined`, which the (correctly
+ * fail-closed) policy-brief gate then refuses — 400ing a Ministry document on a
+ * register of 272.
+ *
+ * ⚠️ This asserts the KEY, not an outcome. A mocked Redis will happily round-trip
+ * any string, so no behavioural test can see a missing version suffix.
+ */
+describe('analytics cache keys are versioned (Story 12-6 review H1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockExecute.mockResolvedValue(mockRows([]));
+  });
+
+  it('composes every key through the shared helper, version suffix included', () => {
+    expect(analyticsCacheKey('insights', 'system', 'all')).toBe(
+      `analytics:insights:system:all:${ANALYTICS_CACHE_VERSION}`,
+    );
+    expect(ANALYTICS_CACHE_VERSION).toMatch(/^v\d+$/);
+  });
+
+  it('leaves no unversioned `analytics:` literal in the service', async () => {
+    // A literal is how the previous six escaped. The source is read rather than
+    // the behaviour observed, because behaviour cannot show the difference.
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(
+      new URL('../survey-analytics.service.ts', import.meta.url),
+      'utf-8',
+    );
+
+    // Redis key literals only — `event:` log names share the `analytics.` prefix
+    // with a DOT, not a colon, so they are not matched here.
+    const rawKeys = src.match(/['"`]analytics:[^'"`]*['"`]/g) ?? [];
+    expect(rawKeys, `unversioned analytics cache key literal(s): ${rawKeys.join(', ')}`)
+      .toEqual([]);
+  });
+
+  it('the public key-findings bridge is versioned on BOTH sides', async () => {
+    // Writer and reader share ONE constant. Bumping only the writer would leave
+    // the public page reading a key nothing writes — it would silently lose its
+    // key findings rather than show stale ones, which is quieter and worse.
+    const publicSrc = (await import('node:fs')).readFileSync(
+      new URL('../public-insights.service.ts', import.meta.url),
+      'utf-8',
+    );
+    expect(publicSrc).toContain('PUBLIC_KEY_FINDINGS_CACHE_KEY');
+    expect(publicSrc).not.toContain("'analytics:public:key-findings'");
+    expect(PUBLIC_KEY_FINDINGS_CACHE_KEY).toMatch(/:v\d+$/);
   });
 });

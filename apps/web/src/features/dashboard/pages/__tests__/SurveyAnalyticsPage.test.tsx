@@ -20,6 +20,10 @@ const mockTrends = vi.hoisted(() => ({ data: [] as any, isLoading: true, error: 
 const mockRegistry = vi.hoisted(() => ({ data: null as any, isLoading: true, error: null as any }));
 const mockRegistryTotals = vi.hoisted(() => ({ data: null as any, isLoading: true, error: null as any }));
 const mockPipeline = vi.hoisted(() => ({ data: null as any, isLoading: true, error: null as any }));
+// Story 12-6 — records the `enabled` flag it was called with, so the tab's
+// lazy-fire contract can be asserted rather than assumed.
+const mockDataHealth = vi.hoisted(() => ({ data: null as any, isLoading: false, isError: false }));
+const mockUseDataHealth = vi.hoisted(() => vi.fn(() => mockDataHealth));
 
 vi.mock('../../hooks/useAnalytics', () => ({
   useDemographics: () => mockDemographics,
@@ -29,6 +33,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
   useTrends: () => mockTrends,
   useRegistrySummary: () => mockRegistry,
   useRegistryTotals: () => mockRegistryTotals,
+  useDataHealth: (...args: unknown[]) => mockUseDataHealth(...(args as [])),
   usePipelineSummary: () => mockPipeline,
   useSkillsInventory: () => ({ data: null, isLoading: false }),
   useInferentialInsights: () => ({ data: null, isLoading: false, error: null }),
@@ -38,6 +43,13 @@ vi.mock('../../hooks/useAnalytics', () => ({
 
 vi.mock('../../api/export.api', () => ({
   fetchLgas: vi.fn().mockResolvedValue([]),
+}));
+
+// Story 12-6 review L3 — the Data Health trigger is role-gated, so the page now
+// reads the auth context. Mutable so a test can take the role away.
+const mockAuthUser = vi.hoisted(() => ({ current: { role: 'super_admin' } as { role: string } | null }));
+vi.mock('../../../auth/context/AuthContext', () => ({
+  useAuth: () => ({ user: mockAuthUser.current }),
 }));
 
 vi.mock('../../../../components/skeletons', () => ({
@@ -85,7 +97,11 @@ function resetMocks() {
   mockTrends.data = []; mockTrends.isLoading = true; mockTrends.error = null;
   mockRegistry.data = null; mockRegistry.isLoading = true; mockRegistry.error = null;
   mockRegistryTotals.data = null; mockRegistryTotals.isLoading = true; mockRegistryTotals.error = null;
+  (mockRegistryTotals as unknown as { isError: boolean }).isError = false;
   mockPipeline.data = null; mockPipeline.isLoading = true; mockPipeline.error = null;
+  mockDataHealth.data = null; mockDataHealth.isLoading = false; mockDataHealth.isError = false;
+  mockUseDataHealth.mockClear();
+  mockAuthUser.current = { role: 'super_admin' };
 }
 
 /** The prod split this story exists to make legible: 139 people, 76 with answers. */
@@ -222,15 +238,20 @@ describe('SurveyAnalyticsPage', () => {
     it('sub-captions the percentage cards with the denominator they divide by', () => {
       renderWithTotals();
       // AC2.1 — so a reader cannot divide the 34 employed by 139.
-      expect(screen.getByTestId('stat-employed')).toHaveTextContent('44.7% of 76 submissions with answers');
-      expect(screen.getByTestId('stat-business-owners')).toHaveTextContent('26.3% of 76 submissions with answers');
+      expect(screen.getByTestId('stat-employed')).toHaveTextContent('44.7% of 76 respondents with answers');
+      expect(screen.getByTestId('stat-business-owners')).toHaveTextContent('26.3% of 76 respondents with answers');
     });
 
-    it('keeps the two "with answers" populations apart when they disagree', () => {
-      // Review R1. getRegistrySummary counts FROM submissions; getRegistryTotals
-      // counts people. 12-4 measured 271 people against ~282 submissions on
-      // prod, so these DO differ — and the page must not print both under the
-      // one phrase "with answers" and leave the reader to reconcile them.
+    it('keeps the two "with answers" figures apart when they still disagree', () => {
+      // Review R1, updated by Story 12-6. Both aggregates now read the canonical
+      // respondent-anchored source, so the GRAIN difference (271 people vs ~282
+      // submissions) is gone. They can still differ, for a narrower reason:
+      // getRegistryTotals additionally resolves rows to PEOPLE via 12-4's
+      // identity key, so duplicate REGISTRATIONS collapse there and not here.
+      //
+      // The rule is unchanged and is what this pins: each figure is stated with
+      // the base its own arithmetic used. The page must never reconcile them by
+      // pointing one at the other's number.
       mockRegistry.data = { ...SUMMARY_76, totalRespondents: 282, employedPct: 44.7 };
       mockRegistry.isLoading = false;
       mockRegistryTotals.data = { ...TOTALS_139, totalRespondents: 300, withAnswers: 271 };
@@ -244,10 +265,10 @@ describe('SurveyAnalyticsPage', () => {
       expect(withAnswers).toHaveTextContent('271');
       expect(withAnswers).toHaveTextContent('respondents whose answers we hold');
 
-      // The percentage names the SUBMISSION count it actually divided by, so
-      // the 282 is never mistaken for a second, contradictory value of the 271.
+      // The percentage names the count it actually divided by (282), so that
+      // figure is never mistaken for a second, contradictory value of the 271.
       expect(screen.getByTestId('stat-employed'))
-        .toHaveTextContent('44.7% of 282 submissions with answers');
+        .toHaveTextContent('44.7% of 282 respondents with answers');
     });
 
     it('falls back to an em-dash rather than a wrong number when totals are unavailable', () => {
@@ -272,5 +293,142 @@ describe('SurveyAnalyticsPage', () => {
 
     const exportBtn = screen.getByRole('button', { name: /Export Policy Brief/i });
     expect(exportBtn).toBeDisabled();
+  });
+});
+
+/**
+ * Story 12-6 — the Data Health tab.
+ *
+ * The lazy-fire assertion is the one with teeth. The per-field pass reads every
+ * answer-bearing row in the registry, so a tab that fetched eagerly would put
+ * that scan on every dashboard load for readers who never open it — and nothing
+ * on screen would show it happening.
+ */
+describe('SurveyAnalyticsPage — Data Health tab (Story 12-6)', () => {
+  const DATA_HEALTH = {
+    withAnswers: 76,
+    formId: 'form-1',
+    formTitle: 'OSLSR Master v3',
+    fields: [
+      { key: 'monthly_income', label: 'Monthly income', answeredCount: 0, responseRate: 0 },
+      { key: 'gender', label: 'Gender', answeredCount: 76, responseRate: 100 },
+    ],
+    recoveryCohort: {
+      total: 55,
+      limit: 50,
+      offset: 0,
+      rows: [
+        {
+          respondentId: 'r-1',
+          referenceCode: 'OYO-0001',
+          fullName: 'Ade Bello',
+          lgaId: 'ibadan_north',
+          lgaName: 'Ibadan North',
+          registeredAt: '2026-05-01T10:00:00.000Z',
+          phoneNumber: '+2348012345678',
+        },
+      ],
+    },
+  };
+
+  it('renders the tab trigger', () => {
+    render(<SurveyAnalyticsPage />, { wrapper });
+    expect(screen.getByRole('tab', { name: 'Data Health' })).toBeInTheDocument();
+  });
+
+  it('does NOT fire its query until the tab is selected', () => {
+    render(<SurveyAnalyticsPage />, { wrapper });
+    // Third positional arg is `enabled`. It must be false on first paint.
+    const [, , enabled] = mockUseDataHealth.mock.calls[0] as unknown as [unknown, unknown, boolean];
+    expect(enabled).toBe(false);
+  });
+
+  it('fires its query once the tab is selected', async () => {
+    const user = userEvent.setup();
+    render(<SurveyAnalyticsPage />, { wrapper });
+    await user.click(screen.getByRole('tab', { name: 'Data Health' }));
+
+    const lastCall = mockUseDataHealth.mock.calls.at(-1) as unknown as [unknown, unknown, boolean];
+    expect(lastCall[2]).toBe(true);
+  });
+
+  it('renders the funnel, status breakdown, field rates and recovery cohort', async () => {
+    mockRegistryTotals.data = TOTALS_139; mockRegistryTotals.isLoading = false;
+    mockDataHealth.data = DATA_HEALTH;
+
+    const user = userEvent.setup();
+    render(<SurveyAnalyticsPage />, { wrapper });
+    await user.click(screen.getByRole('tab', { name: 'Data Health' }));
+
+    expect(screen.getByTestId('data-health-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('data-health-funnel')).toBeInTheDocument();
+    expect(screen.getByTestId('data-health-status-breakdown')).toBeInTheDocument();
+    expect(screen.getByTestId('data-health-field-rates')).toBeInTheDocument();
+
+    // The recoverable count is the COHORT size (55), not the drill page (1).
+    expect(screen.getByTestId('data-health-recovery-count')).toHaveTextContent('55');
+    expect(screen.getByTestId('data-health-recovery-bound')).toHaveTextContent('Showing 1 of 55');
+    expect(screen.getByTestId('data-health-recovery-table')).toHaveTextContent('Ade Bello');
+    expect(screen.getByTestId('data-health-recovery-table')).toHaveTextContent('OYO-0001');
+  });
+
+  it('shows skeletons while loading and the error card on failure', async () => {
+    mockDataHealth.isLoading = true;
+    const user = userEvent.setup();
+    const { unmount } = render(<SurveyAnalyticsPage />, { wrapper });
+    await user.click(screen.getByRole('tab', { name: 'Data Health' }));
+    expect(screen.getByTestId('data-health-loading')).toBeInTheDocument();
+    unmount();
+
+    resetMocks();
+    mockDataHealth.isError = true;
+    mockRegistryTotals.isLoading = false;
+    const user2 = userEvent.setup();
+    render(<SurveyAnalyticsPage />, { wrapper });
+    await user2.click(screen.getByRole('tab', { name: 'Data Health' }));
+    expect(screen.getByTestId('data-health-error')).toBeInTheDocument();
+  });
+
+  it('surfaces a registry-totals failure instead of rendering a blank tab (review H2)', async () => {
+    // ⚠️ THE HOLE THE ORIGINAL ERROR TEST PASSED OVER. It only ever drove
+    // `dhError`, and `totals` happened to be undefined alongside it — so it never
+    // reached the state where data-health SUCCEEDS and registry-totals FAILS.
+    // The page passed only `dhError` through, so that state fell past every
+    // branch in the panel and returned `null`: no skeleton, no error, a blank
+    // tab. On a completeness view a blank space reads as an answer.
+    mockRegistryTotals.data = null;
+    mockRegistryTotals.isLoading = false;
+    (mockRegistryTotals as unknown as { isError: boolean }).isError = true;
+    mockDataHealth.data = DATA_HEALTH;
+
+    const user = userEvent.setup();
+    render(<SurveyAnalyticsPage />, { wrapper });
+    await user.click(screen.getByRole('tab', { name: 'Data Health' }));
+
+    expect(screen.getByTestId('data-health-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('data-health-panel')).not.toBeInTheDocument();
+  });
+
+  it('hides the tab from a role the route would 403 (review L3)', () => {
+    // The route is narrowed to super-admin + government official because the
+    // recovery drill carries PII. Offering a supervisor a tab that can only
+    // answer 403 makes a permissions boundary look like a broken feature.
+    //
+    // ⚠️ Presentation only — `analytics.routes.test.ts` holds the actual control.
+    mockAuthUser.current = { role: 'supervisor' };
+    render(<SurveyAnalyticsPage />, { wrapper });
+
+    expect(screen.queryByRole('tab', { name: 'Data Health' })).not.toBeInTheDocument();
+    // ...and it does not fire a request it cannot be served.
+    const enabledFlags = mockUseDataHealth.mock.calls.map(
+      (c) => (c as unknown as [unknown, unknown, boolean])[2],
+    );
+    expect(enabledFlags.every((e) => e === false)).toBe(true);
+  });
+
+  it('still shows the tab to a government official', () => {
+    mockAuthUser.current = { role: 'government_official' };
+    render(<SurveyAnalyticsPage />, { wrapper });
+    expect(screen.getByRole('tab', { name: 'Data Health' })).toBeInTheDocument();
   });
 });

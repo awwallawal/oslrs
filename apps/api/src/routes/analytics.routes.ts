@@ -93,6 +93,17 @@ router.get('/registry-summary', AnalyticsController.getRegistrySummary);
 // Story 12-4: the authoritative registry aggregate — counts PEOPLE, not
 // answer-bearing submissions. Inherits the router-level RBAC + scope chain.
 router.get('/registry-totals', AnalyticsController.getRegistryTotals);
+// Story 12-6: Data Health (SA + Official only). Restricted per-route rather than
+// inheriting the router-wide role set, because the recovery-cohort drill carries
+// respondent PII (name, reference code, phone) — the same reason /insights and
+// /equity are narrowed above. The per-field RATES alone would not need this;
+// the drill rides in the same response, so the whole route takes the tighter
+// pair rather than splitting one view across two RBAC levels.
+router.get(
+  '/data-health',
+  authorize(UserRole.SUPER_ADMIN, UserRole.GOVERNMENT_OFFICIAL),
+  AnalyticsController.getDataHealth,
+);
 router.get('/pipeline-summary', AnalyticsController.getPipelineSummary);
 
 // Story 8.3: Team quality (Supervisor + Super Admin)

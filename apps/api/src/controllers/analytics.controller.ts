@@ -36,6 +36,18 @@ const trendsQuerySchema = analyticsQuerySchema.extend({
   days: z.coerce.number().int().min(1).max(365).default(30),
 });
 
+/**
+ * Story 12-6 — Data Health. Extends the shared analytics filter with the form
+ * whose schema defines the per-field axis, plus an explicit page bound on the
+ * `data_lost` drill (AC4.3: the recovery list is never unbounded, and the bound
+ * is the caller's to state rather than a hidden constant).
+ */
+const dataHealthQuerySchema = analyticsQuerySchema.extend({
+  formId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 const crossTabQuerySchema = analyticsQuerySchema.extend({
   rowDim: z.nativeEnum(CrossTabDimension),
   colDim: z.nativeEnum(CrossTabDimension),
@@ -142,6 +154,29 @@ export class AnalyticsController {
     try {
       const parsed = analyticsQuerySchema.parse(req.query);
       const data = await getRegistryTotals(getScope(req), getParams(parsed));
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Story 12-6 — the Data-Health view: per-field response rates + the
+   * `data_lost` recovery cohort.
+   *
+   * ⚠️ PII-bearing (the recovery drill carries name / reference code / phone),
+   * so unlike the counting endpoints beside it this one is restricted at the
+   * ROUTE to super-admin + government official — the same pair `/insights` and
+   * `/equity` use. Read the route, not just this method.
+   */
+  static async getDataHealth(req: Request, res: Response, next: NextFunction) {
+    try {
+      const parsed = dataHealthQuerySchema.parse(req.query);
+      const data = await SurveyAnalyticsService.getDataHealth(
+        getScope(req),
+        getParams(parsed),
+        { formId: parsed.formId, limit: parsed.limit, offset: parsed.offset },
+      );
       res.json({ data });
     } catch (error) {
       next(error);
@@ -255,8 +290,19 @@ export class AnalyticsController {
 
       // Threshold guard
       const activationStatus = await SurveyAnalyticsService.getActivationStatus(getScope(req));
-      if (activationStatus.totalSubmissions < 100) {
-        throw new AppError('INSUFFICIENT_DATA', 'Insufficient data for policy brief (need >= 100 submissions)', 400);
+      // Story 12-6: the gate — and the message — now count RESPONDENTS. The
+      // brief's own statistics are computed over people, so refusing on a
+      // submission count would refuse (or allow) on a number the document
+      // itself never uses.
+      //
+      // ⚠️ FAILS CLOSED, and the explicit finite check is the point. Written as
+      // a bare `x < 100`, a missing or non-numeric value compares FALSE and the
+      // brief GENERATES — a data-sufficiency gate silently passing on absent
+      // data, on a document that goes to a Ministry. Renaming the field surfaced
+      // exactly that: a stale caller shape made the gate wave the request
+      // through. An unknown count is not a large count.
+      if (!Number.isFinite(activationStatus.totalRespondents) || activationStatus.totalRespondents < 100) {
+        throw new AppError('INSUFFICIENT_DATA', 'Insufficient data for policy brief (need >= 100 respondents with answers)', 400);
       }
 
       const pdfBuffer = await PolicyBriefService.generatePolicyBrief(getScope(req), getParams(parsed));

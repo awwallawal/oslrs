@@ -14,6 +14,7 @@ import { suppressSmallBuckets, bandSmallBuckets, toBuckets } from '../utils/anal
 import { selectMultipleUnnest } from '../lib/skills-extraction.js';
 import { getRegistryCountCore, answeredFieldDenominator } from './registry-totals.service.js';
 import { registryUnifiedSource } from './registry-unified.js';
+import { PUBLIC_KEY_FINDINGS_CACHE_KEY } from './analytics-cache-keys.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'public-insights' });
@@ -371,7 +372,7 @@ export class PublicInsightsService {
     if (!redis) return {};
 
     try {
-      const cached = await redis.get('analytics:public:key-findings');
+      const cached = await redis.get(PUBLIC_KEY_FINDINGS_CACHE_KEY);
       if (cached) {
         const findings = JSON.parse(cached) as string[];
         if (Array.isArray(findings) && findings.length > 0) {

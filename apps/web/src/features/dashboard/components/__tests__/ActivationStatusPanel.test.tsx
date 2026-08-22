@@ -8,7 +8,7 @@ expect.extend(matchers);
 import type { ActivationStatusData } from '@oslsr/types';
 
 const mockData: ActivationStatusData = {
-  totalSubmissions: 75,
+  totalRespondents: 75,
   features: [
     { id: 'proportion_cis', label: 'Confidence Intervals', requiredN: 30, currentN: 75, met: true, phase: 4, category: 'active' },
     { id: 'group_comparisons', label: 'Group Comparisons', requiredN: 50, currentN: 75, met: true, phase: 4, category: 'active' },

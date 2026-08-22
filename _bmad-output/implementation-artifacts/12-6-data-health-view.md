@@ -1,6 +1,6 @@
 # Story 12.6: Data Health view
 
-Status: ready-for-dev
+Status: review
 
 > 🔗 **Consumes the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (anchored 2026-07-01; **12-4** is the derivation MODEL). This story RENDERS the honest breakdowns from the 12-4 model: **by-completeness** (139 → 76 `full` / 63 `partial`) + **by-verification** + **by-source**, and the **"+N in progress (drafts)"** funnel line. _Amendment only — ACs unchanged._
 
@@ -111,23 +111,52 @@ This story builds the **Data-Health view** — a new tab on the Survey Analytics
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — Per-field response-rate + recovery-cohort aggregate (AC: #3, #4.2, #4.3)
-  - [ ] Add `SurveyAnalyticsService.getDataHealth(scope, params)` (or `getFieldResponseRates` + a recovery-cohort query — record the choice in File List) beside `getRegistrySummary` in `survey-analytics.service.ts`. Reuse the existing scope/filter shape.
-  - [ ] Resolve the form schema via `QuestionnaireService.getFormSchemaById(formId)` and the field list via `buildColumnsFromFormSchema(schema)` (reuse — do not re-walk the schema by hand) [Source: apps/api/src/services/export-query.service.ts:546-561].
-  - [ ] **Read the answer-bearing rows FROM the canonical `registryUnifiedSource('ru')` (13-33) — NOT a re-mirror of `getUnifiedExportData`'s LATERAL** (13-33 hand-off, 2026-07-19). `SELECT ... FROM ${registryUnifiedSource('ru')} WHERE ru.raw_data IS NOT NULL` — `ru.raw_data` IS each respondent's latest NON-EMPTY submission (the canonical read already resolves it), so the per-field pass reads the SAME shape count-core / 12-4 / public-insights use (no third copy, no drift). For each such row, apply `normalizeRawDataKeys(ru.raw_data)` then test each field's presence with the shared emptiness contract (mirror `hasNonEmptyRawData`); tally `answeredCount` per field; `responseRate = answeredCount / withAnswers`. Pull `withAnswers`/`total`/`byDataStatus` from 12-4's `getRegistryTotals()` (call it; do not re-count).
-  - [ ] `data_lost` cohort: count = `byDataStatus.data_lost`; the drill list reuses the existing registry/respondent list projection + pagination, filtered to `data_status='data_lost'` (derived via `deriveDataStatus`, not a private SQL `CASE`). Bound the list (no unbounded in-memory build).
-- [ ] Task 2 — API endpoint + controller + RBAC (AC: #5)
-  - [ ] Add `AnalyticsController.getDataHealth` mirroring `getRegistrySummary` [Source: apps/api/src/controllers/analytics.controller.ts:120-128].
-  - [ ] Register `router.get('/data-health', authorize(UserRole.SUPER_ADMIN, UserRole.GOVERNMENT_OFFICIAL), AnalyticsController.getDataHealth)` in `analytics.routes.ts` beside `/registry-summary`, mirroring the `/insights`/`/equity` per-route SA+Official restriction [Source: apps/api/src/routes/analytics.routes.ts:56-67,92].
-- [ ] Task 3 — Web: Data-Health tab + hook + api (AC: #1, #2, #3, #4.1)
-  - [ ] Add `useDataHealth(params, enabled)` to `useAnalytics.ts` (key `['analytics','data-health', params]`, `staleTime: 60_000`) + `fetchDataHealth` in `analytics.api.ts`, mirroring `useRegistrySummary`/`fetchRegistrySummary` [Source: apps/web/src/features/dashboard/hooks/useAnalytics.ts:31-49]. The funnel + per-status breakdown consume the existing `useRegistrySummary`/12-4 `getRegistryTotals` data — reuse, do not add a second count fetch.
-  - [ ] Add the `Data Health` `TabsTrigger` + `TabsContent value="data-health"` to `SurveyAnalyticsPage`, gated by `activeTab === 'data-health'`, wrapped in `ErrorBoundary` + `SkeletonCard` loading [Source: apps/web/src/features/dashboard/pages/SurveyAnalyticsPage.tsx:129-141].
-  - [ ] Compose the view from a funnel component (reuse/adapt `VerificationFunnelChart`'s `BarChart layout="vertical"` pattern — do NOT build a new chart lib), a per-`data_status` bar/legend over `REGISTRY_DATA_STATUSES`, a per-field response-rate bar chart / table, and the `data_lost` recovery `StatCard` + drill list [Source: apps/web/src/features/dashboard/components/charts/VerificationFunnelChart.tsx; apps/web/src/features/dashboard/pages/SurveyAnalyticsPage.tsx:45-55].
-- [ ] Task 4 — Tests (AC: #6)
-  - [ ] API: unit tests for `getDataHealth` (per-field rate math; `normalizeRawDataKeys` prevents variant-key undercount; emptiness matches `hasNonEmptyRawData`; `data_lost` cohort count/list); route-registration + RBAC assertion in `analytics.routes.test.ts`.
-  - [ ] API: real-DB smoke (integration test, `beforeAll`/`afterAll`) if the aggregate uses raw SQL — ≥3 structurally-distinct respondents + schema-column-existence guard.
-  - [ ] Web: co-located tests for the Data-Health tab (funnel + per-status + per-field + recovery cohort render; skeleton loading; ErrorBoundary fallback; lazy-fire on tab activation).
-- [ ] Task 5 — Validate: targeted API + web suites green; api `tsc --noEmit` + eslint clean; web `tsc` + lint clean; real-DB smoke green against local `oslsr_postgres` (if added). Zero regressions.
+- [x] Task 0 — Re-point the rate-bearing aggregates onto the respondent grain (INHERITED 12-5 R2; ruled by Awwal 2026-08-20)
+  - [x] ⚖️ **THE RULING.** Presented at dev-story start with the measurement below; Awwal chose **"full re-point of all rate-bearing aggregates"** over "narrow (published rates only)" and "defer to its own story". The option text he chose named **`getRegistrySummary` + `getHousehold` + `getEmployment` + `getDemographics`** — that enumeration IS the agreed scope. `getSkillsFrequency` is added to it here because 12-5 gave it a published denominator called `respondentsAnswering` that counts SUBMISSIONS; leaving it would publish a figure whose own label is wrong. Everything NOT re-pointed is enumerated in Dev Notes with its reason — no silent narrowing.
+  - [x] **⛔ THE CALLOUT'S FIX DOES NOT COMPILE AS WRITTEN, AND THAT IS THE WHOLE DIFFICULTY.** "Re-point `survey-analytics.service`'s aggregates onto `registryUnifiedSource('ru')`" reads mechanical. It is not: `buildWhereFragments` filters on **three submission columns the canonical read does not expose** — `s.submitter_id` (`personal` scope), `s.submitted_at` (`dateFrom`/`dateTo`) and `s.source`. Re-pointing therefore REDEFINES what the dashboard's filters MEAN. Decide it once, deliberately, and write it down:
+    - `personal` scope → `ru.submitter_id` ("the people I registered"), NOT "the submissions I filed". Requires adding `submitter_id` to the canonical read — see the next subtask. `productivity.service.ts` already attributes respondents to staff by `r.submitter_id`, so this adopts an existing definition rather than minting one.
+    - `dateFrom`/`dateTo` → `ru.created_at` (**when the person was registered**), not `s.submitted_at` (when an answer arrived). This is what 12-4's `buildRegistryFilter` already does for `/registry-totals`, so the two endpoints stop disagreeing about what a date range selects.
+    - `source` → `ru.source` (respondent provenance). Vocabularies overlap on `enumerator`/`public`/`clerk`; `ru.source` additionally carries the `imported_*` values, which is the honest superset.
+  - [x] Add `r.submitter_id AS submitter_id` to `REGISTRY_UNIFIED_SQL_TEXT` under its stated column governance (raw substrate, respondent column, grain-preserving) with the WHO/WHY line the governance requires; extend `RegistryUnifiedRow`; re-run the view/inline parity smoke (rule 4 — a column change takes the DROP+CREATE path).
+  - [x] Export 12-4's `buildRegistryFilter` and teach it `personal` scope, then compose the analytics filter as `buildRegistryFilter(scope, params) AND ru.raw_data IS NOT NULL`. **ONE filter definition for the respondent grain, not a second one** — a private copy in `survey-analytics.service.ts` would be the drift 13-33/13-37 exist to kill, rebuilt inside the story that fixes a drift.
+    - ⚠️ **`buildRegistryFilter` ignores `personal` scope, and that is a RULING, not a hole** — 12-4 wrote it down: the register is one shared object whose total is already published unauthenticated on oyoskills.com/insights, and 403-ing enumerators would contradict AC5.2. I first read it as an oversight; re-reading the comment corrected that. The analytics aggregates DID narrow for an enumerator, so the two callers genuinely differ. Express the difference as a named `PersonalScopeMode` parameter (`'unfiltered'` for `/registry-totals`, `'submitter'` for analytics) rather than letting one caller inherit the other's decision by accident.
+  - [x] Re-point `getRegistrySummary`, `getHousehold`, `getEmployment`, `getDemographics`, `getSkillsFrequency`: `FROM submissions s LEFT JOIN respondents r ON r.id = s.respondent_id` → `FROM ${registryUnifiedSource('ru')}`, `s.raw_data` → `ru.raw_data`, `r.lga_id` → `ru.lga_id`. The orphan-submission class disappears by construction (the read is anchored `FROM respondents`, so `respondent_id IS NOT NULL` stops being a condition anyone can forget — it is the grain).
+  - [x] **Fix the web copy the grain change invalidates.** `pctOfAnswersCaption`/`ofAnswersCaption` render "% of N **submissions** with answers" — wording 12-5 chose *because* the two populations genuinely differed, and which becomes a lie the moment they are one population. `registry-copy.ts` says so itself: "When 12-4 repoints `getRegistrySummary` onto the canonical respondent-anchored read, the two collapse into one number and this wording can lose the word 'submissions'." Pin the new wording with a test.
+  - [x] ⚠️ **PRE-DEPLOY RESIDUAL — every moved figure is discharged by PREDICTION, not by movement** (12-4 R1 / 12-5 R1 discipline, §2z(d)). Reproduce each aggregate read-only against prod, confirm the control reproduces the CURRENT live figure EXACTLY, then predict, then compare after deploy. Reproduce the WHOLE predicate — 12-5's misprediction (45.7 vs the true 45.5) came from naming the right table and dropping half the WHERE.
+
+- [x] Task 1 — Per-field response-rate + recovery-cohort aggregate (AC: #3, #4.2, #4.3)
+  - [x] Add `SurveyAnalyticsService.getDataHealth(scope, params)` (or `getFieldResponseRates` + a recovery-cohort query — record the choice in File List) beside `getRegistrySummary` in `survey-analytics.service.ts`. Reuse the existing scope/filter shape.
+  - [x] Resolve the form schema via `QuestionnaireService.getFormSchemaById(formId)` and the field list via `buildColumnsFromFormSchema(schema)` (reuse — do not re-walk the schema by hand) [Source: apps/api/src/services/export-query.service.ts:546-561].
+  - [x] **Read the answer-bearing rows FROM the canonical `registryUnifiedSource('ru')` (13-33) — NOT a re-mirror of `getUnifiedExportData`'s LATERAL** (13-33 hand-off, 2026-07-19). `SELECT ... FROM ${registryUnifiedSource('ru')} WHERE ru.raw_data IS NOT NULL` — `ru.raw_data` IS each respondent's latest NON-EMPTY submission (the canonical read already resolves it), so the per-field pass reads the SAME shape count-core / 12-4 / public-insights use (no third copy, no drift). For each such row, apply `normalizeRawDataKeys(ru.raw_data)` then test each field's presence with the shared emptiness contract (mirror `hasNonEmptyRawData`); tally `answeredCount` per field; `responseRate = answeredCount / withAnswers`. Pull `withAnswers`/`total`/`byDataStatus` from 12-4's `getRegistryTotals()` (call it; do not re-count).
+  - [x] `data_lost` cohort: count = `byDataStatus.data_lost`; the drill list reuses the existing registry/respondent list projection + pagination, filtered to `data_status='data_lost'` (derived via `deriveDataStatus`, not a private SQL `CASE`). Bound the list (no unbounded in-memory build).
+- [x] Task 2 — API endpoint + controller + RBAC (AC: #5)
+  - [x] Add `AnalyticsController.getDataHealth` mirroring `getRegistrySummary` [Source: apps/api/src/controllers/analytics.controller.ts:120-128].
+  - [x] Register `router.get('/data-health', authorize(UserRole.SUPER_ADMIN, UserRole.GOVERNMENT_OFFICIAL), AnalyticsController.getDataHealth)` in `analytics.routes.ts` beside `/registry-summary`, mirroring the `/insights`/`/equity` per-route SA+Official restriction [Source: apps/api/src/routes/analytics.routes.ts:56-67,92].
+- [x] Task 3 — Web: Data-Health tab + hook + api (AC: #1, #2, #3, #4.1)
+  - [x] Add `useDataHealth(params, enabled)` to `useAnalytics.ts` (key `['analytics','data-health', params]`, `staleTime: 60_000`) + `fetchDataHealth` in `analytics.api.ts`, mirroring `useRegistrySummary`/`fetchRegistrySummary` [Source: apps/web/src/features/dashboard/hooks/useAnalytics.ts:31-49]. The funnel + per-status breakdown consume the existing `useRegistrySummary`/12-4 `getRegistryTotals` data — reuse, do not add a second count fetch.
+  - [x] Add the `Data Health` `TabsTrigger` + `TabsContent value="data-health"` to `SurveyAnalyticsPage`, gated by `activeTab === 'data-health'`, wrapped in `ErrorBoundary` + `SkeletonCard` loading [Source: apps/web/src/features/dashboard/pages/SurveyAnalyticsPage.tsx:129-141].
+  - [x] Compose the view from a funnel component (reuse/adapt `VerificationFunnelChart`'s `BarChart layout="vertical"` pattern — do NOT build a new chart lib), a per-`data_status` bar/legend over `REGISTRY_DATA_STATUSES`, a per-field response-rate bar chart / table, and the `data_lost` recovery `StatCard` + drill list [Source: apps/web/src/features/dashboard/components/charts/VerificationFunnelChart.tsx; apps/web/src/features/dashboard/pages/SurveyAnalyticsPage.tsx:45-55].
+- [x] Task 4 — Tests (AC: #6)
+  - [x] API: unit tests for `getDataHealth` (per-field rate math; `normalizeRawDataKeys` prevents variant-key undercount; emptiness matches `hasNonEmptyRawData`; `data_lost` cohort count/list); route-registration + RBAC assertion in `analytics.routes.test.ts`.
+  - [x] API: real-DB smoke (integration test, `beforeAll`/`afterAll`) if the aggregate uses raw SQL — ≥3 structurally-distinct respondents + schema-column-existence guard.
+  - [x] Web: co-located tests for the Data-Health tab (funnel + per-status + per-field + recovery cohort render; skeleton loading; ErrorBoundary fallback; lazy-fire on tab activation).
+- [x] Task 5 — Validate: targeted API + web suites green; api `tsc --noEmit` + eslint clean; web `tsc` + lint clean; real-DB smoke green against local `oslsr_postgres` (if added). Zero regressions.
+
+### Review Follow-ups (AI)
+
+Adversarial code review, 2026-08-21 (Opus 5, `code-review` workflow, fresh context on the
+uncommitted tree). 9 findings — **all raised as action items and all fixed in the same pass**, on
+Awwal's instruction. Every code fix is RED-verified by mutation (each reds exactly 1).
+
+- [x] **[AI-Review][High] H1 — no analytics Redis cache key was versioned, so six cached payloads outlive the deploy that corrected them.** The re-point changed the VALUE of `cross-tab` (300s), `skills-inventory` (600s), `insights` (3600s), `public:key-findings` (3600s), `equity` (600s), and the SHAPE of `activation-status` (`totalSubmissions` → `totalRespondents`, 300s). Deploys never flush Redis — prod is a long-lived `unless-stopped` container and the deploy chain does not touch it. Unversioned: `/insights` publishes n=284 confidence intervals for an hour AFTER the fix that narrowed them; the public page's key findings with it; and `getActivationStatus` returns a cached object whose `totalRespondents` is `undefined`, which the (correctly fail-closed) policy-brief gate then refuses — 400ing a Ministry document on a register of 272. It also means R1's discharge-on-deploy comparison would read PRE-deploy figures and could be misread as "the fix did not land". ⭐ 12-4 had already written this rule in `public-insights.service.ts:22-34` — *"BUMP THE `:vN` SUFFIX WHENEVER THE PAYLOAD SHAPE CHANGES… a corrected FIGURE would otherwise stay hidden behind the stale entry while the correction is announced"* — but it lived in a comment beside ONE literal, so it was followed for one key. **FIXED:** new `analytics-cache-keys.ts` owns `ANALYTICS_CACHE_VERSION` (`v2`) + `analyticsCacheKey()`; all seven analytics caches compose it, and the writer/reader-shared `PUBLIC_KEY_FINDINGS_CACHE_KEY` is one exported constant so a one-sided bump is impossible. Guarded by a test that fails on any unversioned `analytics:` literal in the service. [apps/api/src/services/analytics-cache-keys.ts; survey-analytics.service.ts:1198,1318,1657,1837,1858,2029,2191; public-insights.service.ts]
+- [x] **[AI-Review][High] H2 — the Data Health tab rendered completely blank when `/registry-totals` failed.** The page passed `isError={dhError}` only; `useRegistryTotals` had no error surfaced. So with registry-totals failed and data-health succeeded: not loading, not error, `totals` undefined → `if (!totals || !dataHealth) return null`. No skeleton, no error, nothing to retry. On a completeness view blank space reads as an answer. The existing error test only drove `dhError` (with `totals` undefined alongside), so it passed over exactly this state — the same shape as the holes this story caught elsewhere. **FIXED:** `totalsError` propagated into the panel, and the `return null` replaced by an explicit `data-health-unavailable` card. Both covered. [SurveyAnalyticsPage.tsx:89,470; DataHealthPanel.tsx:103]
+- [x] **[AI-Review][Medium] M1 — `responseRate` divides ROWS by PEOPLE, so it can exceed 100% and is then silently clipped.** Numerator = rows from `buildUnifiedAnswersWhere` (one per `respondents.id`); denominator = `getRegistryTotals().withAnswers`, counted AFTER 12-4's identity-key collapse. Two respondent rows resolving to one person give 2 and 1. Prod measures the gap at 0 today, but it is structural, and `<XAxis domain={[0, 100]}>` would render 150% as a FULL bar with a "150%" tooltip — wrong and silent together. **FIXED:** clamped for display with a `logger.warn` naming the condition; `answeredCount` stays truthful. Deliberately NOT "fixed" by dividing by `rawRows.length` — that would publish a denominator beside a `withAnswers` caption the arithmetic never used, which is ruling R-E's defect. [survey-analytics.service.ts:430-465]
+- [x] **[AI-Review][Medium] M2 — `getDataHealth` mixed two readings of `personal` scope, dividing one submitter's answers by the whole register.** The numerator passed `buildRegistryFilter(..., 'submitter')`; the denominator came from `getRegistryTotals`, whose `personal` default is `'unfiltered'` (correct for `/registry-totals`, per 12-4 ruling 2). Unreachable through `/data-health` today — SA and Official both resolve to `system` scope — which is exactly why it needed catching: it would surface only if the route were widened, and then only as plausible-looking figures. It is also precisely what the named `PersonalScopeMode` existed to prevent, one call site later. **FIXED:** `getRegistryTotals` takes an explicit `personalScope` (defaulting to `'unfiltered'`, so `/registry-totals` is byte-identical) and `getDataHealth` passes `'submitter'`. [registry-totals.service.ts:507-541; survey-analytics.service.ts:965]
+- [x] **[AI-Review][Medium] M3 — `RegistrySummaryStrip.test.tsx` was modified in git but absent from the File List.** The only undocumented file in the diff, and the one the Change Log's own closing lesson is about. **FIXED:** added below.
+- [x] **[AI-Review][Medium] M4 — the §2ad hand-off's falsifiable check went stale a second time.** `docs/adjudication-agent-handoff.md` still read "The falsifiable check is: 46 → 22"; the shipped tree is **6**. 22 was the phase-1 count, invalidated the same day by the phase-2 re-point, and never updated — the SAME class of error the first correction was written to fix, one iteration later. ⭐ **A falsifiable number is a LIVE artefact, not a fact recorded once: re-measure it at the END of the work.** **FIXED:** corrected to 46 → 6, with the re-correction and its lesson recorded, and the count now pinned by a test so the next drift reds instead of misleading.
+- [x] **[AI-Review][Low] L1 — "46 → 7" was wrong in four places; it is 6.** The story's own survivor table enumerated 6 (pipeline 1 + trends 1 + forecast 1 + enumerator-reliability 2 + doc comment 1) while three headline sentences and the R3 ledger row said 7. **FIXED** in all four, and pinned by the new enumerated-survivors test.
+- [x] **[AI-Review][Low] L2 — the recovery drill's bound caption vanished exactly when it was needed.** `deriveDataStatus` drops rows AFTER `LIMIT/OFFSET`, so a page can legitimately return empty while the cohort is not — past the offset, or because the atom rejected every row on the page. The "Showing N of total" caption only rendered inside `rows.length > 0`, leaving a bare "55" with no table and no reason, which reads as a broken table. **FIXED:** an explicit empty-page line, plus a pointer to the registry export when the cohort exceeds the page. [DataHealthPanel.tsx]
+- [x] **[AI-Review][Low] L3 — the Data Health tab trigger was shown to roles the route 403s.** AC5.2 narrowed `/data-health` to SA + Official for PII reasons, but the trigger was unconditional, so a supervisor clicking it read "Failed to load data health" — a permissions boundary presented as a broken feature. (Insights and Equity share this pre-existing flaw; only the new surface is corrected here.) **FIXED:** trigger, tab body and the query's `enabled` flag all gated on role. ⚠️ Presentation only — the route is the control, and `analytics.routes.test.ts` is what keeps it closed. [SurveyAnalyticsPage.tsx:98-100,276,462]
 
 ## Dev Notes
 
@@ -161,6 +190,141 @@ This story builds the **Data-Health view** — a new tab on the Survey Analytics
 ### Raw-SQL drift guard
 - If the per-field aggregate flattens `raw_data` via raw `db.execute(sql\`...\`)` (like the other analytics methods), it is NOT type-checked and mocked-DB tests hide renamed/removed columns. Columns it depends on: `submissions.raw_data`, `respondents.metadata` (`questionnaire_data_lost`), `respondents.status`/`source`. The real-DB smoke (Task 4) is the mandatory guard — the project has been bitten twice by raw-SQL schema drift (`users.role→role_id`, plus a separate hotfix). If the per-field tally is instead done in TS over typed reads + the 12-4 aggregate, note that and the smoke may be lighter.
 
+### Residuals ledger
+
+| # | item | state |
+|---|---|---|
+| **R1** | The grain re-point moves published dashboard figures. Discharge by PREDICTION, not by movement. | ✅ **PREDICTED 2026-08-21 against prod, read-only. Control reproduces the CURRENT live figures EXACTLY.** Table below. Closes on deploy by comparing. |
+| **R2** | 12-4 R4 — `registry_unified` is dropped by `db:push` each deploy, harmless only while nothing runtime reads the physical VIEW. | ✅ **STILL HARMLESS.** Everything this story added composes the INLINE canonical source (`registryUnifiedSource`); verified by grep — no runtime reference to `REGISTRY_UNIFIED_VIEW_NAME` / `getRegistryUnifiedViewRows` outside tests and the view-init runner. |
+| **R3** | Four rate-bearing aggregates left on the submission grain at first dev pass. | ✅ **CLOSED — all four re-pointed** on Awwal's "resolve everything" instruction (2026-08-21). `FROM submissions s` 46 → 6, every survivor attributed below. |
+| **R4** | ⛔ **Cached analytics payloads outlive the deploy that corrects them** — found by the adversarial code review (H1), not by the dev pass. | ✅ **CLOSED IN CODE.** All seven analytics caches now compose `ANALYTICS_CACHE_VERSION` (`v2`) from `analytics-cache-keys.ts`, so the deploy retires every stale entry instead of serving pre-fix figures for up to an hour. ⚠️ **This one is load-bearing for R1**: unversioned, the discharge-on-deploy comparison would have read PRE-deploy numbers out of Redis and could have been recorded as "the fix did not land". Guarded by a test that reds on any unversioned `analytics:` literal. |
+
+#### R1 — the prediction (prod, read-only, 2026-08-21)
+
+**Control validity:** the old predicate reproduced `has_business_n = 198`, `businessOwnershipRate = 45.5` —
+**exactly** the figures 12-5 closed on prod (`836d1c7`). The control is therefore reproducing the live
+page, not merely something plausible, which is the only thing that makes the prediction falsifiable.
+Both halves of the predicate were reproduced (`raw_data IS NOT NULL` **and**
+`respondent_id IS NOT NULL`) — omitting the second is what made 12-5's own prediction wrong.
+
+| figure (dashboard) | live now (control) | predicted after deploy |
+|---|---|---|
+| answer-bearing population | 284 | **272** |
+| `has_business` n | 198 | **191** |
+| **businessOwnershipRate** | 45.5 | **45.5 — unchanged** |
+| employed count | 131 | 127 |
+| employedPct | 46.1 | **46.7** |
+| female count | 125 | 121 |
+| femalePct | 44.0 | **44.5** |
+| avgAge | 32.3 | **32.2** |
+| skills `respondentsAnswering` | 253 | **242** |
+| inferential `totalN` (n of every CI) | 284 | **272** |
+| activation gate / policy-brief gate | 284 | **272** |
+
+⭐ **The headline is that `businessOwnershipRate` does NOT move — and that is the fix landing, not the
+fix failing.** 12-5 recorded that the dashboard (45.5 @ n=198) and the public page (45.5 @ n=191)
+agreed *by rounding coincidence* across different grains, and would diverge the moment either
+population moved. After this they are the same number at the same n=191, computed from the same read.
+The figure that was fragile is now structural.
+
+⚠️ **12 people were being counted twice** (284 − 272). The 2026-08-20 hand-off said "~14"; the register
+has moved since, so the number to compare against on deploy is **12**, not 14.
+
+#### The claim that needed narrowing
+
+Dev Notes and two code comments say `getRegistrySummary` and `getRegistryTotals().withAnswers` "can
+still differ" after the grain fix, because 12-4 additionally collapses rows to PEOPLE by identity key.
+That is structurally true — but **measured on prod 2026-08-21 the gap is ZERO**: 272 answer-bearing
+rows resolve to 272 distinct identities, both on a raw key and on a format-insensitive one
+(NIN → last-10-digits of phone → row id). So the two figures should be EQUAL on today's data, and a
+gap appearing after deploy is a signal worth chasing, not the expected residual difference. The
+guidance stands (never point one figure at the other); the expected magnitude is 0, not "small".
+
+⚠️ The identity approximation above is SQL-side; the real key normalises through
+`normaliseNigerianPhone`. It can only collapse MORE, never fewer — so 0 is a floor, and the
+conclusion holds.
+
+### The grain re-point (Task 0) — what moved, what did NOT, and why
+
+**Moved to the canonical respondent-anchored read** (`registryUnifiedSource('ru')`) — every aggregate
+that publishes a rate, a distribution, or a THRESHOLD over people. Ten in total:
+
+| Method | Why it had to move |
+|---|---|
+| `getRegistrySummary` | The registry strip's percentages. |
+| `getHousehold` | Business-ownership + dependency rates and their per-field bases. |
+| `getEmployment` | Work-status / income / hours distributions. |
+| `getDemographics` | Gender / age / education / LGA distributions. |
+| `getSkillsFrequency` | 12-5 gave it a denominator literally named `respondentsAnswering` while it counted SUBMISSIONS — a figure whose own label was wrong. |
+| `getCrossTab` | Every cell is a count of people; the n≥50 suppression gate divides on it. |
+| `getSkillsInventory` | Four sections (allSkills / byLga / gap / diversity) plus two suppression gates. |
+| `getInferentialInsights` | ⭐ **The one where grain mattered most.** `totalN` is the n of every confidence interval and chi-square. Over-counting does not merely shift a point estimate — it NARROWS the interval around it, publishing more confidence than the data supports. |
+| `getExtendedEquity` | Disability gap, education alignment, Gini — all rates over people, two with Wilson intervals. |
+| `getActivationStatus` | It gates the statistics above at n≥100 / n≥30. While it counted submissions, `/activation-status` and `/insights` published **different n for the same threshold** (286 vs 272). Its field was renamed `totalSubmissions` → `totalRespondents`, because keeping the old name over the new number is the exact mislabel Epic 12 exists to remove. |
+
+`FROM submissions s` in `survey-analytics.service.ts`: **46 → 6.**
+
+**Deliberately NOT moved — the subject genuinely IS a submission. All 6 survivors:**
+
+| Method | Sites | Why it stays submission-grained |
+|---|---|---|
+| `getPipelineSummary` | 1 | Counts submissions, completion rate, avg completion time, active enumerators. A "respondent-grained completion time" is not a quantity. |
+| `getTrends` | 1 | A time series of registration EVENTS per day, keyed on `s.submitted_at` — a column the canonical read does not carry, because a respondent has ONE registration date and any number of submissions. |
+| `getInferentialInsights` (forecast only) | 1 | The 90-day enrolment forecast inside an otherwise re-pointed method. It needs its OWN `buildWhereFragments` filter; feeding it the unified one would reference `ru` with no `ru` in scope. Pinned by a test that asserts this ONE query keeps the retired join while every sibling is canonical. |
+| `getEnumeratorReliability` | 2 | Compares enumerators BY submission. Per-enumerator-per-submission is the grain. |
+| — (doc comment) | 1 | The note on `buildWhereFragments` explaining why it double-counts. |
+
+⚠️ **Nothing is left on the old grain for want of a decision.** The four aggregates flagged as an open
+residual after the first pass (`getCrossTab`, `getSkillsInventory`, `getInferentialInsights`,
+`getExtendedEquity`) were all re-pointed on Awwal's 2026-08-21 "resolve everything" instruction.
+
+⚠️ **One trap this pass hit, worth knowing before touching the SQL again:** `getSkillsInventory`'s
+byLga query aliases a CTE as `r` (`FROM ranked r`) two lines below a `LEFT JOIN respondents r`. A
+mechanical `r.` → `ru.` rewrite silently corrupts it. The CTE is now aliased `rk` so the two can never
+be confused. A blanket regex over this file is not safe; the transformation was done per query block.
+
+### Two things the inherited callout's one-line fix hid
+
+1. **The canonical read carries no `submitted_at` and no `submitter_id`.** Re-pointing therefore
+   REDEFINES three filters (`personal` scope, date range, `source`) rather than relocating them.
+   Resolved in Task 0; `submitter_id` was added to the canonical read under its own stated column
+   governance, and the three decisions are written into `buildUnifiedAnswersWhere`.
+2. **`getRegistrySummary` and `getRegistryTotals().withAnswers` are not equal BY CONSTRUCTION — but on
+   today's data they are equal in FACT, and the difference between those two statements matters.**
+   12-5 said the two would "collapse into one number" once the grain was fixed. Structurally that is
+   not quite right: `getRegistryTotals` additionally resolves rows to PEOPLE through 12-4's identity
+   key (NIN → E.164 phone), so a person holding two respondent rows would be one there and two here.
+   **Measured on prod 2026-08-21, that collapse removes NOTHING: 272 answer-bearing rows → 272
+   distinct identities, on both a raw key and a format-insensitive one.** So the expected gap is
+   **0**, not "small" — and a gap appearing after deploy is a signal to chase, not the residual
+   difference being described here. ⚠️ Either way, never close a gap by pointing one figure at the
+   other; that publishes a denominator the arithmetic never used.
+
+### `getDataHealth` — decisions worth knowing before editing it
+
+- **It counts nothing itself.** `withAnswers` and the `data_lost` cohort size come from
+  `getRegistryTotals()`. The funnel and per-status bars are rendered from that same aggregate on the
+  WEB side, so the endpoint deliberately does not re-serve them — one registry, one count.
+- **The field axis comes from the form SCHEMA, not from the data.** A question nobody answered is the
+  single most valuable row in a data-health view, and deriving the axis from observed keys would
+  delete exactly that row. Field list + labels via `buildColumnsFromFormSchema` (skips
+  `note`/`geopoint`); form = most recently published unless `formId` is passed.
+- **"Answered" is 12-4's `hasAnswer`** (exported by this story), the TS half of the same contract
+  `answeredFieldDenominator` speaks in SQL. `'0'` and `'false'` ARE answers; `''`/`[]`/`{}` are not.
+  `normalizeRawDataKeys` runs BEFORE the test, or a field reads as under-answered purely because an
+  older form version spelled it differently.
+- **The recovery drill: SQL narrows, the ATOM decides.** AC4.2 requires `deriveDataStatus`; AC4.3
+  requires a bound. Those pull opposite ways, so the query pre-filters on the atom's own INPUTS
+  (`raw_data IS NULL`, the `questionnaire_data_lost` marker) — never its precedence — and
+  `deriveDataStatus` then runs over that bounded page as the authority, DROPPING and logging any row
+  it disagrees with. The divergence is real, not theoretical: `->>` renders a JSONB string `"true"`
+  and a boolean `true` identically while the atom requires the boolean. Covered by a test.
+- **PII boundary.** The drill exposes reference code, name, LGA, registered-at and phone — all already
+  visible in the existing registry table and the unified export under the same roles. NIN is on the
+  canonical read and is deliberately not surfaced. The route is narrowed to super-admin + government
+  official for this reason, and the test asserts the EXACT key set, because a subset assertion cannot
+  see a field being ADDED.
+
 ### Project Structure Notes
 - New aggregate method in `apps/api/src/services/survey-analytics.service.ts` (beside `getRegistrySummary`); new controller method in `apps/api/src/controllers/analytics.controller.ts`; new route in `apps/api/src/routes/analytics.routes.ts` (SA+Official).
 - Web: new tab in `apps/web/src/features/dashboard/pages/SurveyAnalyticsPage.tsx`; new hook in `apps/web/src/features/dashboard/hooks/useAnalytics.ts` + fetcher in `apps/web/src/features/dashboard/api/analytics.api.ts`; new Data-Health components under `apps/web/src/features/dashboard/components/charts/` (reusing/adapting existing chart components).
@@ -189,9 +353,177 @@ This story builds the **Data-Health view** — a new tab on the Survey Analytics
 
 ### Agent Model Used
 
+Opus 5 (1M context) — dev-story workflow, 2026-08-20 → 2026-08-21.
+
 ### Completion Notes List
 
+**Scope was RULED, not assumed.** Discovery was raised before any code: naive `ready-for-dev` order
+lands on 11-3, not 12-6 (the known "sprint-status has no priority field" residual from 12-4). Took
+12-6 as the blast-gate successor to 12-5. Then measured the inherited 12-5 R2 and found the callout's
+one-line fix does not compile as written — presented three options with the measurement; **Awwal ruled
+"full re-point of all rate-bearing aggregates"**. Task 0 was added to the story to carry it.
+
+**What actually shipped**
+
+- **Task 0 — the grain fix.** TEN aggregates now read `registryUnifiedSource('ru')`:
+  `getRegistrySummary`, `getHousehold`, `getEmployment`, `getDemographics`, `getSkillsFrequency`,
+  and — after Awwal's 2026-08-21 "resolve everything" instruction — `getCrossTab`,
+  `getSkillsInventory`, `getInferentialInsights`, `getExtendedEquity`, `getActivationStatus`.
+  `FROM submissions s` in `survey-analytics.service.ts`: **46 → 6**, and all 6 survivors are
+  attributed in Dev Notes (pipeline 1, trends 1, the inferential 90-day forecast 1,
+  enumerator-reliability 2, one doc comment — and nothing left for want of a decision). Filter is
+  12-4's `buildRegistryFilter`, exported and shared rather than copied, with `personal` scope added
+  as an explicit `PersonalScopeMode` so `/registry-totals` keeps its documented "register is one
+  shared object" behaviour and analytics keeps its narrowing. `submitter_id` added to the canonical
+  read under its stated column governance.
+- **Tasks 1–3 — the view.** `SurveyAnalyticsService.getDataHealth` (per-field rates + bounded
+  `data_lost` drill), `GET /api/v1/analytics/data-health` restricted to SA+Official, and a
+  `Data Health` tab composed from the existing `ChartCard` / recharts vertical-bar primitives.
+- **Task 4 — tests.** API + web, all green. The grain guard covers all 9 re-pointed service methods,
+  with threshold-opening cases so the gated queries actually execute.
+
+**Findings worth carrying forward**
+
+1. ⭐ **The §2ad hand-off check was inverted.** The adjudication handoff gained a falsifiable check
+   mid-development — "`FROM submissions s` = 22 at hand-off; if still 22, R2 did not land". The
+   baseline had been sampled from a working tree that ALREADY CONTAINED THE FIX. The committed
+   baseline is 46. As written the check would have declared "R2 did not land" on precisely the state
+   where it had. Corrected in the handoff doc. **A falsifiable number only beats a judgement call if
+   it is measured against the COMMITTED baseline, never the tree you are standing in.**
+2. ⭐ **A numeric gate that fails OPEN.** Renaming `ActivationStatusData.totalSubmissions` →
+   `totalRespondents` broke a stale test mock, and the break revealed that the policy-brief guard was
+   written `if (x < 100) throw`. `undefined < 100` is **false**, so a missing count let the brief
+   GENERATE — a data-sufficiency gate approving a Ministry document on data it could not read. Now
+   `!Number.isFinite(x) || x < 100`, RED-verified against `undefined`/`null`/`NaN`/a string. An
+   unknown count is not a large count.
+3. ⚠️ **A claim of mine that needed narrowing.** I wrote that `getRegistrySummary` and
+   `getRegistryTotals().withAnswers` "can still differ" via 12-4's identity key. Structurally true —
+   but measured on prod the gap is **0** (272 answer-bearing rows → 272 distinct identities, raw and
+   format-insensitive). So they should read EQUAL today, and a gap after deploy is a signal to chase,
+   not an expected artefact. Code comment and Dev Notes corrected from "small" to "zero".
+4. ⚠️ **A blanket regex over this SQL is not safe.** `getSkillsInventory`'s byLga query aliases a CTE
+   as `r` (`FROM ranked r`) two lines below `LEFT JOIN respondents r`. A mechanical `r.` → `ru.`
+   rewrite silently corrupts it. Caught before running; CTE renamed to `rk`. The phase-2 re-point was
+   done per query block for this reason.
+
+**RED-verified by mutation (a guard nobody has watched fire is not a guard)**
+
+| mutation | result |
+|---|---|
+| `getHousehold` filter back to `buildWhereFragments` | reds exactly 1 — that method's grain guard |
+| `getSkillsInventory` filter back to `buildWhereFragments` | reds exactly 1 — the gated-aggregate guard |
+| drop `authorize(...)` from `/data-health` | reds exactly 2 — per-route middleware + the RBAC identity check |
+| make the Data-Health tab fire eagerly | reds exactly 1 — the lazy-fire assertion |
+| drop zero-count statuses from the breakdown | reds exactly 1 — the AC2.2 guard |
+| policy-brief gate back to a bare `x < 100` | reds exactly 1 — the fail-closed case |
+
+**Three of my own test errors, caught and corrected rather than worked around**
+
+- A negative assertion `not.toContain('FROM submissions s')` passed on a PREFIX of the canonical
+  read's own `FROM submissions sx` LATERAL — asserting nothing. Re-pinned to the retired JOIN text.
+  ⚠️ **I then made the same prefix mistake a second time**, matching the forecast query by
+  `includes('submitted_at')` when the canonical read orders by `sx.submitted_at`. Re-pinned to
+  `INTERVAL '90 days'`. Substring assertions against SQL in this file are a repeat trap.
+- The `/data-health` RBAC test originally matched `authorize` by ARGUMENTS, so it found `/insights`'
+  identical SA+Official call and would have passed with no authorize on the route at all — a textbook
+  test-that-passes-over-a-hole. Re-pinned to the identity of the middleware actually mounted.
+- The `it.each` grain guard drove the four gated aggregates with an empty mock, so each returned after
+  its FIRST query and the re-pointed queries never ran. It would have stayed green with the whole
+  phase-2 fix reverted. Added cases that open the thresholds.
+
+**Two premises of mine that were simply wrong, corrected on measurement**
+
+- I recorded `buildRegistryFilter` ignoring `personal` scope as a silent hole; re-reading 12-4's
+  comment showed it is a documented ruling (the register is one shared, already-public object).
+  `/registry-totals` behaviour is unchanged; the difference is now a named `PersonalScopeMode`.
+- A test I wrote asserted `pending_nin` outranks `data_lost` in `deriveDataStatus`. It does not —
+  `data_lost` comes first. The code was right and the test premise was wrong; replaced with a REAL
+  divergence (JSONB string `"true"` vs boolean `true`).
+
+✅ **PRE-DEPLOY RESIDUAL — PREDICTED 2026-08-21 (read-only against prod), not left open.** Full table
+in Dev Notes → Residuals ledger. The control reproduced the CURRENT live figures EXACTLY
+(`has_business` n=198, businessOwnershipRate 45.5 — the numbers 12-5 closed on `836d1c7`), with BOTH
+halves of the predicate, so the prediction is falsifiable rather than merely plausible.
+**Predicted after deploy: the answer-bearing population 284 → 272 (12 people were being counted
+twice), employedPct 46.1 → 46.7, femalePct 44.0 → 44.5, avgAge 32.3 → 32.2, skills n 253 → 242,
+inferential/activation n 284 → 272.**
+⭐ **businessOwnershipRate does NOT move — it stays 45.5, and that is the fix landing rather than
+failing.** 12-5 recorded that the dashboard (45.5 @ n=198) and the public page (45.5 @ n=191) agreed
+by ROUNDING COINCIDENCE across two grains and would diverge the moment either population moved. They
+are now the same number at the same n=191 from the same read. The figure that was fragile is
+structural. **This closes on deploy by comparing against the table, not by observing movement.**
+✅ 12-4 R4 stays harmless: nothing added here reads the physical `registry_unified` view (verified by
+grep); every read composes the inline source.
+
+### Senior Developer Review (AI) — 2026-08-21
+
+**Reviewer:** adversarial `code-review` workflow (Opus 5), fresh context, on the UNCOMMITTED tree.
+**Outcome:** **Changes Requested → all applied.** 9 findings (2 High, 4 Medium, 3 Low); every one
+fixed in the same pass on Awwal's instruction, each code fix RED-verified by mutation.
+
+**What the review checked rather than accepted.** The dev record's claims were re-measured, not
+read: `FROM submissions s` counted against `git show HEAD:` (46) and the working tree (**6**, not the
+7 claimed); the File List diffed against `git status` (one omission); the targeted suites re-run; tsc
+and eslint re-run. The grain re-point itself held up — the RBAC-by-middleware-identity test, the
+threshold-opening `it.each` fix and the real-DB smoke are genuine guards, and the smoke does catch
+the `dob`↔`date_of_birth` undercount through real SQL.
+
+**Where the review disagreed with the dev pass.** Three of the nine findings are records that had
+drifted from the work (M3, M4, L1) — the class this project already names. The other six are code.
+⭐ **The most valuable one, H1, was invisible from inside the story:** every AC passed, every test was
+green, and the fix would still not have reached a reader for up to an hour after deploy, because the
+figures the dashboard serves come out of Redis and no cache key was retired. **A fix that is correct
+in the source and stale at the edge is the "fix that never fires" class wearing a cache.**
+
+⚠️ **Status deliberately left at `review`, not flipped to `done`.** All ACs are implemented and all
+High/Medium findings are fixed, but R1 is an OPEN pre-deploy residual by construction: it discharges
+by comparing prod against the prediction table AFTER deploy. Flipping to `done` here would close a
+story on a check that has not run — the [[pattern-verification-that-cannot-run-yet]] this project
+refuses. **Awwal's call, at adjudication, once the deploy comparison is in.**
+
 ### File List
+
+**API — code review fixes (2026-08-21)**
+- `apps/api/src/services/analytics-cache-keys.ts` (NEW) — `ANALYTICS_CACHE_VERSION` + `analyticsCacheKey()` + `PUBLIC_KEY_FINDINGS_CACHE_KEY` (review H1)
+- `apps/api/src/services/public-insights.service.ts` (M) — reads the shared versioned key-findings constant (review H1)
+
+**API — the grain re-point (Task 0)**
+- `apps/api/src/services/registry-unified.sql.ts` (M) — `submitter_id` added to the canonical read + governance entry
+- `apps/api/src/services/registry-unified.ts` (M) — `submitter_id` on `RegistryUnifiedRow`
+- `apps/api/src/services/registry-totals.service.ts` (M) — export `buildRegistryFilter` + `PersonalScopeMode`; export `hasAnswer`
+- `apps/api/src/services/survey-analytics.service.ts` (M) — `buildUnifiedAnswersWhere`; 5 aggregates re-pointed; `getDataHealth` + `getRecoveryCohort` + `tallyFieldResponses` + `resolveDataHealthForm`
+
+**API — the Data-Health endpoint (Tasks 1–2)**
+- `apps/api/src/controllers/analytics.controller.ts` (M) — `dataHealthQuerySchema` + `getDataHealth`
+- `apps/api/src/routes/analytics.routes.ts` (M) — `GET /data-health`, SA+Official
+- `packages/types/src/analytics.ts` (M) — `DataHealthData`, `DataHealthField`, `DataHealthRecoveryRow`, `DataHealthRecoveryCohort`
+
+**Web (Task 3)**
+- `apps/web/src/features/dashboard/components/charts/DataHealthPanel.tsx` (NEW)
+- `apps/web/src/features/dashboard/pages/SurveyAnalyticsPage.tsx` (M) — Data Health tab, lazy-fired
+- `apps/web/src/features/dashboard/hooks/useAnalytics.ts` (M) — `useDataHealth` + key
+- `apps/web/src/features/dashboard/api/analytics.api.ts` (M) — `fetchDataHealth`
+- `apps/web/src/features/dashboard/utils/registry-copy.ts` (M) — captions say "respondents", not "submissions"
+
+**Tests (Task 4)**
+- `apps/api/src/services/__tests__/data-health.service.test.ts` (NEW) — 15 → **18** (review M1 clamp ×2, M2 scope alignment)
+- `apps/api/src/services/__tests__/data-health-db-smoke.integration.test.ts` (NEW) — 4, real DB
+- `apps/api/src/services/__tests__/survey-analytics.service.test.ts` (M) — grain guard over 9 methods + threshold-opening cases, 36 → 52 → **56** (review H1 cache-version guards ×3, L1/M4 enumerated-survivors pin)
+- `apps/api/src/routes/__tests__/analytics.routes.test.ts` (M) — route + RBAC by middleware identity
+- `apps/api/src/routes/__tests__/analytics-8-7.routes.test.ts` (M) — SA+GOV census 3 → 4; the policy-brief fail-closed case
+- `apps/api/src/services/__tests__/insights-integration.test.ts` (M) — activation field rename; key-findings asserted through the SHARED constant, not a literal (review H1)
+- `apps/web/src/features/dashboard/components/__tests__/ActivationStatusPanel.test.tsx` (M) — activation field rename
+- `apps/web/src/features/dashboard/components/charts/__tests__/DataHealthPanel.test.tsx` (NEW) — 9 → **11**, incl. the AC2.2 zero-count guard + review H2 unavailable-state and L2 empty-page
+- `apps/web/src/features/dashboard/pages/__tests__/SurveyAnalyticsPage.test.tsx` (M) — tab + lazy-fire, 20 → **23** (review H2 totals-failure, L3 role gating ×2)
+- `apps/web/src/features/dashboard/utils/__tests__/registry-copy.test.ts` (M) — caption population
+- `apps/web/src/features/dashboard/components/charts/__tests__/RegistrySummaryStrip.test.tsx` (M) — the caption rename's population word. ⚠️ **Added by the code review (M3)** — it was modified in the working tree but missing from this list, which is the file the Change Log's own closing lesson is about.
+
+**Docs**
+- `docs/adjudication-agent-handoff.md` (M) — §2ad 12-5 R2 baseline corrected 22 → 46 (see note 1)
+- `_bmad-output/implementation-artifacts/12-6-data-health-view.md` (M), `sprint-status.yaml` (M)
+
+⚠️ `.gitignore` is modified in the working tree by a PRIOR session (side-engagement ignore rule), not
+by this story.
 
 ## Change Log
 
@@ -200,3 +532,7 @@ This story builds the **Data-Health view** — a new tab on the Survey Analytics
 | 2026-06-16 | Story authored (SM, Bob) via create-story workflow. Epic 12 "Dashboard System Refresh" Tier-1: Data-Health view (new Survey Analytics tab). CONSUMES 12-4's `getRegistryTotals()` (139→76 funnel + per-`data_status` breakdown) and 9-59's `registry-data-status.ts` / `registry-key-normalization.ts` (do not redefine). OWNS the per-field response-rate computation (which 12-4 deferred here) + surfaces the 55 `data_lost` recovery cohort (count + drill, no new PII) tying into the re-engagement campaign. Reuses `VerificationFunnelChart` + existing shadcn/chart primitives — compose, not rebuild; no new stat methods. 6 ACs: tab+skeleton/ErrorBoundary, funnel+per-status from 12-4, per-field rates (normalize-before-count, denominator=76), recovery cohort, analytics endpoint+SA/Official RBAC, raw-SQL drift smoke + API/web tests. POST-LAUNCH, NON-GATING. Status → ready-for-dev. |
 | 2026-07-04 | **13-16 parity note (Amelia):** `respondents.lgaId` canonicalized to the `lgas.code` slug everywhere (wizard + backfill of the 139 public UUID rows; prod run = operator residual). Any per-LGA slice this view adds can join `l.code = r.lga_id` safely for ALL sources. Form `lga_list` 6-value divergence residual tracked in 13-14/13-16. |
 | 2026-07-19 | **13-33 harmonization (John/PM).** Re-pointed the per-field-rates read (Task 1) to aggregate FROM the canonical `registryUnifiedSource('ru')` (13-33) — `ru.raw_data` is already the latest-non-empty submission — instead of re-mirroring `getUnifiedExportData`'s LATERAL (a third copy = the drift 13-33 killed). Updated the reference accordingly. No AC change; POST-LAUNCH / NON-GATING unchanged. Found by the post-13-33 backlog sweep. |
+| 2026-08-21 | **DEV COMPLETE (Opus 5, dev-story).** Status `ready-for-dev` → `in-progress` → `review`. Built the 6 ACs — Data Health tab, funnel + per-`data_status` breakdown rendered from 12-4, per-field response rates (`getDataHealth`, normalize-before-count, denominator = `withAnswers`), bounded `data_lost` recovery drill, `GET /analytics/data-health` at SA+Official, real-DB drift smoke. **PLUS Task 0, added under Awwal's ruling: the inherited 12-5 R2 grain fix.** `getRegistrySummary` / `getHousehold` / `getEmployment` / `getDemographics` / `getSkillsFrequency` re-pointed onto `registryUnifiedSource` — `FROM submissions s` 46 → 22, the remainder attributed method-by-method in Dev Notes. ⚠️ The callout's one-line fix did NOT compile as written: the canonical read carries no `submitted_at` and no `submitter_id`, so re-pointing REDEFINED three filters (`personal` scope → `ru.submitter_id`, dates → `ru.created_at`, source → `ru.source`); `submitter_id` was added to the canonical read under its column governance, and 12-4's `buildRegistryFilter` was exported and shared rather than copied. ⭐ **CORRECTED THE §2ad HAND-OFF CHECK**: its "still 22 ⇒ R2 did not land" baseline was sampled from a tree that already contained the fix, so it would have declared failure on the state where R2 HAD landed; committed baseline is 46. 🔻 **NOT re-pointed and named as an open residual for Awwal**: `getCrossTab`, `getSkillsInventory`, `getInferentialInsights`, `getExtendedEquity` — all still submission-grained, none in the option text the ruling was given against. ⛔ **PRE-DEPLOY RESIDUAL OPEN — figures move again; discharge by PREDICTION against prod, not by movement, reproducing the WHOLE predicate.** Verified: **API 4074 pass / 290 files, 0 fail** — run from `apps/api`, NOT the repo root (root has no vitest config: it skips `mockReset` AND collected only 276 files vs 290, so a root-run green is a strictly weaker check); **web 3009 pass / 273 files, 0 fail** (FULL suite from `apps/web`). ⚠️ An earlier draft of this entry quoted ~1,187 — that was the `src/features/dashboard` SUBSET, not the suite, and quoting a subset as a total is how three caption regressions in `RegistrySummaryStrip` stayed invisible for two passes, tsc api 0 / web 0, eslint 0 both, all 3 lint guards run DIRECT/uncached. RED-verified by 3 mutations; 2 of my own weak assertions found and re-pinned (a prefix match on `FROM submissions sx`, and an RBAC check that matched `/insights`' identical authorize args). Awaiting adversarial code review. |
+| 2026-08-21 | **RESOLVED THE OPEN ITEMS + DISCHARGED THE RESIDUAL (Awwal: "resolve all the things pointed out and the residue before we go to review").** ① **The four remaining rate-bearing aggregates were re-pointed**: `getCrossTab`, `getSkillsInventory`, `getInferentialInsights`, `getExtendedEquity` — plus `getActivationStatus`, which was not on the original list but gates the very statistics that now count people, so it was publishing a DIFFERENT n for the same threshold (`/activation-status` 284 vs `/insights` 272); its field was renamed `totalSubmissions` → `totalRespondents` because keeping the old name over the new number is the mislabel this epic exists to remove. `FROM submissions s` **46 → 6**, and all 6 survivors are attributed in Dev Notes (pipeline, trends, the inferential 90-day forecast, enumerator-reliability ×2, one doc comment). ⭐ **The single most consequential move was `getInferentialInsights.totalN`** — it is the n of every confidence interval, so over-counting did not merely shift estimates, it NARROWED the intervals and published more confidence than the data supports. ② **R1 DISCHARGED BY PREDICTION** against prod, read-only: the control reproduced the live figures EXACTLY (`has_business` n=198, rate 45.5 — 12-5's closing numbers) using BOTH halves of the predicate; predicted 284 → 272 (**12 people double-counted**, not the 14 recorded 2026-08-20 — the register moved), employedPct 46.1 → 46.7, femalePct 44.0 → 44.5, avgAge 32.3 → 32.2, skills n 253 → 242. **businessOwnershipRate stays 45.5 — the fix landing, not failing**: dashboard and public page now agree at the same n=191 from the same read, instead of by the rounding coincidence 12-5 flagged as fragile. ③ **Narrowed an over-broad claim of my own**: I had written that `getRegistrySummary` and `getRegistryTotals().withAnswers` "can still differ" via the identity key. Structurally true, but measured on prod the gap is **0** (272 rows → 272 distinct identities, raw and format-insensitive) — so they should read EQUAL today and a gap is a signal, not an expected artefact. Code comment + Dev Notes corrected. ④ **Two guards hardened after they caught real things**: the SA+GOV route census 3 → 4 (it fired the moment `/data-health` was added), and the policy-brief threshold now **fails CLOSED** — the rename exposed that a bare `x < 100` compares `undefined < 100` as false, so a missing count would have GENERATED the brief; `Number.isFinite` added and RED-verified against 4 bad values. ⑤ Extended the grain guard from 5 to 9 methods, and added threshold-opening cases — the `it.each` form alone returned after each method's FIRST query, so it would have stayed green with every gated query still on the old grain. RED-verified by mutation throughout. |
+| 2026-08-21 | **ADVERSARIAL CODE REVIEW (Opus 5, `code-review` workflow, fresh context on the uncommitted tree) — 9 findings, ALL raised as action items AND fixed in the same pass** on Awwal's instruction ("create action items and fix them all"). Full list in Tasks → Review Follow-ups (AI). ⛔ **H1 was the one that mattered: not a single analytics Redis cache key was versioned.** Six cached payloads changed value or shape in this story, deploys never flush Redis, and 12-4 had already written the rule — *"BUMP THE `:vN` SUFFIX WHENEVER THE PAYLOAD SHAPE CHANGES"* — in a comment beside ONE literal in `public-insights.service.ts`, so it was followed for exactly one key. Unversioned, `/insights` would publish n=284 confidence intervals for an hour AFTER the fix that narrowed them, the public key-findings bridge with it, and `getActivationStatus` would hand the policy-brief gate an `undefined` count — 400ing a Ministry document on a register of 272. ⭐ **And it would have corrupted this story's own R1 discharge**: the post-deploy comparison reads the dashboard, and the dashboard would have been reading Redis. Fixed by extracting `analytics-cache-keys.ts` so the version is a shared symbol rather than a comment, with a guard that reds on any unversioned `analytics:` literal. **H2:** the Data Health tab rendered *completely blank* — no skeleton, no error — when `/registry-totals` failed, because the page passed only `dhError`; the existing error test never reached that state. **M1:** per-field `responseRate` divides ROWS by identity-collapsed PEOPLE, so it can exceed 100% and would be clipped silently by `domain={[0, 100]}` — now clamped with a warn, and deliberately NOT "fixed" by dividing by `rawRows.length`, which would publish a denominator the caption never used. **M2:** `getDataHealth` paired a `'submitter'`-narrowed numerator with `getRegistryTotals`' `'unfiltered'` denominator — the exact accident the named `PersonalScopeMode` was introduced to prevent, one call site later. **M3/M4/L1:** three records disagreed with the work — `RegistrySummaryStrip.test.tsx` missing from the File List, "46 → 7" (it is 6, and the story's own table said 6), and the §2ad hand-off check still reading "46 → 22" after phase 2 invalidated it the same day. ⭐ **A falsifiable number is a LIVE artefact, not a fact recorded once** — the count is now pinned by a test, so the next drift reds instead of misleading. **L2/L3:** the drill's bound caption vanished exactly when the page was empty; the tab was offered to roles the route 403s. **Every code fix RED-verified by mutation — each reds exactly 1.** Gates re-run after the fixes: **API 4081 pass / 290 files, 0 fail** (from `apps/api`); **web 3014 pass / 273 files, 0 fail**; tsc 0 api / 0 web; eslint 0 both. ⚠️ **The web suite's FIRST full run reported 2952/271 with one red — and it was contention, proven, not assumed.** Two worker forks died with "Timeout waiting for worker to respond" (so two files never collected at all) and `FAQPage.test.tsx` — a static page untouched by this story — timed out at 10 s. The failing file passed alone, then passed again in the identical trio on the identical tree; at `--maxWorkers=4` all 273 files collect and pass. ⭐ **Worth carrying forward: a contended local full-suite run silently COLLECTS FEWER FILES.** 271 vs 273 is not a smaller pass rate, it is two files that never ran — the same shape as quoting a subset as a total ([[feedback-quote-the-suite-total-never-a-subset]]), arriving by a different route. Compare the FILE COUNT, not just the pass count. |
+| 2026-08-21 | **FULL-SUITE VERIFICATION + a lesson about how I was measuring.** Final gates: **API 4074 pass / 290 files**, **web 3009 pass / 273 files**, 0 failures; tsc 0/0; eslint 0/0; all three lint guards run DIRECT (uncached). ⚠️ **The web number I had been quoting all session (~1,187) was the `src/features/dashboard` SUBSET, not the suite** — the suite is 3,011. Running the subset is what let the caption rename ("submissions with answers" → "respondents with answers") break **`RegistrySummaryStrip.test.tsx` for two passes without my seeing it**: that file lives under `components/charts/__tests__` and WAS in the subset, but my first full run had its output truncated by my own `tail -25`, so only the last of the three failures was visible and I fixed one file believing it was one failure. **Two process corrections: (a) quote the SUITE total, never a subset total, and (b) never pipe a suite run through `tail` — redirect the whole log to a file and grep it.** Same family as [[feedback-never-pipe-a-push-to-tail]]: reading a truncated tail of a long-running command hides everything above the cut. Also re-verified after the fix that no stale `submissions with answers` string and no stale `activationStatus.totalSubmissions` reference remains anywhere in `apps/`+`packages/`. |

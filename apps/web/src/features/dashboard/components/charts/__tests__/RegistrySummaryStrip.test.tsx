@@ -79,7 +79,7 @@ describe('RegistrySummaryStrip', () => {
       render(
         <RegistrySummaryStrip data={mockData} totals={mockTotals} isLoading={false} error={null} />,
       );
-      expect(screen.getByText('71.5% of 1,247 submissions with answers')).toBeInTheDocument();
+      expect(screen.getByText('71.5% of 1,247 respondents with answers')).toBeInTheDocument();
     });
 
     it('renders an em-dash rather than falling back to the answers count', () => {

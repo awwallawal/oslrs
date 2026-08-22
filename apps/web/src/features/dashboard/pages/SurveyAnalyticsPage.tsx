@@ -24,6 +24,7 @@ import {
   useTrends,
   useRegistrySummary,
   useRegistryTotals,
+  useDataHealth,
   usePipelineSummary,
   useSkillsInventory,
   useInferentialInsights,
@@ -43,6 +44,8 @@ import { SkillsConcentrationTable } from '../components/charts/SkillsConcentrati
 import { SkillsDiversityCards } from '../components/charts/SkillsDiversityCards';
 import { lgaDistributionToMapData } from '../utils/analytics-transforms';
 import { ChartCard } from '../components/charts/ChartCard';
+import { DataHealthPanel } from '../components/charts/DataHealthPanel';
+import { useAuth } from '../../auth/context/AuthContext';
 import { bucketTotal } from '../components/charts/chart-utils';
 import {
   TOTAL_RESPONDENTS_LABEL,
@@ -78,19 +81,58 @@ export default function SurveyAnalyticsPage() {
   const [params, setParams] = useState<AnalyticsQueryParams>({});
   const [activeTab, setActiveTab] = useState('demographics');
 
+  /**
+   * 12-6 review L3 — the Data Health tab is shown only to the roles that can
+   * actually load it.
+   *
+   * `GET /analytics/data-health` is narrowed at the route to super-admin +
+   * government official (AC5.2), because the recovery drill carries respondent
+   * PII. Every other tab on this page inherits the router-wide role set, so an
+   * ungated trigger offered a supervisor or enumerator a tab that answers 403 —
+   * they would click it and read "Failed to load data health", which describes a
+   * broken tab rather than one that was never theirs.
+   *
+   * ⚠️ This is presentation only. The route is the control; hiding a trigger is
+   * never authorization. The RBAC assertion in `analytics.routes.test.ts` is
+   * what actually keeps this closed.
+   */
+  const { user } = useAuth();
+  const canSeeDataHealth =
+    user?.role === 'super_admin' || user?.role === 'government_official';
+
   // Always enabled — shown above tabs
   const { data: registry, isLoading: regLoading } = useRegistrySummary(params);
   // Story 12-5 AC1: the HONEST registry total. `registry.totalRespondents` is
   // the answer-bearing subset, NOT the total — never bind a total to it.
-  const { data: totals, isLoading: totalsLoading } = useRegistryTotals(params);
+  // `isError` is read because the Data Health tab renders the funnel and the
+  // per-status breakdown from THIS query rather than its own — so a
+  // registry-totals failure is a Data-Health failure and has to reach the
+  // panel (12-6 review H2). Without it the tab fell through every branch and
+  // rendered nothing at all: no skeleton, no error, a blank tab.
+  const { data: totals, isLoading: totalsLoading, isError: totalsError } = useRegistryTotals(params);
   const { data: pipeline, isLoading: pipeLoading } = usePipelineSummary(params);
 
   // AC1.2 / 13-33 harmonization: the "with answers" figure is sourced from
-  // `getRegistryTotals().withAnswers` (respondent-scoped), NOT from
-  // `getRegistrySummary().totalRespondents` (submission-scoped, so it can
-  // double-count a respondent with more than one answer-bearing submission).
-  // The % cards below are computed inside getRegistrySummary over ITS count, so
-  // their caption names that denominator rather than assuming the two agree.
+  // `getRegistryTotals().withAnswers`, and the % cards state the denominator
+  // `getRegistrySummary` actually divided by. Each figure is still read from
+  // the aggregate that produced it — never cross-bound.
+  //
+  // ⚠️ Story 12-6 removed the GRAIN difference between these two (both now read
+  // the canonical respondent-anchored source, so neither double-counts a person
+  // with two answer-bearing submissions) — but they are STILL not guaranteed
+  // equal, and the remaining gap is not a bug:
+  //   • `getRegistrySummary` counts unified ROWS — one per `respondents.id`.
+  //   • `getRegistryTotals().withAnswers` counts PEOPLE **after** 12-4's
+  //     identity-key collapse (NIN → E.164 phone), so a person holding two
+  //     respondent rows is one here and two there.
+  // The residual difference is therefore exactly 12-4's `identityAmbiguous`
+  // territory — duplicate registrations, not double-counted submissions.
+  //
+  // ⚠️ Measured on prod 2026-08-21 that difference is ZERO (272 answer-bearing
+  // rows resolve to 272 distinct identities), so these two SHOULD read the same
+  // today. A gap appearing here is a signal worth chasing, not an expected
+  // rounding artefact — but still never close one by pointing a figure at the
+  // other's number; that publishes a denominator the arithmetic never used.
   const withAnswers = totals?.withAnswers;
   const pctDenominator = registry?.totalRespondents;
 
@@ -103,6 +145,16 @@ export default function SurveyAnalyticsPage() {
   const { data: skillsInventory, isLoading: siLoading, isError: siError } = useSkillsInventory(params, activeTab === 'skills-inventory');
   const { data: insights, isLoading: insightsLoading, error: insightsError } = useInferentialInsights(params, activeTab === 'insights');
   const { data: extendedEquity, isLoading: eqxLoading, error: eqxError, refetch: refetchEqx } = useExtendedEquity(params, activeTab === 'equity');
+  // Story 12-6 — Data Health. Lazy-fired like every other tab: the per-field
+  // pass reads every answer-bearing row, so it must not run for a reader who
+  // never opens the tab.
+  const {
+    data: dataHealth,
+    isLoading: dhLoading,
+    isError: dhError,
+  // Gated on the ROLE as well as the tab: a role that cannot load this route
+  // must not fire a request that can only 403 (12-6 review L3).
+  } = useDataHealth(params, undefined, canSeeDataHealth && activeTab === 'data-health');
   const [pdfLoading, setPdfLoading] = useState(false);
 
   // Derive equity data from raw analytics responses (Fix 4: derivation in parent)
@@ -223,6 +275,7 @@ export default function SurveyAnalyticsPage() {
           <TabsTrigger value="cross-tab">Cross-Tab</TabsTrigger>
           <TabsTrigger value="skills-inventory">Skills Inventory</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
+          {canSeeDataHealth && <TabsTrigger value="data-health">Data Health</TabsTrigger>}
         </TabsList>
 
         {/* Shared tabs: Demographics, Employment, Household, Trends, Equity */}
@@ -406,6 +459,35 @@ export default function SurveyAnalyticsPage() {
             {insights && <InsightsPanel data={insights} />}
           </ErrorBoundary>
         </TabsContent>
+
+        {/* Data Health tab (Story 12-6) */}
+        {canSeeDataHealth && (
+        <TabsContent value="data-health">
+          <ErrorBoundary
+            resetKey={activeTab}
+            fallbackProps={{
+              title: 'Data health error',
+              description: 'This tab encountered an unexpected error. Other tabs still work.',
+              showHomeLink: false,
+            }}
+          >
+            {/*
+              The funnel + per-status breakdown come from `totals` (12-4's
+              aggregate, already fetched above for the header strip) and are NOT
+              re-fetched here — one registry, one count. Only the per-field rates
+              and the recovery cohort are this tab's own request.
+            */}
+            <DataHealthPanel
+              totals={totals}
+              dataHealth={dataHealth}
+              isLoading={dhLoading || totalsLoading}
+              // BOTH queries feed this tab; either failing must surface as a
+              // failure. See the note on `totalsError` above.
+              isError={dhError || totalsError}
+            />
+          </ErrorBoundary>
+        </TabsContent>
+        )}
       </Tabs>
 
       {/* Activation Status Panel (Story 8.7) — all roles */}

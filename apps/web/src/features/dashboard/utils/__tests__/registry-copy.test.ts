@@ -40,15 +40,15 @@ describe('registry-copy', () => {
   });
 
   it('states a percentage with the denominator it divides by', () => {
-    expect(pctOfAnswersCaption(44.7, 76)).toBe('44.7% of 76 submissions with answers');
+    expect(pctOfAnswersCaption(44.7, 76)).toBe('44.7% of 76 respondents with answers');
   });
 
   it('rounds a percentage caption to one decimal place', () => {
-    expect(pctOfAnswersCaption(26.34, 1247)).toBe('26.3% of 1,247 submissions with answers');
+    expect(pctOfAnswersCaption(26.34, 1247)).toBe('26.3% of 1,247 respondents with answers');
   });
 
   it('captions a non-percentage statistic with its base', () => {
-    expect(ofAnswersCaption(76)).toBe('of 76 submissions with answers');
+    expect(ofAnswersCaption(76)).toBe('of 76 respondents with answers');
   });
 
   it('pluralises the counted-over caption', () => {
@@ -56,15 +56,21 @@ describe('registry-copy', () => {
     expect(countedOverCaption(70)).toBe('counted over 70 respondents who answered');
   });
 
-  // ── Review R1 — the two "with answers" populations must not share a phrase ──
+  // ── 12-6 — the caption names the population the arithmetic actually used ──
 
-  it('scopes the percentage caption to SUBMISSIONS, not to respondents', () => {
-    // These percentages come out of getRegistrySummary, which still counts
-    // FROM submissions; the "With Answers" card beside them counts PEOPLE.
-    // 12-4 measured 271 people against ~282 submissions on prod, so if both
-    // said plain "with answers" the page would show two different numbers
-    // under one phrase — the defect this story exists to end.
-    expect(pctOfAnswersCaption(44.7, 282)).toContain('submissions with answers');
+  it('scopes the percentage caption to RESPONDENTS, now that the grain agrees', () => {
+    // 12-5 wrote "submissions with answers" here ON PURPOSE: getRegistrySummary
+    // counted FROM submissions while the "With Answers" card beside it counted
+    // PEOPLE (12-4 measured 271 people against ~282 submissions on prod), so a
+    // shared phrase would have shown two different numbers under one label.
+    //
+    // 12-6 re-pointed getRegistrySummary onto the canonical respondent-anchored
+    // read — the exact condition 12-5 recorded for retiring the word. The two
+    // populations are now ONE, so "submissions" would name a denominator the
+    // arithmetic no longer uses: the same defect, pointed the other way.
+    expect(pctOfAnswersCaption(44.7, 272)).toContain('respondents with answers');
+    expect(pctOfAnswersCaption(44.7, 272)).not.toContain('submission');
+    expect(ofAnswersCaption(272)).not.toContain('submission');
     expect(WITH_ANSWERS_CAPTION).not.toContain('submission');
     expect(WITH_ANSWERS_CAPTION).toContain('respondents');
   });

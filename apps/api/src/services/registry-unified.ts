@@ -49,6 +49,12 @@ export interface RegistryUnifiedRow {
   nin: string | null;
   /** Raw as stored (E.164 by CHECK constraint, but historic rows may vary) — Story 12-4 AC2 identity key. */
   phone_number: string | null;
+  /**
+   * The staff user who first submitted for this person; `null` for a public
+   * self-registration. Story 12-6: the `personal`-scope key for analytics once
+   * the rate-bearing aggregates moved to the respondent grain.
+   */
+  submitter_id: string | null;
   metadata: Record<string, unknown> | null;
   consent_marketplace: boolean;
   consent_enriched: boolean;

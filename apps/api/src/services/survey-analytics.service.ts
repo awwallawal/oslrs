@@ -34,6 +34,11 @@ import type {
   EnumeratorReliabilityData,
   EnumeratorDistribution,
   ReliabilityPair,
+  DataHealthData,
+  DataHealthField,
+  DataHealthRecoveryCohort,
+  DataHealthRecoveryRow,
+  NativeFormSchema,
 } from '@oslsr/types';
 import { CrossTabDimension } from '@oslsr/types';
 import {
@@ -48,6 +53,20 @@ import {
 import { skillSectorForSlug } from '@oslsr/types';
 import { selectMultipleUnnest } from '../lib/skills-extraction.js';
 import type { AnalyticsScope } from '../middleware/analytics-scope.js';
+import { registryUnifiedSource } from './registry-unified.js';
+import { analyticsCacheKey, PUBLIC_KEY_FINDINGS_CACHE_KEY } from './analytics-cache-keys.js';
+import {
+  buildRegistryFilter,
+  getRegistryTotals,
+  hasAnswer,
+} from './registry-totals.service.js';
+// Story 12-6 — the Data-Health view CONSUMES 9-59's atoms; it does not redefine
+// the taxonomy or the key map. See `tallyFieldResponses` for why each matters.
+import { deriveDataStatus, hasNonEmptyRawData } from './registry-data-status.js';
+import { normalizeRawDataKeys } from './registry-key-normalization.js';
+import { buildColumnsFromFormSchema } from './export-query.service.js';
+import { QuestionnaireService } from './questionnaire.service.js';
+import { AppError } from '@oslsr/utils';
 import { suppressSmallBuckets, suppressIfTooFew, toBuckets } from '../utils/analytics-suppression.js';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import pino from 'pino';
@@ -133,33 +152,33 @@ function getRedisClient() {
 function dimensionToSql(dim: CrossTabDimension): SQL {
   switch (dim) {
     case CrossTabDimension.GENDER:
-      return sql`s.raw_data->>'gender'`;
+      return sql`ru.raw_data->>'gender'`;
     case CrossTabDimension.AGE_BAND:
       return sql`CASE
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 15 AND 19 THEN '15-19'
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 20 AND 24 THEN '20-24'
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 25 AND 29 THEN '25-29'
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 30 AND 34 THEN '30-34'
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 35 AND 39 THEN '35-39'
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 40 AND 44 THEN '40-44'
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 45 AND 49 THEN '45-49'
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 50 AND 54 THEN '50-54'
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 55 AND 59 THEN '55-59'
-        WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) >= 60 THEN '60+'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 15 AND 19 THEN '15-19'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 20 AND 24 THEN '20-24'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 25 AND 29 THEN '25-29'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 30 AND 34 THEN '30-34'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 35 AND 39 THEN '35-39'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 40 AND 44 THEN '40-44'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 45 AND 49 THEN '45-49'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 50 AND 54 THEN '50-54'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 55 AND 59 THEN '55-59'
+        WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) >= 60 THEN '60+'
         ELSE 'unknown'
       END`;
     case CrossTabDimension.EDUCATION:
-      return sql`s.raw_data->>'education_level'`;
+      return sql`ru.raw_data->>'education_level'`;
     case CrossTabDimension.LGA:
-      return sql`COALESCE(l.name, r.lga_id, 'Unknown')`;
+      return sql`COALESCE(l.name, ru.lga_id, 'Unknown')`;
     case CrossTabDimension.EMPLOYMENT_TYPE:
-      return sql`s.raw_data->>'employment_type'`;
+      return sql`ru.raw_data->>'employment_type'`;
     case CrossTabDimension.MARITAL_STATUS:
-      return sql`s.raw_data->>'marital_status'`;
+      return sql`ru.raw_data->>'marital_status'`;
     case CrossTabDimension.HOUSING:
-      return sql`s.raw_data->>'housing_status'`;
+      return sql`ru.raw_data->>'housing_status'`;
     case CrossTabDimension.DISABILITY:
-      return sql`s.raw_data->>'disability_status'`;
+      return sql`ru.raw_data->>'disability_status'`;
   }
 }
 
@@ -206,8 +225,62 @@ const SKILLS_THRESHOLD_GENERAL = 30;
 const SKILLS_THRESHOLD_PER_LGA = 20;
 
 /**
+ * The answers-present cohort on the canonical respondent-anchored read —
+ * Story 12-6 (inherited 12-5 R2).
+ *
+ * ⭐ WHY THIS REPLACED `buildWhereFragments` FOR EVERY PUBLISHED RATE. The old
+ * filter ran over `FROM submissions s`: ONE ROW PER SUBMISSION. Anyone holding
+ * more than one answer-bearing submission was weighted twice in every rate the
+ * dashboard published. Measured on prod 2026-08-20: 286 answer-bearing
+ * submissions against 272 answer-bearing people — ~14 people counted twice, in
+ * figures a Ministry reads. That is a GRAIN defect, and 12-5 fixed only the
+ * DIVISOR; a right numerator over a doubled population is still wrong.
+ *
+ * ⚠️ Re-pointing is not a search-and-replace, because the canonical read is
+ * respondent-anchored and therefore does not carry three columns the old filter
+ * used. Each was a decision, taken deliberately (Task 0, Awwal 2026-08-20):
+ *
+ *   - `s.submitter_id` → `ru.submitter_id`, via `buildRegistryFilter`'s
+ *     `'submitter'` personal-scope mode. "The people I registered", not
+ *     "the submissions I filed" —
+ *     the only question a per-person read can answer, and the attribution
+ *     `productivity.service.ts` already reports staff counts from.
+ *   - `s.submitted_at` → `ru.created_at`. A date range now selects WHEN THE
+ *     PERSON REGISTERED, not when an answer arrived. This is what
+ *     `/registry-totals` already meant by a date range, so the two endpoints
+ *     stop disagreeing about what the filter selects.
+ *   - `s.source` → `ru.source` (respondent provenance). The vocabularies
+ *     overlap on `enumerator`/`public`/`clerk`; `ru.source` also carries the
+ *     `imported_*` values, which is the honest superset.
+ *
+ * ⭐ And one condition simply stops existing: the old filter needed
+ * `s.respondent_id IS NOT NULL` to exclude orphan submissions (prod holds 2,
+ * from the 13-57 pair — and forgetting that half of the predicate is what made
+ * 12-5's prod prediction wrong). Here the grain IS the respondent, so an orphan
+ * submission cannot enter the population at all. A condition nobody can forget
+ * beats a condition everybody must remember.
+ *
+ * The scope/params half is 12-4's `buildRegistryFilter` — imported, never
+ * re-written. A private second copy of a registry filter is precisely the drift
+ * 13-33/13-37 exist to kill.
+ */
+function buildUnifiedAnswersWhere(
+  scope: AnalyticsScope,
+  params: AnalyticsQueryParams = {},
+): SQL {
+  return sql`${buildRegistryFilter(scope, params, 'submitter')} AND ru.raw_data IS NOT NULL`;
+}
+
+/**
  * Build parameterized WHERE clause fragments for scope + optional params.
  * Uses Drizzle sql template tag — NEVER sql.raw() for user-supplied values.
+ *
+ * ⚠️ SUBMISSION-GRAINED — one row per submission. Story 12-6 moved every
+ * PUBLISHED RATE off this and onto {@link buildUnifiedAnswersWhere}; what still
+ * uses it are the surfaces whose subject genuinely IS a submission (processing
+ * pipeline, per-day submission counts, per-enumerator comparison). Before
+ * reaching for it on anything that divides people by people, read that
+ * function's note — this one double-counts by construction.
  */
 function buildWhereFragments(scope: AnalyticsScope, params: AnalyticsQueryParams = {}): SQL {
   const conditions: SQL[] = [
@@ -249,6 +322,154 @@ function buildWhereFragments(scope: AnalyticsScope, params: AnalyticsQueryParams
   return sql.join(conditions, sql` AND `);
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Story 12-6 — Data-Health helpers
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** Default page bound for the `data_lost` drill (AC4.3 — never unbounded). */
+const DATA_HEALTH_DRILL_LIMIT = 50;
+
+/** Per-request knobs that are not part of the shared analytics filter. */
+export interface DataHealthOptions {
+  /** Which published form's schema supplies the field axis. Defaults to the latest. */
+  formId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** Raw row shape of the recovery-cohort query. */
+interface RecoveryCohortRow {
+  respondent_id: string;
+  lga_id: string | null;
+  status: string | null;
+  source: string | null;
+  metadata: Record<string, unknown> | null;
+  phone_number: string | null;
+  created_at: string | Date | null;
+  raw_data: Record<string, unknown> | null;
+  reference_code: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  lga_name: string | null;
+}
+
+/**
+ * Resolve the form whose schema defines the per-field axis.
+ *
+ * An explicit `formId` wins. Otherwise the MOST RECENTLY PUBLISHED form is used
+ * — `listForms` already orders by `createdAt DESC`, and "the instrument we are
+ * currently collecting on" is the only default a completeness view can defend.
+ *
+ * ⚠️ Returns a null schema rather than throwing when no published form exists.
+ * That state is unreachable in prod (registration requires a published form) but
+ * it IS reachable on a fresh test/dev database, and a Data-Health tab that 500s
+ * on an empty environment would be blamed on the tab. The view then renders the
+ * recovery cohort and an empty field list, which is the honest picture: no
+ * instrument, therefore no per-question rates.
+ */
+async function resolveDataHealthForm(formId?: string): Promise<{
+  id: string | null;
+  title: string | null;
+  schema: NativeFormSchema | null;
+}> {
+  if (formId) {
+    const schema = await QuestionnaireService.getFormSchemaById(formId);
+    if (!schema) {
+      throw new AppError('FORM_NOT_FOUND', 'Questionnaire form not found or has no schema', 404);
+    }
+    return { id: formId, title: schema.title ?? null, schema };
+  }
+
+  const published = await QuestionnaireService.listForms({ status: 'published', pageSize: 1 });
+  const latest = published.data[0];
+  if (!latest) return { id: null, title: null, schema: null };
+
+  const schema = await QuestionnaireService.getFormSchemaById(latest.id);
+  return { id: latest.id, title: latest.title ?? null, schema: schema ?? null };
+}
+
+/**
+ * Tally per-field response rates over the answer-bearing cohort (AC3).
+ *
+ * Pure so the arithmetic is testable without a database — the drift class this
+ * story sits in is arithmetic, not plumbing.
+ *
+ * Two things it must get right, both of which have bitten this codebase:
+ *
+ * 1. **`normalizeRawDataKeys` runs BEFORE the answered test.** The same concept
+ *    appears under different keys across form versions (`dob`↔`date_of_birth`,
+ *    `firstname`↔`surname`, `_gpsLatitude`↔`gps_latitude`). Without this, a
+ *    field reads as under-answered purely because older submissions spelled it
+ *    differently — a data-health view reporting a data-health defect it invented.
+ * 2. **"Answered" is `hasAnswer` (12-4), not a local emptiness check.** That is
+ *    the TS half of the same contract `answeredFieldDenominator` speaks in SQL;
+ *    a third definition would let a row read `partial` on Axis-2 while counting
+ *    as answered here. Note `'0'` and `'false'` ARE answers; `''`/`[]`/`{}` are not.
+ *
+ * Sorted ascending by rate so the most under-answered questions surface first —
+ * which is the question the view exists to answer.
+ */
+export function tallyFieldResponses(
+  rawRows: Array<Record<string, unknown> | null>,
+  columns: Array<{ key: string; header: string }>,
+  withAnswers: number,
+): DataHealthField[] {
+  const answered = new Map<string, number>(columns.map((c) => [c.key, 0]));
+
+  for (const raw of rawRows) {
+    if (raw == null) continue;
+    const normalized = normalizeRawDataKeys(raw);
+    for (const column of columns) {
+      if (hasAnswer(normalized, column.key)) {
+        answered.set(column.key, (answered.get(column.key) ?? 0) + 1);
+      }
+    }
+  }
+
+  return columns
+    .map((column) => {
+      const answeredCount = answered.get(column.key) ?? 0;
+
+      // ⚠️ THE NUMERATOR COUNTS ROWS; THE DENOMINATOR COUNTS PEOPLE (12-6
+      // review M1). `rawRows` is one row per `respondents.id`, while
+      // `withAnswers` is `getRegistryTotals().byDataStatus.completed`, counted
+      // AFTER 12-4's identity-key collapse (NIN → E.164 phone). Two respondent
+      // rows resolving to one person therefore contribute 2 to a field's
+      // numerator and 1 to the denominator, and the rate exceeds 100%.
+      //
+      // Measured on prod 2026-08-21 the collapse removes nothing (272 rows →
+      // 272 identities), so this is latent today — but the difference is
+      // structural, not arithmetic, and the chart's X axis is fixed to
+      // `domain={[0, 100]}`, so an over-100 bar would render as a FULL bar with
+      // an over-100 tooltip: wrong and silent at the same time.
+      //
+      // So: clamp for display, and say so in the log. Never "fix" it by
+      // dividing by `rawRows.length` instead — that publishes a denominator
+      // beside a `withAnswers` caption the arithmetic did not use, which is the
+      // defect ruling R-E named.
+      const rawRate = withAnswers > 0 ? (answeredCount / withAnswers) * 100 : 0;
+      if (answeredCount > withAnswers) {
+        logger.warn({
+          event: 'analytics.data_health_field_rate_exceeds_cohort',
+          field: column.key,
+          answeredCount,
+          withAnswers,
+          why: 'answer-bearing ROWS exceed identity-collapsed PEOPLE — duplicate registrations (12-4 identityAmbiguous territory); rate clamped to 100 for display',
+        });
+      }
+
+      return {
+        key: column.key,
+        label: column.header,
+        answeredCount,
+        // Guarded because a filtered view can legitimately select nobody, and
+        // 0/0 must render as "no data", never as NaN on a Ministry dashboard.
+        responseRate: Math.min(100, Math.round(rawRate * 10) / 10),
+      };
+    })
+    .sort((a, b) => a.responseRate - b.responseRate || a.key.localeCompare(b.key));
+}
 const SUPPRESSION_MIN_N = 5;
 const ACTIVE_ENUMERATOR_DEFAULT_DAYS = 7;
 
@@ -257,13 +478,12 @@ export class SurveyAnalyticsService {
    * Demographics: gender, age bands, education, marital status, disability, LGA distribution
    */
   static async getDemographics(scope: AnalyticsScope, params: AnalyticsQueryParams = {}): Promise<DemographicStats> {
-    const where = buildWhereFragments(scope, params);
+    const where = buildUnifiedAnswersWhere(scope, params);
 
     // Total count for percentage calculations
     const totalResult = await db.execute(sql`
       SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
     `);
     const total = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
@@ -272,81 +492,73 @@ export class SurveyAnalyticsService {
     const [genderRows, ageRows, eduRows, maritalRows, disabilityRows, lgaRows, consentMktRows, consentEnrRows] = await Promise.all([
       // Gender
       db.execute(sql`
-        SELECT s.raw_data->>'gender' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'gender' IS NOT NULL
+        SELECT ru.raw_data->>'gender' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'gender' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // Age bands
       db.execute(sql`
         SELECT
           CASE
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 15 AND 19 THEN '15-19'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 20 AND 24 THEN '20-24'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 25 AND 29 THEN '25-29'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 30 AND 34 THEN '30-34'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 35 AND 39 THEN '35-39'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 40 AND 44 THEN '40-44'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 45 AND 49 THEN '45-49'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 50 AND 54 THEN '50-54'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) BETWEEN 55 AND 59 THEN '55-59'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)) >= 60 THEN '60+'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 15 AND 19 THEN '15-19'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 20 AND 24 THEN '20-24'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 25 AND 29 THEN '25-29'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 30 AND 34 THEN '30-34'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 35 AND 39 THEN '35-39'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 40 AND 44 THEN '40-44'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 45 AND 49 THEN '45-49'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 50 AND 54 THEN '50-54'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 55 AND 59 THEN '55-59'
+            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) >= 60 THEN '60+'
             ELSE 'unknown'
           END AS label,
           COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'dob' IS NOT NULL
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'dob' IS NOT NULL
         GROUP BY label ORDER BY label
       `),
       // Education
       db.execute(sql`
-        SELECT s.raw_data->>'education_level' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'education_level' IS NOT NULL
+        SELECT ru.raw_data->>'education_level' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'education_level' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // Marital status
       db.execute(sql`
-        SELECT s.raw_data->>'marital_status' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'marital_status' IS NOT NULL
+        SELECT ru.raw_data->>'marital_status' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'marital_status' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // Disability
       db.execute(sql`
-        SELECT s.raw_data->>'disability_status' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'disability_status' IS NOT NULL
+        SELECT ru.raw_data->>'disability_status' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'disability_status' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // LGA distribution
       db.execute(sql`
-        SELECT COALESCE(l.name, r.lga_id, 'Unknown') AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        LEFT JOIN lgas l ON l.code = r.lga_id
+        SELECT COALESCE(l.name, ru.lga_id, 'Unknown') AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        LEFT JOIN lgas l ON l.code = ru.lga_id
         WHERE ${where}
         GROUP BY label ORDER BY count DESC
       `),
       // Consent: marketplace opt-in (AC#2)
       db.execute(sql`
-        SELECT s.raw_data->>'consent_marketplace' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'consent_marketplace' IS NOT NULL
+        SELECT ru.raw_data->>'consent_marketplace' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'consent_marketplace' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // Consent: enriched data sharing (AC#2)
       db.execute(sql`
-        SELECT s.raw_data->>'consent_enriched' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'consent_enriched' IS NOT NULL
+        SELECT ru.raw_data->>'consent_enriched' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'consent_enriched' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
     ]);
@@ -367,12 +579,11 @@ export class SurveyAnalyticsService {
    * Employment statistics: work status, type, experience, hours, income
    */
   static async getEmployment(scope: AnalyticsScope, params: AnalyticsQueryParams = {}): Promise<EmploymentStats> {
-    const where = buildWhereFragments(scope, params);
+    const where = buildUnifiedAnswersWhere(scope, params);
 
     const totalResult = await db.execute(sql`
       SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
     `);
     const total = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
@@ -382,95 +593,88 @@ export class SurveyAnalyticsService {
       db.execute(sql`
         SELECT
           CASE
-            WHEN s.raw_data->>'employment_status' = 'yes' THEN 'employed'
-            WHEN s.raw_data->>'temp_absent' = 'yes' THEN 'temporarily_absent'
-            WHEN s.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed_seeking'
-            WHEN s.raw_data->>'available_for_work' = 'yes' THEN 'unemployed_available'
+            WHEN ru.raw_data->>'employment_status' = 'yes' THEN 'employed'
+            WHEN ru.raw_data->>'temp_absent' = 'yes' THEN 'temporarily_absent'
+            WHEN ru.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed_seeking'
+            WHEN ru.raw_data->>'available_for_work' = 'yes' THEN 'unemployed_available'
             ELSE 'not_in_labour_force'
           END AS label,
           COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
+        FROM ${registryUnifiedSource('ru')}
         WHERE ${where}
         GROUP BY label ORDER BY count DESC
       `),
       // Employment type
       db.execute(sql`
-        SELECT s.raw_data->>'employment_type' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'employment_type' IS NOT NULL
+        SELECT ru.raw_data->>'employment_type' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'employment_type' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // Formal vs informal
       db.execute(sql`
         SELECT
           CASE
-            WHEN s.raw_data->>'employment_type' IN ('wage_public', 'wage_private', 'contractor') THEN 'formal'
-            WHEN s.raw_data->>'employment_type' IN ('self_employed', 'family_unpaid', 'apprentice') THEN 'informal'
+            WHEN ru.raw_data->>'employment_type' IN ('wage_public', 'wage_private', 'contractor') THEN 'formal'
+            WHEN ru.raw_data->>'employment_type' IN ('self_employed', 'family_unpaid', 'apprentice') THEN 'informal'
             ELSE 'unknown'
           END AS label,
           COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'employment_type' IS NOT NULL
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'employment_type' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // Experience
       db.execute(sql`
-        SELECT s.raw_data->>'years_experience' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'years_experience' IS NOT NULL
+        SELECT ru.raw_data->>'years_experience' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'years_experience' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // Hours worked (bands)
       db.execute(sql`
         SELECT
           CASE
-            WHEN (s.raw_data->>'hours_worked')::int BETWEEN 0 AND 19 THEN '0-19'
-            WHEN (s.raw_data->>'hours_worked')::int BETWEEN 20 AND 34 THEN '20-34'
-            WHEN (s.raw_data->>'hours_worked')::int BETWEEN 35 AND 44 THEN '35-44'
-            WHEN (s.raw_data->>'hours_worked')::int BETWEEN 45 AND 59 THEN '45-59'
-            WHEN (s.raw_data->>'hours_worked')::int >= 60 THEN '60+'
+            WHEN (ru.raw_data->>'hours_worked')::int BETWEEN 0 AND 19 THEN '0-19'
+            WHEN (ru.raw_data->>'hours_worked')::int BETWEEN 20 AND 34 THEN '20-34'
+            WHEN (ru.raw_data->>'hours_worked')::int BETWEEN 35 AND 44 THEN '35-44'
+            WHEN (ru.raw_data->>'hours_worked')::int BETWEEN 45 AND 59 THEN '45-59'
+            WHEN (ru.raw_data->>'hours_worked')::int >= 60 THEN '60+'
             ELSE 'unknown'
           END AS label,
           COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
+        FROM ${registryUnifiedSource('ru')}
         WHERE ${where}
-          AND s.raw_data->>'hours_worked' IS NOT NULL
-          AND s.raw_data->>'hours_worked' ~ '^[0-9]+$'
+          AND ru.raw_data->>'hours_worked' IS NOT NULL
+          AND ru.raw_data->>'hours_worked' ~ '^[0-9]+$'
         GROUP BY label ORDER BY label
       `),
       // Income distribution (bands in Naira)
       db.execute(sql`
         SELECT
           CASE
-            WHEN (s.raw_data->>'monthly_income')::int < 30000 THEN 'under_30k'
-            WHEN (s.raw_data->>'monthly_income')::int BETWEEN 30000 AND 49999 THEN '30k-50k'
-            WHEN (s.raw_data->>'monthly_income')::int BETWEEN 50000 AND 99999 THEN '50k-100k'
-            WHEN (s.raw_data->>'monthly_income')::int BETWEEN 100000 AND 199999 THEN '100k-200k'
-            WHEN (s.raw_data->>'monthly_income')::int >= 200000 THEN '200k+'
+            WHEN (ru.raw_data->>'monthly_income')::int < 30000 THEN 'under_30k'
+            WHEN (ru.raw_data->>'monthly_income')::int BETWEEN 30000 AND 49999 THEN '30k-50k'
+            WHEN (ru.raw_data->>'monthly_income')::int BETWEEN 50000 AND 99999 THEN '50k-100k'
+            WHEN (ru.raw_data->>'monthly_income')::int BETWEEN 100000 AND 199999 THEN '100k-200k'
+            WHEN (ru.raw_data->>'monthly_income')::int >= 200000 THEN '200k+'
             ELSE 'unknown'
           END AS label,
           COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
+        FROM ${registryUnifiedSource('ru')}
         WHERE ${where}
-          AND s.raw_data->>'monthly_income' IS NOT NULL
-          AND s.raw_data->>'monthly_income' ~ '^[0-9]+$'
+          AND ru.raw_data->>'monthly_income' IS NOT NULL
+          AND ru.raw_data->>'monthly_income' ~ '^[0-9]+$'
         GROUP BY label ORDER BY label
       `),
       // Income-reporting respondents by LGA
       db.execute(sql`
-        SELECT COALESCE(l.name, r.lga_id, 'Unknown') AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        LEFT JOIN lgas l ON l.code = r.lga_id
+        SELECT COALESCE(l.name, ru.lga_id, 'Unknown') AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        LEFT JOIN lgas l ON l.code = ru.lga_id
         WHERE ${where}
-          AND s.raw_data->>'monthly_income' IS NOT NULL
-          AND s.raw_data->>'monthly_income' ~ '^[0-9]+$'
+          AND ru.raw_data->>'monthly_income' IS NOT NULL
+          AND ru.raw_data->>'monthly_income' ~ '^[0-9]+$'
         GROUP BY label ORDER BY count DESC
       `),
     ]);
@@ -490,12 +694,11 @@ export class SurveyAnalyticsService {
    * Household statistics: size distribution, dependency, housing, business
    */
   static async getHousehold(scope: AnalyticsScope, params: AnalyticsQueryParams = {}): Promise<HouseholdStats> {
-    const where = buildWhereFragments(scope, params);
+    const where = buildUnifiedAnswersWhere(scope, params);
 
     const totalResult = await db.execute(sql`
       SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
     `);
     const total = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
@@ -505,37 +708,34 @@ export class SurveyAnalyticsService {
       db.execute(sql`
         SELECT
           CASE
-            WHEN (s.raw_data->>'household_size')::int = 1 THEN '1'
-            WHEN (s.raw_data->>'household_size')::int BETWEEN 2 AND 3 THEN '2-3'
-            WHEN (s.raw_data->>'household_size')::int BETWEEN 4 AND 6 THEN '4-6'
-            WHEN (s.raw_data->>'household_size')::int BETWEEN 7 AND 10 THEN '7-10'
-            WHEN (s.raw_data->>'household_size')::int > 10 THEN '11+'
+            WHEN (ru.raw_data->>'household_size')::int = 1 THEN '1'
+            WHEN (ru.raw_data->>'household_size')::int BETWEEN 2 AND 3 THEN '2-3'
+            WHEN (ru.raw_data->>'household_size')::int BETWEEN 4 AND 6 THEN '4-6'
+            WHEN (ru.raw_data->>'household_size')::int BETWEEN 7 AND 10 THEN '7-10'
+            WHEN (ru.raw_data->>'household_size')::int > 10 THEN '11+'
             ELSE 'unknown'
           END AS label,
           COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
+        FROM ${registryUnifiedSource('ru')}
         WHERE ${where}
-          AND s.raw_data->>'household_size' IS NOT NULL
-          AND s.raw_data->>'household_size' ~ '^[0-9]+$'
+          AND ru.raw_data->>'household_size' IS NOT NULL
+          AND ru.raw_data->>'household_size' ~ '^[0-9]+$'
         GROUP BY label ORDER BY label
       `),
       // Head of household by gender
       db.execute(sql`
-        SELECT s.raw_data->>'gender' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
+        SELECT ru.raw_data->>'gender' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
         WHERE ${where}
-          AND s.raw_data->>'is_head' = 'yes'
-          AND s.raw_data->>'gender' IS NOT NULL
+          AND ru.raw_data->>'is_head' = 'yes'
+          AND ru.raw_data->>'gender' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // Housing status
       db.execute(sql`
-        SELECT s.raw_data->>'housing_status' AS label, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'housing_status' IS NOT NULL
+        SELECT ru.raw_data->>'housing_status' AS label, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'housing_status' IS NOT NULL
         GROUP BY label ORDER BY count DESC
       `),
       // Aggregate scalars
@@ -547,26 +747,25 @@ export class SurveyAnalyticsService {
           -- denominator, inflating the ratio by an amount nobody could state.
           CASE WHEN COUNT(*) > 0
             THEN ROUND(
-              SUM(CASE WHEN s.raw_data->>'dependents_count' ~ '^[0-9]+$'
-                       AND s.raw_data->>'household_size' ~ '^[0-9]+$'
-                  THEN (s.raw_data->>'dependents_count')::numeric ELSE 0 END)::numeric /
-              NULLIF(SUM(CASE WHEN s.raw_data->>'household_size' ~ '^[0-9]+$'
-                  THEN (s.raw_data->>'household_size')::numeric ELSE 0 END), 0)
+              SUM(CASE WHEN ru.raw_data->>'dependents_count' ~ '^[0-9]+$'
+                       AND ru.raw_data->>'household_size' ~ '^[0-9]+$'
+                  THEN (ru.raw_data->>'dependents_count')::numeric ELSE 0 END)::numeric /
+              NULLIF(SUM(CASE WHEN ru.raw_data->>'household_size' ~ '^[0-9]+$'
+                  THEN (ru.raw_data->>'household_size')::numeric ELSE 0 END), 0)
             , 2)
             ELSE NULL
           END AS dependency_ratio,
-          COUNT(*) FILTER (WHERE s.raw_data->>'has_business' = 'yes') AS biz_owners,
-          COUNT(*) FILTER (WHERE s.raw_data->>'business_reg' = 'registered') AS biz_registered,
-          SUM(CASE WHEN s.raw_data->>'apprentice_count' ~ '^[0-9]+$'
-              THEN (s.raw_data->>'apprentice_count')::int ELSE 0 END) AS apprentice_total,
+          COUNT(*) FILTER (WHERE ru.raw_data->>'has_business' = 'yes') AS biz_owners,
+          COUNT(*) FILTER (WHERE ru.raw_data->>'business_reg' = 'registered') AS biz_registered,
+          SUM(CASE WHEN ru.raw_data->>'apprentice_count' ~ '^[0-9]+$'
+              THEN (ru.raw_data->>'apprentice_count')::int ELSE 0 END) AS apprentice_total,
           COUNT(*) AS total_count,
           -- Story 12-5 AC4 / ruling R-E: each statistic's OWN base — the people
           -- who answered ITS question, counted through the same WHERE.
-          COUNT(*) FILTER (WHERE s.raw_data->>'household_size' ~ '^[0-9]+$') AS household_size_n,
-          COUNT(*) FILTER (WHERE s.raw_data->>'has_business' IS NOT NULL) AS has_business_n,
-          COUNT(*) FILTER (WHERE s.raw_data->>'apprentice_count' ~ '^[0-9]+$') AS apprentice_n
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
+          COUNT(*) FILTER (WHERE ru.raw_data->>'household_size' ~ '^[0-9]+$') AS household_size_n,
+          COUNT(*) FILTER (WHERE ru.raw_data->>'has_business' IS NOT NULL) AS has_business_n,
+          COUNT(*) FILTER (WHERE ru.raw_data->>'apprentice_count' ~ '^[0-9]+$') AS apprentice_n
+        FROM ${registryUnifiedSource('ru')}
         WHERE ${where}
       `),
     ]);
@@ -640,16 +839,15 @@ export class SurveyAnalyticsService {
     params: AnalyticsQueryParams = {},
     limit: number = 20,
   ): Promise<SkillsFrequencyResult> {
-    const where = buildWhereFragments(scope, params);
+    const where = buildUnifiedAnswersWhere(scope, params);
 
     // Total submissions with skills for percentage
     const totalResult = await db.execute(sql`
       SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
-        AND s.raw_data->>'skills_possessed' IS NOT NULL
-        AND s.raw_data->>'skills_possessed' != ''
+        AND ru.raw_data->>'skills_possessed' IS NOT NULL
+        AND ru.raw_data->>'skills_possessed' != ''
     `);
     const total = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
 
@@ -657,12 +855,11 @@ export class SurveyAnalyticsService {
 
     const rows = await db.execute(sql`
       SELECT skill, COUNT(*) AS count
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id,
-           ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
+      FROM ${registryUnifiedSource('ru')},
+           ${selectMultipleUnnest(sql`ru.raw_data`, 'skills_possessed')} AS skill
       WHERE ${where}
-        AND s.raw_data->>'skills_possessed' IS NOT NULL
-        AND s.raw_data->>'skills_possessed' != ''
+        AND ru.raw_data->>'skills_possessed' IS NOT NULL
+        AND ru.raw_data->>'skills_possessed' != ''
       GROUP BY skill
       ORDER BY count DESC
       LIMIT ${safeLimit}
@@ -727,20 +924,19 @@ export class SurveyAnalyticsService {
    * consentMarketplacePct, consentEnrichedPct. Single query for efficiency (AC#6)
    */
   static async getRegistrySummary(scope: AnalyticsScope, params: AnalyticsQueryParams = {}): Promise<RegistrySummary> {
-    const where = buildWhereFragments(scope, params);
+    const where = buildUnifiedAnswersWhere(scope, params);
 
     const rows = await db.execute(sql`
       SELECT
         COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE s.raw_data->>'employment_status' = 'yes') AS employed,
-        COUNT(*) FILTER (WHERE s.raw_data->>'gender' = 'female') AS female,
-        AVG(EXTRACT(YEAR FROM AGE(NOW(), (s.raw_data->>'dob')::date)))
-          FILTER (WHERE s.raw_data->>'dob' IS NOT NULL) AS avg_age,
-        COUNT(*) FILTER (WHERE s.raw_data->>'has_business' = 'yes') AS biz_owners,
-        ROUND(100.0 * COUNT(*) FILTER (WHERE s.raw_data->>'consent_marketplace' = 'yes') / NULLIF(COUNT(*), 0), 1) AS consent_marketplace_pct,
-        ROUND(100.0 * COUNT(*) FILTER (WHERE s.raw_data->>'consent_enriched' = 'yes') / NULLIF(COUNT(*), 0), 1) AS consent_enriched_pct
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+        COUNT(*) FILTER (WHERE ru.raw_data->>'employment_status' = 'yes') AS employed,
+        COUNT(*) FILTER (WHERE ru.raw_data->>'gender' = 'female') AS female,
+        AVG(EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)))
+          FILTER (WHERE ru.raw_data->>'dob' IS NOT NULL) AS avg_age,
+        COUNT(*) FILTER (WHERE ru.raw_data->>'has_business' = 'yes') AS biz_owners,
+        ROUND(100.0 * COUNT(*) FILTER (WHERE ru.raw_data->>'consent_marketplace' = 'yes') / NULLIF(COUNT(*), 0), 1) AS consent_marketplace_pct,
+        ROUND(100.0 * COUNT(*) FILTER (WHERE ru.raw_data->>'consent_enriched' = 'yes') / NULLIF(COUNT(*), 0), 1) AS consent_enriched_pct
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
     `);
 
@@ -762,6 +958,180 @@ export class SurveyAnalyticsService {
       consentMarketplacePct: total < SUPPRESSION_MIN_N ? null : Number(row?.consent_marketplace_pct ?? 0),
       consentEnrichedPct: total < SUPPRESSION_MIN_N ? null : Number(row?.consent_enriched_pct ?? 0),
     };
+  }
+
+  /**
+   * Story 12-6 — the Data-Health aggregate: per-field response rates + the
+   * `data_lost` recovery cohort.
+   *
+   * ── What this OWNS, and what it deliberately does not ───────────────────────
+   * 12-4 exposed the funnel head (`totalRespondents` / `withAnswers`) and the
+   * per-`data_status` breakdown and explicitly left per-field rates here,
+   * because flattening `raw_data` per QUESTION is a different aggregation
+   * altitude from a distinct-respondent tally. So this calls
+   * `getRegistryTotals()` for every count it needs and re-counts nothing: one
+   * registry, one number. The tab renders the funnel from that same aggregate.
+   *
+   * ── The field list comes from the SCHEMA, not from the data ────────────────
+   * `buildColumnsFromFormSchema` (the same builder the Full/Unified exports use)
+   * supplies the questions and their labels. Deriving the field list from the
+   * keys actually present would make a question with a 0% response rate
+   * invisible — and a question nobody answered is the single most important row
+   * a data-health view can show.
+   */
+  static async getDataHealth(
+    scope: AnalyticsScope,
+    params: AnalyticsQueryParams = {},
+    options: DataHealthOptions = {},
+  ): Promise<DataHealthData> {
+    const limit = Math.max(1, Math.min(options.limit ?? DATA_HEALTH_DRILL_LIMIT, 200));
+    const offset = Math.max(0, options.offset ?? 0);
+
+    const form = await resolveDataHealthForm(options.formId);
+    const where = buildUnifiedAnswersWhere(scope, params);
+
+    const [totals, answerRows] = await Promise.all([
+      // ⚠️ `'submitter'` is NOT optional here, and the 12-6 review (M2) is why.
+      // The per-field NUMERATOR below narrows a `personal` scope to one
+      // submitter through `buildUnifiedAnswersWhere`; the DENOMINATOR is
+      // `totals.withAnswers`. `getRegistryTotals` defaults `personal` to
+      // "no filter" — the right reading for `/registry-totals`, where the
+      // register is one shared already-public object — so taking the default
+      // here would divide one enumerator's answered fields by the WHOLE
+      // register. Both halves of a rate must describe one population.
+      getRegistryTotals(scope, params, 'submitter'),
+      // Only `raw_data` crosses the wire: this pass counts answered questions,
+      // so there is no reason for every respondent's NIN and phone to enter the
+      // API process on a dashboard hit (12-4's narrowed-projection discipline).
+      db.execute(sql`
+        SELECT ru.raw_data
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where}
+      `),
+    ]);
+
+    const columns = form.schema ? buildColumnsFromFormSchema(form.schema) : [];
+    const fields = tallyFieldResponses(
+      (answerRows.rows as unknown as Array<{ raw_data: Record<string, unknown> | null }>)
+        .map((r) => r.raw_data),
+      columns,
+      totals.withAnswers,
+    );
+
+    const recoveryCohort = await SurveyAnalyticsService.getRecoveryCohort(
+      scope,
+      params,
+      totals.byDataStatus.data_lost,
+      limit,
+      offset,
+    );
+
+    logger.info({
+      event: 'analytics.data_health_computed',
+      withAnswers: totals.withAnswers,
+      fieldCount: fields.length,
+      formId: form.id,
+      dataLostTotal: recoveryCohort.total,
+      drillRows: recoveryCohort.rows.length,
+    });
+
+    return {
+      withAnswers: totals.withAnswers,
+      formId: form.id,
+      formTitle: form.title,
+      fields,
+      recoveryCohort,
+    };
+  }
+
+  /**
+   * One bounded page of the `data_lost` cohort (AC4.2/4.3).
+   *
+   * ── Why the SQL narrows but the ATOM decides ───────────────────────────────
+   * `deriveDataStatus` (9-59) is the single authority on what `data_lost` means,
+   * and re-expressing its precedence as a SQL `CASE` would be the second
+   * definition 13-33/13-37 exist to prevent. But the list must also be BOUNDED —
+   * "derive in TS" and "do not build the whole cohort in memory" pull opposite
+   * ways at scale.
+   *
+   * Resolution: SQL narrows using only the atom's own INPUTS (`raw_data` absent,
+   * the `questionnaire_data_lost` marker set) — never its precedence — so the
+   * query returns a superset-free page, and `deriveDataStatus` is then run over
+   * that page as the authority. Any row the atom disagrees with is DROPPED and
+   * counted, because a silent disagreement between the narrowing and the
+   * taxonomy is exactly the drift worth hearing about.
+   *
+   * The cohort SIZE comes from 12-4's `byDataStatus.data_lost`, never from
+   * `rows.length` — a page is not a population.
+   */
+  private static async getRecoveryCohort(
+    scope: AnalyticsScope,
+    params: AnalyticsQueryParams,
+    total: number,
+    limit: number,
+    offset: number,
+  ): Promise<DataHealthRecoveryCohort> {
+    const result = await db.execute(sql`
+      SELECT
+        ru.respondent_id,
+        ru.lga_id,
+        ru.status,
+        ru.source,
+        ru.metadata,
+        ru.phone_number,
+        ru.created_at,
+        ru.raw_data,
+        r.reference_code,
+        r.first_name,
+        r.last_name,
+        l.name AS lga_name
+      FROM ${registryUnifiedSource('ru')}
+      JOIN respondents r ON r.id = ru.respondent_id
+      LEFT JOIN lgas l ON l.code = ru.lga_id
+      WHERE ${buildRegistryFilter(scope, params, 'submitter')}
+        AND ru.raw_data IS NULL
+        AND ru.metadata->>'questionnaire_data_lost' = 'true'
+      ORDER BY ru.created_at DESC NULLS LAST, ru.respondent_id
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+
+    const rows: DataHealthRecoveryRow[] = [];
+    let atomDisagreements = 0;
+
+    for (const raw of result.rows as unknown as RecoveryCohortRow[]) {
+      const status = deriveDataStatus({
+        hasSubmissionData: hasNonEmptyRawData(raw.raw_data),
+        status: raw.status,
+        source: raw.source,
+        metadata: raw.metadata as { questionnaire_data_lost?: boolean } | null,
+      });
+
+      if (status !== 'data_lost') {
+        atomDisagreements += 1;
+        continue;
+      }
+
+      const name = [raw.first_name, raw.last_name].filter(Boolean).join(' ').trim();
+      rows.push({
+        respondentId: raw.respondent_id,
+        referenceCode: raw.reference_code ?? null,
+        fullName: name === '' ? null : name,
+        lgaId: raw.lga_id ?? null,
+        lgaName: raw.lga_name ?? null,
+        registeredAt: raw.created_at == null ? null : new Date(raw.created_at).toISOString(),
+        phoneNumber: raw.phone_number ?? null,
+      });
+    }
+
+    if (atomDisagreements > 0) {
+      logger.warn({
+        event: 'analytics.data_health_cohort_narrowing_drift',
+        atomDisagreements,
+        why: 'SQL narrowing selected rows deriveDataStatus does not classify data_lost',
+      });
+    }
+
+    return { total, rows, limit, offset };
   }
 
   /**
@@ -858,10 +1228,10 @@ export class SurveyAnalyticsService {
     scope: AnalyticsScope,
     params: AnalyticsQueryParams = {},
   ): Promise<CrossTabResult> {
-    const where = buildWhereFragments(scope, params);
+    const where = buildUnifiedAnswersWhere(scope, params);
 
     // Check cache
-    const cacheKey = `analytics:cross-tab:${scope.type}:${scope.lgaCode || scope.userId || 'all'}:${rowDim}:${colDim}:${measure}:${stableStringify(params as unknown as Record<string, unknown>)}`;
+    const cacheKey = analyticsCacheKey('cross-tab', scope.type, scope.lgaCode || scope.userId || 'all', rowDim, colDim, measure, stableStringify(params as unknown as Record<string, unknown>));
     const redis = getRedisClient();
     if (redis) {
       try {
@@ -875,8 +1245,7 @@ export class SurveyAnalyticsService {
     // Threshold guard
     const totalResult = await db.execute(sql`
       SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
     `);
     const totalN = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
@@ -890,15 +1259,14 @@ export class SurveyAnalyticsService {
 
     // LGA dimension requires extra JOIN
     const needsLgaJoin = rowDim === CrossTabDimension.LGA || colDim === CrossTabDimension.LGA;
-    const lgaJoin = needsLgaJoin ? sql`LEFT JOIN lgas l ON l.code = r.lga_id` : sql``;
+    const lgaJoin = needsLgaJoin ? sql`LEFT JOIN lgas l ON l.code = ru.lga_id` : sql``;
 
     const rows = await db.execute(sql`
       SELECT
         ${rowExpr} AS row_val,
         ${colExpr} AS col_val,
         COUNT(*) AS cell_count
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       ${lgaJoin}
       WHERE ${where}
         AND ${rowExpr} IS NOT NULL
@@ -980,10 +1348,10 @@ export class SurveyAnalyticsService {
     scope: AnalyticsScope,
     params: AnalyticsQueryParams = {},
   ): Promise<SkillsInventoryData> {
-    const where = buildWhereFragments(scope, params);
+    const where = buildUnifiedAnswersWhere(scope, params);
 
     // Check cache
-    const cacheKey = `analytics:skills-inventory:${scope.type}:${scope.lgaCode || scope.userId || 'all'}:${stableStringify(params as unknown as Record<string, unknown>)}`;
+    const cacheKey = analyticsCacheKey('skills-inventory', scope.type, scope.lgaCode || scope.userId || 'all', stableStringify(params as unknown as Record<string, unknown>));
     const redis = getRedisClient();
     if (redis) {
       try {
@@ -994,22 +1362,27 @@ export class SurveyAnalyticsService {
       }
     }
 
-    // Count total submissions with skills data for threshold checks
+    // Count the PEOPLE with skills data for threshold checks.
     const totalSkillsResult = await db.execute(sql`
       SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
-        AND s.raw_data->>'skills_possessed' IS NOT NULL
-        AND s.raw_data->>'skills_possessed' != ''
+        AND ru.raw_data->>'skills_possessed' IS NOT NULL
+        AND ru.raw_data->>'skills_possessed' != ''
     `);
     const totalWithSkills = Number((totalSkillsResult.rows[0] as unknown as TotalRow)?.total ?? 0);
 
-    // Count total submissions for LGA-specific thresholds
+    // Count the answer-bearing PEOPLE for LGA-specific thresholds.
+    //
+    // ⚠️ `totalSubmissions` keeps its name only because it feeds the shared
+    // threshold shape; as of Story 12-6 it counts people, like every other
+    // denominator in this method. Suppression thresholds that were sized against
+    // a double-counted population were, by construction, slightly too easy to
+    // clear — a suppression gate is the last place that should round in the
+    // permissive direction.
     const totalResult = await db.execute(sql`
       SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
     `);
     const totalSubmissions = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
@@ -1028,12 +1401,11 @@ export class SurveyAnalyticsService {
     if (thresholds.allSkills.met) {
       const skillRows = await db.execute(sql`
         SELECT skill, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id,
-             ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
+        FROM ${registryUnifiedSource('ru')},
+             ${selectMultipleUnnest(sql`ru.raw_data`, 'skills_possessed')} AS skill
         WHERE ${where}
-          AND s.raw_data->>'skills_possessed' IS NOT NULL
-          AND s.raw_data->>'skills_possessed' != ''
+          AND ru.raw_data->>'skills_possessed' IS NOT NULL
+          AND ru.raw_data->>'skills_possessed' != ''
         GROUP BY skill
         ORDER BY count DESC
       `);
@@ -1068,25 +1440,28 @@ export class SurveyAnalyticsService {
     if (scope.type === 'system' && thresholds.byLga.met) {
       const lgaSkillRows = await db.execute(sql`
         WITH skill_counts AS (
-          SELECT r.lga_id, skill, COUNT(*) AS count
-          FROM submissions s
-          LEFT JOIN respondents r ON r.id = s.respondent_id,
-               ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
+          SELECT ru.lga_id, skill, COUNT(*) AS count
+          FROM ${registryUnifiedSource('ru')},
+               ${selectMultipleUnnest(sql`ru.raw_data`, 'skills_possessed')} AS skill
           WHERE ${where}
-            AND s.raw_data->>'skills_possessed' IS NOT NULL
-            AND s.raw_data->>'skills_possessed' != ''
-          GROUP BY r.lga_id, skill
+            AND ru.raw_data->>'skills_possessed' IS NOT NULL
+            AND ru.raw_data->>'skills_possessed' != ''
+          GROUP BY ru.lga_id, skill
           HAVING COUNT(*) >= ${SUPPRESSION_MIN_N}
         ),
         ranked AS (
           SELECT *, ROW_NUMBER() OVER (PARTITION BY lga_id ORDER BY count DESC) AS rn
           FROM skill_counts
         )
-        SELECT r.lga_id, COALESCE(l.name, r.lga_id, 'Unknown') AS lga_name, r.skill, r.count
-        FROM ranked r
-        LEFT JOIN lgas l ON l.code = r.lga_id
-        WHERE r.rn <= 3
-        ORDER BY lga_name, r.rn
+        -- rk is the RANKED CTE, not the respondents table. It was aliased r
+        -- before Story 12-6, which read exactly like the respondent join two
+        -- lines above and made a mechanical r. -> ru. rewrite silently wrong.
+        -- Renamed so the two can never be confused again.
+        SELECT rk.lga_id, COALESCE(l.name, rk.lga_id, 'Unknown') AS lga_name, rk.skill, rk.count
+        FROM ranked rk
+        LEFT JOIN lgas l ON l.code = rk.lga_id
+        WHERE rk.rn <= 3
+        ORDER BY lga_name, rk.rn
       `);
 
       const lgaMap = new Map<string, { lgaId: string; lgaName: string; topSkills: { skill: string; count: number }[] }>();
@@ -1105,23 +1480,21 @@ export class SurveyAnalyticsService {
       const [haveRows, wantRows] = await Promise.all([
         db.execute(sql`
           SELECT skill, COUNT(*) AS count
-          FROM submissions s
-          LEFT JOIN respondents r ON r.id = s.respondent_id,
-               ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
+          FROM ${registryUnifiedSource('ru')},
+               ${selectMultipleUnnest(sql`ru.raw_data`, 'skills_possessed')} AS skill
           WHERE ${where}
-            AND s.raw_data->>'skills_possessed' IS NOT NULL
-            AND s.raw_data->>'skills_possessed' != ''
+            AND ru.raw_data->>'skills_possessed' IS NOT NULL
+            AND ru.raw_data->>'skills_possessed' != ''
           GROUP BY skill
           HAVING COUNT(*) >= ${SUPPRESSION_MIN_N}
         `),
         db.execute(sql`
           SELECT skill, COUNT(*) AS count
-          FROM submissions s
-          LEFT JOIN respondents r ON r.id = s.respondent_id,
-               ${selectMultipleUnnest(sql`s.raw_data`, 'training_interest')} AS skill
+          FROM ${registryUnifiedSource('ru')},
+               ${selectMultipleUnnest(sql`ru.raw_data`, 'training_interest')} AS skill
           WHERE ${where}
-            AND s.raw_data->>'training_interest' IS NOT NULL
-            AND s.raw_data->>'training_interest' != ''
+            AND ru.raw_data->>'training_interest' IS NOT NULL
+            AND ru.raw_data->>'training_interest' != ''
           GROUP BY skill
           HAVING COUNT(*) >= ${SUPPRESSION_MIN_N}
         `),
@@ -1155,16 +1528,15 @@ export class SurveyAnalyticsService {
     let diversityIndex: SkillsInventoryData['diversityIndex'] = null;
     if (scope.type === 'system' && thresholds.diversityIndex.met) {
       const divRows = await db.execute(sql`
-        SELECT r.lga_id, COALESCE(l.name, r.lga_id, 'Unknown') AS lga_name,
+        SELECT ru.lga_id, COALESCE(l.name, ru.lga_id, 'Unknown') AS lga_name,
                skill, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        LEFT JOIN lgas l ON l.code = r.lga_id,
-             ${selectMultipleUnnest(sql`s.raw_data`, 'skills_possessed')} AS skill
+        FROM ${registryUnifiedSource('ru')}
+        LEFT JOIN lgas l ON l.code = ru.lga_id,
+             ${selectMultipleUnnest(sql`ru.raw_data`, 'skills_possessed')} AS skill
         WHERE ${where}
-          AND s.raw_data->>'skills_possessed' IS NOT NULL
-          AND s.raw_data->>'skills_possessed' != ''
-        GROUP BY r.lga_id, lga_name, skill
+          AND ru.raw_data->>'skills_possessed' IS NOT NULL
+          AND ru.raw_data->>'skills_possessed' != ''
+        GROUP BY ru.lga_id, lga_name, skill
       `);
 
       // Group by LGA, compute Shannon index
@@ -1213,23 +1585,22 @@ export class SurveyAnalyticsService {
   private static async extractInferentialData(where: SQL): Promise<InferentialRow[]> {
     const result = await db.execute(sql`
       SELECT
-        s.raw_data->>'gender' AS gender,
-        s.raw_data->>'employment_type' AS employment_type,
-        s.raw_data->>'education_level' AS education_level,
-        s.raw_data->>'disability_status' AS disability_status,
-        s.raw_data->>'marital_status' AS marital_status,
-        s.raw_data->>'is_head' AS is_head,
-        s.raw_data->>'housing_status' AS housing_status,
-        s.raw_data->>'has_business' AS has_business,
-        s.raw_data->>'monthly_income' AS monthly_income,
-        s.raw_data->>'years_experience' AS years_experience,
-        s.raw_data->>'household_size' AS household_size,
-        s.raw_data->>'hours_worked' AS hours_worked,
-        CASE WHEN s.raw_data->>'employment_status' = 'yes' THEN 'employed'
-             WHEN s.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed' ELSE 'other' END AS work_status,
-        r.lga_id
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+        ru.raw_data->>'gender' AS gender,
+        ru.raw_data->>'employment_type' AS employment_type,
+        ru.raw_data->>'education_level' AS education_level,
+        ru.raw_data->>'disability_status' AS disability_status,
+        ru.raw_data->>'marital_status' AS marital_status,
+        ru.raw_data->>'is_head' AS is_head,
+        ru.raw_data->>'housing_status' AS housing_status,
+        ru.raw_data->>'has_business' AS has_business,
+        ru.raw_data->>'monthly_income' AS monthly_income,
+        ru.raw_data->>'years_experience' AS years_experience,
+        ru.raw_data->>'household_size' AS household_size,
+        ru.raw_data->>'hours_worked' AS hours_worked,
+        CASE WHEN ru.raw_data->>'employment_status' = 'yes' THEN 'employed'
+             WHEN ru.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed' ELSE 'other' END AS work_status,
+        ru.lga_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
     `);
     return result.rows as unknown as InferentialRow[];
@@ -1316,10 +1687,10 @@ export class SurveyAnalyticsService {
     scope: AnalyticsScope,
     params: AnalyticsQueryParams = {},
   ): Promise<InferentialInsightsData> {
-    const where = buildWhereFragments(scope, params);
+    const where = buildUnifiedAnswersWhere(scope, params);
 
     // Check cache
-    const cacheKey = `analytics:insights:${scope.type}:${scope.lgaCode || scope.userId || 'all'}:${stableStringify(params as unknown as Record<string, unknown>)}`;
+    const cacheKey = analyticsCacheKey('insights', scope.type, scope.lgaCode || scope.userId || 'all', stableStringify(params as unknown as Record<string, unknown>));
     const redis = getRedisClient();
     if (redis) {
       try {
@@ -1330,11 +1701,17 @@ export class SurveyAnalyticsService {
       }
     }
 
-    // Get total count for threshold checks
+    // Get total count for threshold checks.
+    //
+    // ⚠️ This `totalN` is the n of every confidence interval and every
+    // chi-square below. On the old submission grain it over-counted anyone with
+    // two answer-bearing submissions, which does not merely shift a point
+    // estimate — it NARROWS the interval around it, publishing more confidence
+    // than the data supports. Of everything Story 12-6 re-pointed, this is the
+    // number where the grain mattered most.
     const totalResult = await db.execute(sql`
       SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
     `);
     const totalN = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
@@ -1425,13 +1802,22 @@ export class SurveyAnalyticsService {
     // --- Enrollment Forecast ---
     let forecast = null;
     if (thresholds.forecast.met) {
+      // ⚠️ THE ONE QUERY IN THIS METHOD THAT STAYS SUBMISSION-GRAINED, and it
+      // needs its own filter to do so. This is a TIME SERIES of enrolment
+      // EVENTS per day, keyed on `s.submitted_at` — a column the canonical
+      // respondent-anchored read does not carry, because a person has one
+      // registration date and any number of submissions. Feeding it the unified
+      // `where` would reference `ru.*` in a query with no `ru` in scope: a
+      // straight SQL error, which is the good outcome. The bad outcome would be
+      // re-pointing it "for consistency" and silently turning a rate-of-arrival
+      // forecast into something else. Same reasoning as `getTrends`.
       const trendsResult = await db.execute(sql`
         SELECT
           DATE(s.submitted_at AT TIME ZONE 'Africa/Lagos') AS day,
           COUNT(*) AS count
         FROM submissions s
         LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where}
+        WHERE ${buildWhereFragments(scope, params)}
           AND s.submitted_at >= NOW() - INTERVAL '90 days'
         GROUP BY DATE(s.submitted_at AT TIME ZONE 'Africa/Lagos')
         ORDER BY day
@@ -1484,7 +1870,7 @@ export class SurveyAnalyticsService {
           });
 
         if (significantFindings.length > 0 && scope.type === 'system') {
-          await redis.set('analytics:public:key-findings', JSON.stringify(significantFindings), 'EX', 3600);
+          await redis.set(PUBLIC_KEY_FINDINGS_CACHE_KEY, JSON.stringify(significantFindings), 'EX', 3600);
         }
       } catch (err) {
         logger.warn({ event: 'insights.public_cache_write_failed', error: (err as Error).message });
@@ -1502,10 +1888,10 @@ export class SurveyAnalyticsService {
     scope: AnalyticsScope,
     params: AnalyticsQueryParams = {},
   ): Promise<ExtendedEquityData> {
-    const where = buildWhereFragments(scope, params);
+    const where = buildUnifiedAnswersWhere(scope, params);
 
     // Check cache
-    const cacheKey = `analytics:equity:${scope.type}:${scope.lgaCode || scope.userId || 'all'}:${stableStringify(params as unknown as Record<string, unknown>)}`;
+    const cacheKey = analyticsCacheKey('equity', scope.type, scope.lgaCode || scope.userId || 'all', stableStringify(params as unknown as Record<string, unknown>));
     const redis = getRedisClient();
     if (redis) {
       try {
@@ -1519,8 +1905,7 @@ export class SurveyAnalyticsService {
     // Total count for thresholds
     const totalResult = await db.execute(sql`
       SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
+      FROM ${registryUnifiedSource('ru')}
       WHERE ${where}
     `);
     const totalN = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
@@ -1538,16 +1923,15 @@ export class SurveyAnalyticsService {
     if (thresholds.disabilityGap.met) {
       const disabilityResult = await db.execute(sql`
         SELECT
-          s.raw_data->>'disability_status' AS disability_status,
+          ru.raw_data->>'disability_status' AS disability_status,
           COUNT(*) AS total,
           COUNT(*) FILTER (WHERE
-            CASE WHEN s.raw_data->>'employment_status' = 'yes' THEN 'employed'
-                 WHEN s.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed' ELSE 'other' END = 'employed'
+            CASE WHEN ru.raw_data->>'employment_status' = 'yes' THEN 'employed'
+                 WHEN ru.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed' ELSE 'other' END = 'employed'
           ) AS employed
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND s.raw_data->>'disability_status' IS NOT NULL
-        GROUP BY s.raw_data->>'disability_status'
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.raw_data->>'disability_status' IS NOT NULL
+        GROUP BY ru.raw_data->>'disability_status'
       `);
 
       const disabledRow = (disabilityResult.rows as unknown as DisabilityGapRow[]).find(r => r.disability_status === 'yes');
@@ -1575,15 +1959,14 @@ export class SurveyAnalyticsService {
     if (thresholds.educationAlignment.met) {
       const alignResult = await db.execute(sql`
         SELECT
-          s.raw_data->>'education_level' AS education_level,
-          s.raw_data->>'employment_type' AS employment_type
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
+          ru.raw_data->>'education_level' AS education_level,
+          ru.raw_data->>'employment_type' AS employment_type
+        FROM ${registryUnifiedSource('ru')}
         WHERE ${where}
-          AND CASE WHEN s.raw_data->>'employment_status' = 'yes' THEN 'employed'
-                   WHEN s.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed' ELSE 'other' END = 'employed'
-          AND s.raw_data->>'education_level' IS NOT NULL
-          AND s.raw_data->>'employment_type' IS NOT NULL
+          AND CASE WHEN ru.raw_data->>'employment_status' = 'yes' THEN 'employed'
+                   WHEN ru.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed' ELSE 'other' END = 'employed'
+          AND ru.raw_data->>'education_level' IS NOT NULL
+          AND ru.raw_data->>'employment_type' IS NOT NULL
       `);
 
       const alignRows = alignResult.rows as unknown as AlignmentRow[];
@@ -1625,11 +2008,10 @@ export class SurveyAnalyticsService {
 
     if (thresholds.giniCoefficient.met) {
       const lgaResult = await db.execute(sql`
-        SELECT r.lga_id, COUNT(*) AS count
-        FROM submissions s
-        LEFT JOIN respondents r ON r.id = s.respondent_id
-        WHERE ${where} AND r.lga_id IS NOT NULL
-        GROUP BY r.lga_id
+        SELECT ru.lga_id, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        WHERE ${where} AND ru.lga_id IS NOT NULL
+        GROUP BY ru.lga_id
         ORDER BY count
       `);
 
@@ -1675,7 +2057,12 @@ export class SurveyAnalyticsService {
   ): Promise<EnumeratorReliabilityData> {
     const redis = getRedisClient();
     const lgaCode = scope.type === 'lga' && scope.lgaCode ? scope.lgaCode : params.lgaId;
-    const cacheKey = `analytics:reliability:${lgaCode || 'all'}`;
+    // Routed through the shared helper like every other analytics cache. This
+    // aggregate's VALUE did not change in 12-6 (it is deliberately still
+    // submission-grained), so this bump costs one cold recompute of a 600s
+    // entry — worth it to leave no unversioned literal for a later reader to
+    // treat as the pattern.
+    const cacheKey = analyticsCacheKey('reliability', lgaCode || 'all');
 
     if (redis) {
       try {
@@ -1837,7 +2224,7 @@ export class SurveyAnalyticsService {
 
   static async getActivationStatus(scope: AnalyticsScope): Promise<ActivationStatusData> {
     const redis = getRedisClient();
-    const cacheKey = `analytics:activation-status:${scope.type}:${scope.lgaCode || scope.userId || 'all'}`;
+    const cacheKey = analyticsCacheKey('activation-status', scope.type, scope.lgaCode || scope.userId || 'all');
 
     if (redis) {
       try {
@@ -1848,36 +2235,42 @@ export class SurveyAnalyticsService {
       }
     }
 
-    // Simple COUNT query — no expensive computation
-    const conditions: SQL[] = [
-      sql`s.raw_data IS NOT NULL`,
-      sql`s.respondent_id IS NOT NULL`,
-    ];
-    if (scope.type === 'lga' && scope.lgaCode) {
-      conditions.push(sql`r.lga_id = ${scope.lgaCode}`);
-    } else if (scope.type === 'personal' && scope.userId) {
-      conditions.push(sql`s.submitter_id = ${scope.userId}`);
-    }
-    const whereClause = sql.join(conditions, sql` AND `);
-
-    const totalResult = await db.execute(sql`
-      SELECT COUNT(*) AS total
-      FROM submissions s
-      LEFT JOIN respondents r ON r.id = s.respondent_id
-      WHERE ${whereClause}
-    `);
-    const totalSubmissions = Number((totalResult.rows[0] as unknown as TotalRow)?.total ?? 0);
+    // Simple COUNT query — no expensive computation.
+    //
+    // ⚠️ Story 12-6: this gate counts PEOPLE, and it had to. The features it
+    // activates ARE the statistics in `getInferentialInsights` (chi-square at
+    // n≥100, CIs at n≥30) — and those now compute over the answer-bearing
+    // respondent cohort. While this counted submissions, the two surfaces
+    // published DIFFERENT n for the same threshold: /activation-status could
+    // report a feature live at 286 while /insights computed it at 272. A gate
+    // that disagrees with the statistic it gates is the same mislabel defect as
+    // the one this epic exists to end, just wearing a threshold.
+    //
+    // It also rounded the wrong way: submissions ≥ people, so every gate was
+    // marginally too EASY to clear — the last direction a suppression threshold
+    // should err in.
+    const totalRespondents = Number(
+      (
+        (
+          await db.execute(sql`
+            SELECT COUNT(*) AS total
+            FROM ${registryUnifiedSource('ru')}
+            WHERE ${buildUnifiedAnswersWhere(scope)}
+          `)
+        ).rows[0] as unknown as TotalRow
+      )?.total ?? 0,
+    );
 
     const features = ACTIVATION_REGISTRY.map(feat => {
-      const met = feat.phase <= 4 && totalSubmissions >= feat.requiredN;
-      const ratio = feat.requiredN > 0 ? totalSubmissions / feat.requiredN : 0;
+      const met = feat.phase <= 4 && totalRespondents >= feat.requiredN;
+      const ratio = feat.requiredN > 0 ? totalRespondents / feat.requiredN : 0;
       const category = met ? 'active' as const
         : (feat.phase >= 5 || ratio <= 0.5) ? 'dormant' as const
         : 'approaching' as const;
-      return { ...feat, currentN: totalSubmissions, met, category };
+      return { ...feat, currentN: totalRespondents, met, category };
     });
 
-    const result: ActivationStatusData = { totalSubmissions, features };
+    const result: ActivationStatusData = { totalRespondents, features };
 
     // Cache for 5 min
     if (redis) {

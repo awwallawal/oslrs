@@ -41,40 +41,44 @@ export function countedOverCaption(n: number): string {
 }
 
 /**
- * Sub-caption for a percentage computed over the answer-bearing SUBMISSIONS,
+ * Sub-caption for a percentage computed over the answer-bearing RESPONDENTS,
  * so a reader cannot divide by the registry total by mistake.
  *
- * ⚠️ Says "submissions with answers", NOT "with answers", and the difference is
- * load-bearing. These percentages are computed inside `getRegistrySummary`,
- * which still counts `FROM submissions` — one respondent with two answer-bearing
- * submissions counts twice. The "With Answers" figure beside them counts PEOPLE
- * (`getRegistryTotals().withAnswers`). The two are genuinely different
- * populations and on prod they genuinely differ (12-4 measured 271 people
- * against ~282 submissions), so calling both "with answers" would put two
- * disagreeing counts under one phrase — the defect this story exists to end,
- * rebuilt on the page that fixes it.
+ * ── Why this used to say "submissions", and why it no longer does (12-6) ─────
+ * 12-5 deliberately wrote "N **submissions** with answers" here, because
+ * `getRegistrySummary` counted `FROM submissions` while the "With Answers" card
+ * beside it counted PEOPLE. Two genuinely different populations under one
+ * phrase would have rebuilt, on the fixing page, the very defect being fixed —
+ * so each population was named instead.
  *
- * The honest move is to name each population, not to divide by the other one:
- * re-captioning these with the respondent count would state a denominator the
- * arithmetic never used. When 12-4 repoints `getRegistrySummary` onto the
+ * Story 12-6 (inherited 12-5 R2) re-pointed `getRegistrySummary` onto the
+ * canonical respondent-anchored read, which is the condition 12-5 wrote down
+ * for retiring that word: *"When 12-4 repoints getRegistrySummary onto the
  * canonical respondent-anchored read, the two collapse into one number and this
- * wording can lose the word "submissions".
+ * wording can lose the word 'submissions'."* They have collapsed. Keeping
+ * "submissions" now would name a population the arithmetic no longer uses —
+ * the same class of error, pointed the other way.
  *
- * @example pctOfAnswersCaption(44.7, 282) // "44.7% of 282 submissions with answers"
+ * ⚠️ So this wording is NOT cosmetic and must not be edited independently of the
+ * service. It asserts which population the percentage divides by. If anything
+ * ever moves an aggregate back onto the submission grain, this string is part
+ * of that change.
+ *
+ * @example pctOfAnswersCaption(44.7, 272) // "44.7% of 272 respondents with answers"
  */
-export function pctOfAnswersCaption(pct: number, submissionsWithAnswers: number): string {
-  return `${pct.toFixed(1)}% of ${submissionsWithAnswers.toLocaleString()} submissions with answers`;
+export function pctOfAnswersCaption(pct: number, respondentsWithAnswers: number): string {
+  return `${pct.toFixed(1)}% of ${respondentsWithAnswers.toLocaleString()} respondents with answers`;
 }
 
 /**
  * Sub-caption for a non-percentage statistic (e.g. an average) computed over
- * the answer-bearing submissions. Same scoping caveat as
+ * the answer-bearing respondents. Same population note as
  * {@link pctOfAnswersCaption}.
  *
- * @example ofAnswersCaption(282) // "of 282 submissions with answers"
+ * @example ofAnswersCaption(272) // "of 272 respondents with answers"
  */
-export function ofAnswersCaption(submissionsWithAnswers: number): string {
-  return `of ${submissionsWithAnswers.toLocaleString()} submissions with answers`;
+export function ofAnswersCaption(respondentsWithAnswers: number): string {
+  return `of ${respondentsWithAnswers.toLocaleString()} respondents with answers`;
 }
 
 /**

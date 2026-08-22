@@ -751,6 +751,38 @@ when you fix a guard, immediately grep for its siblings.* I verified the instanc
 - **A second surface is not a second bug — it is the same bug, unfixed.** Closing on one instance
   makes the record say "fixed" while the class is live.
 
+### 2ad. ⭐ AN INHERITED HAND-OFF IS A GATE ITEM — the receiving story can drop it silently
+*Added 2026-08-20 on Awwal's instruction, while 12-6 was already in active development.*
+
+§2a1 covers **invisible payment** — a later story quietly discharging an earlier story's residual.
+This is the inverse and it is more dangerous: **a later story quietly NOT doing what was handed to
+it.** The hand-off was recorded, the receiving story was written, the dev built the ACs, the review
+passed — and the inherited item was never in anyone's acceptance criteria, so nothing failed. The
+story arrives at adjudication **looking complete**.
+
+- ⛔ **THE ADJUDICATOR IS THE ONLY BACKSTOP.** Dev builds the ACs. Review checks the ACs. An
+  inherited residual is, by construction, **not an AC** — so if I do not check it, nobody does.
+- ✅ **THE CHECK, at §2a0 cold-start on ANY story:** `grep -i "INHERIT\|HANDED\|carries.*R[0-9]"`
+  the story file and its `sprint-status` line. Every hit becomes a row I must resolve before `done`,
+  exactly like the story's own residuals.
+- **If it did not land, that is an OPEN residual, not a silent deferral.** Either the receiving story
+  did it, or it re-opens with a named owner and a reopen trigger. What it must never do is evaporate
+  because it was nobody's AC.
+
+**LIVE INSTANCE — 12-6, IN DEVELOPMENT NOW. Do not rule `done` without checking these:**
+
+| # | inherited | what "landed" looks like |
+|---|---|---|
+| **12-5 R2** | The dashboard reads `FROM submissions` (one row per SUBMISSION), so **~14 people are weighted twice** in every rate. Measured 2026-08-20: submissions-with-answers **286** vs registry_unified-with-answers **272**. | `survey-analytics.service`'s aggregates read `registryUnifiedSource('ru')` — the same canonical read 12-6's own Task 1 already mandates for its NEW rates. ⚠️ **BASELINE CORRECTED 2026-08-21 by the 12-6 dev — the original number was sampled from a tree that ALREADY CONTAINED THE FIX.** `git show HEAD:…/survey-analytics.service.ts \| grep -c 'FROM submissions s'` = **46** at hand-off; the "22" recorded here was the mid-development working tree, i.e. the POST-re-point count. As written, the check declared "R2 did not land" on the exact state where it HAD landed — a backstop with an inverted verdict. **The falsifiable check is: 46 → 6.** Still 46 ⇒ R2 did not land. ⚠️ **RE-CORRECTED 2026-08-21 by the 12-6 adversarial review — the "22" here went stale the same day it was written.** 22 was the count after phase 1 (five aggregates); Awwal then ruled "resolve everything" and phase 2 re-pointed four more plus `getActivationStatus`, taking it to **6**. The number was never updated, so this backstop again carried a target the tree does not match — the SAME class of error the first correction was written to fix, one iteration later. ⭐ **A falsifiable number is a LIVE artefact, not a fact recorded once: it has to be re-measured at the end of the work, not at the moment it is written.** The count is now pinned by a test (`survey-analytics.service.test.ts`, "the submission-grained survivors are an enumerated set"), so the next drift reds instead of misleading. ⭐ A falsifiable number does beat a judgement call, but only if it is measured against the COMMITTED baseline, never against the tree you are standing in. |
+| **12-4 R4** | `registry_unified` is DROPPED by `db:push` each deploy, ~27 s before the init runner recreates it, so 13-33-L4's "no window where the view is absent" guarantee is false. | Harmless **only** while nothing at runtime reads the physical VIEW. **If 12-6 makes anything read `registry_unified` rather than the inline source, that window stops being harmless** and R4 must be re-opened as a real one. |
+
+⚠️ **And if R2 DID land, it moves published dashboard figures a second time** — so it needs its
+own DISCHARGE-ON-DEPLOY row, predicted from prod with the control reproducing the CURRENT live figure
+first. Reproduce the **whole** predicate: `buildWhereFragments` carries **two** conditions
+(`s.raw_data IS NOT NULL` **and** `s.respondent_id IS NOT NULL`), and missing the second is what made
+adjudication predict 45.7% where the truth was 45.5% — prod holds 2 orphan submissions and one of
+them answered the question.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 

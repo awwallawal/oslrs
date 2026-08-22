@@ -63,6 +63,19 @@
  * respondent writers themselves use and what the `chk_respondents_phone_number_e164`
  * CHECK constraint enforces. Using anything else would key the dedup on a
  * different shape than the column stores.
+ *
+ * ✅ ADDED 2026-08-20 (Story 12-6): `submitter_id` (raw) — needed by
+ * `survey-analytics.service`'s `personal` scope once its rate-bearing aggregates
+ * moved onto this read (12-5 R2, Awwal's full-re-point ruling). The old
+ * submission-grained filter scoped an enumerator/clerk dashboard by
+ * `submissions.submitter_id`; on a respondent-anchored read the equivalent
+ * question is "which PEOPLE did I register", which is `respondents.submitter_id`
+ * — the same attribution `productivity.service.ts` already uses for per-staff
+ * counts, so this adopts an existing definition rather than minting a second
+ * one. Without it, re-pointing would have had to silently drop `personal` scope
+ * (which is exactly what 12-4's `buildRegistryFilter` did, unnoticed, until this
+ * story). Exposed RAW per rule 1; nullable, because a public self-registration
+ * has no staff submitter.
  */
 
 /** The physical view name (single source of truth for the identifier). */
@@ -84,6 +97,7 @@ export const REGISTRY_UNIFIED_SQL_TEXT = `
     r.status               AS status,
     r.nin                  AS nin,
     r.phone_number         AS phone_number,
+    r.submitter_id         AS submitter_id,
     r.metadata             AS metadata,
     r.consent_marketplace  AS consent_marketplace,
     r.consent_enriched     AS consent_enriched,
