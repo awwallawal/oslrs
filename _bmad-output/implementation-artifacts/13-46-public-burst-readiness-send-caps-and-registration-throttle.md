@@ -1018,6 +1018,36 @@ the rows this story does not own marked, so a reviewer can see the boundary rath
 
 _45 paths total, of which 6 belong to 13-63 / 13-64 / 13-65 planning work._
 
+## Deploy record
+
+✅ **DEPLOYED TO PROD 2026-08-22 — SHA `7177d6d`.** CI run 32575592269, all 10 jobs green, health 200.
+**Status stays `review`:** R3, R8 and R12 are open. §2a0 reserves `done` for a real deploy SHA **with
+every residual resolved** — the SHA is now real, the residuals are not. **R8 REQUIRES this deploy:**
+AC7's after-count needs the jingle to have aired against live caps.
+
+### Verified on prod by BEHAVIOUR, not by SHA
+
+| check | result |
+|---|---|
+| Caps resolve to real values (no `undefined` silently disabling one) | `MARKETING_DAILY_CAP = 2000`, `MARKETING_MONTHLY_CAP = 20000` |
+| **The burst watch is MOUNTED, not merely constructed** | `registration.routes.ts:76` — `registrationBurstWatch` sits in the handler chain, not just the import list |
+| **The draft throttle is MOUNTED on both verbs** | `:60` PUT and `:61` GET both carry `wizardDraftRateLimit` + `wizardDraftEmailRateLimit` |
+| Transactional mail exempt (AC4 red line) | the cap gates on `isMarketingCategory`, so an exhausted marketing budget cannot block a citizen's login link |
+
+⭐ **Why this check rather than a green deploy:** a limiter that is imported and never mounted passes
+every test asserting it exists, and stays invisible until the jingle hits it. That is this project's
+top defect class — [[pattern-ship-a-fix-that-never-fires]] — so the mount was read out of the
+DEPLOYED source on the VPS, not inferred from the diff.
+
+**➜ Nothing else gates the 24 August airing.** No env vars to set (all four go through
+`positiveIntEnv` with committed defaults, so the SEC-3 crash-loop lesson does not apply), no schema,
+no migration, no operator action. The caps bind at their defaults from this deploy forward.
+
+⚠️ **One Low finding recorded at adjudication:** the insights cache key is bumped by hand
+(`analytics:public:insights:v2` → `v3`) while seven other analytics caches compose the shared
+`ANALYTICS_CACHE_VERSION` that 12-6 introduced. Bumping that constant will not move this key. 12-6's
+own H1 lesson, incompletely applied — harmless today, worth folding in when someone next touches it.
+
 ## Residual ledger (13-46)
 
 **Format is the one `lint-story-residuals.ts` parses** — ID · severity · STATE · evidence · owner.
