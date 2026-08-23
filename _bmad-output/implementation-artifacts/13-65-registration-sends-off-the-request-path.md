@@ -802,7 +802,33 @@ guard scans residual TABLE ROWS, so a story with no table is policed by nothing 
 |---|---|---|---|---|---|
 | **R1** | **AC8's before/after measurement has NOT been run** (Task 7, both halves). The queue is deployed but its behaviour under real load is unmeasured — peak RSS, peak CPU, `pm2RestartCount` delta, peak queue depth. | ⏳ **OPEN — BLOCKS `done`** | `apps/api/scripts/load-test.ts` (now `--method`/`--body` capable, non-localhost refusal intact). **Deliberately deferred to JINGLE WEEK 1** — one station, one 60-second spot, the smallest real blast radius available, against a 2 GB box. A synthetic run at production would be a worse measurement AND a worse risk. | Awwal / ops, week 1 | Week 1 passing without the measurement being taken — the window does not recur |
 | **R2** | The two transactional registration sends are `critical` and therefore **bypass dedup**. That is correct (a citizen's login link must not be deduplicated away) but it means a genuine double-submit sends two magic links. | ✅ **ACCEPTED** | `EMAIL_TYPE_PRIORITY` in `packages/types/src/email.ts`; guarded by *"classifies the two TRANSACTIONAL registration sends as critical"* | — | A complaint about duplicate login emails, which would mean the submit path is not idempotent upstream |
+| **R4** | `CITIZEN_REGISTRATION_EMAIL_TYPES` is exported by this story and has **zero consumers** anywhere in the repo — not even in its own file. | ✅ **ACCEPTED** | `grep -rn CITIZEN_REGISTRATION_EMAIL_TYPES` → 1 hit, the definition | a future story touching `packages/types/src/email.ts` | Anyone importing it and relying on the old `as const` tuple type, which no longer exists |
+| **R5** | `load-test.ts` silently clamps `--connections` to `LOAD_PROFILE.connections` (50), discarding an explicit operator value without saying so. | ⏳ **OPEN — one-line fix, do it with the AC8 run** | `--connections 100` on a bounded run; observe 50 with no message | dev, alongside R1's week-1 measurement | An operator reporting that a load run did not reach the concurrency they asked for |
+| **R6** | `--verify`'s `still missing: N` counts every public respondent with a resolvable email, NOT this run's cohort, so a non-zero value is normal and reads as failure. | ⏳ **OPEN — rename the label, do not rescope** | Run `--verify` after a backfill; the number will not be 0 | dev, alongside R1 | An operator halting or re-running a backfill because `still missing` was non-zero |
 | **R3** | 13-65 moves the code 13-46's burst guards live in. Those guards' behavioural tests are the contract and were **not** rewritten — but the concurrency residual the review raised as M9 is real and unstated in the ACs. | ✅ **ACCEPTED — documented in the review, not silently carried** | `## Senior Developer Review (AI)` → M9 | 13-46 R8's week-1 numbers will show whether it matters | Queue depth behaving unlike the M9 analysis predicts under week-1 load |
+
+### 🏁 THE SEVEN FOURTH-PASS PROBES — EXECUTED BY ADJUDICATION 2026-08-23
+
+⚠️ **First, the process failure, recorded because it is the useful part.** The
+`## 🏁 FOR ADJUDICATION` section was written *for the adjudication agent, explicitly in lieu of a
+fourth review pass*. **The first adjudication pass did not read it** — it ran the §2a0 debt gate,
+tsc/eslint/guards, the touched suites and one RED-verify, then wrote this ledger. That pass would have
+missed six of the seven probes; only AC8 was caught independently (as R1). Found because Awwal asked.
+**The §2a0 gate checks unchecked boxes and ledger presence — it did not check "is there a section
+addressed to me". That check is now added to the playbook.**
+
+| # | Probe | Ruling |
+|---|---|---|
+| **2** | `CITIZEN_REGISTRATION_EMAIL_TYPES` changed TYPE — check consumers relying on tuple typing or iteration order | ✅ **SAFE, but not for the stated reason.** It appears **exactly once in the repo — its own definition.** No consumer in `apps/web`, none in `apps/api`, not even used inside its own file, so nothing can depend on the tuple type or the order. ⚠️ **But `git log -S` shows THIS story introduced it**, so it ships an exported constant with zero consumers. → **R4** |
+| **3** | D11's silent 50-connection ceiling — is the cap wanted, and visible enough? | ⚠️ **The cap is right; the SILENCE is the defect.** Clamping a write run against a 2 GB box is defensible. Silently discarding an explicit `--connections 100` is the "correct but invisible" class this project keeps being caught by. **One line fixes it** — print `requested 100 → clamped to 50 (LOAD_PROFILE)`. → **R5** |
+| **4** | D7 resolved by STATING not SCOPING — is stating enough for an operator at 2am? | ❌ **No.** A verification line exists to be read under pressure, and *"`still missing: 0` will rarely be true and must not be read as the run failing"* is exactly a number that WILL be misread — the §2t family. **Cheapest honest fix is the LABEL, not the scope:** `registry-wide missing (NOT this run): N`. The caveat then travels with the number. → **R6** |
+| **5** | C6 is a product ruling — does the adjudicator agree with the RULING, not the test? | ✅ **Agreed.** A password reset is someone locked out; blocking it to save a fraction of a cent is the wrong trade, and it fails in the direction that favours the user. ⚠️ **Recorded consequence:** password-reset floods are no longer budget-capped — but the cap was never the right control for abuse, and `login-rate-limit` / `magic-link-rate-limit` are. |
+| **6** | C9 deliberately did not change code — is a dead array entry the right call? | ✅ **Right call, NOW.** Re-indexing alters live retry timing, days before a jingle, to tidy an array. Correcting the CLAIMS was the part that mattered. **When it is removed it must be a deliberate change with the timing consequence stated** — not a cleanup. |
+| **7** | AC8 has never run — gate item 7 must stay RED | ✅ **Confirmed, and caught independently as R1.** Needs Monday's spot; cannot be discharged early. |
+| **8** | Pointer accuracy — audit independently, since adjudication caught this class on 13-46 | ✅ **Confirmed.** Every referenced story key resolves, and **11-8 is genuinely `backlog` on the board**, matching all 11 of its references. ⚠️ My first sweep threw a FALSE POSITIVE — `17-29` is a line range in `load-test-eval.ts:17-29`, not a story key. Recorded because reporting a regex artefact as a finding is the same error class the probe exists to catch. |
+
+**Probe 1 needed no action** — closed before hand-off with a body-recording server (6 requests → 6
+distinct bodies).
 
 ### Closing verdict
 

@@ -123,6 +123,32 @@ Most are probably un-ticked AC/template checklists (9-12 has 33, 9-9 has 30) —
 real and launch-gating (see §4). Treat a `done` story's unchecked boxes as unverified until read. Triage is
 deferred: §8.
 
+### 2a0.1 ⛔ GREP THE STORY FOR A SECTION ADDRESSED TO *YOU* — before anything else
+*Added 2026-08-23, after adjudicating 13-65 without reading the section written for the adjudicator.*
+
+**The rule: before adjudicating, `grep -niE "for adjudication|adjudicat(or|ion) agent|probe" <story>.md`.**
+If a story has a section addressed to adjudication, it is the FIRST thing to read, ahead of the debt
+gate and ahead of the code.
+
+**How it bit.** 13-65 carried `## 🏁 FOR ADJUDICATION — final gate state + the fourth-pass probes,
+IN LIEU of a fourth review`. Awwal had ruled that a fourth review pass was not worth the compute, and
+**the probes it would have run were written out for the adjudication agent to execute instead.** The
+first pass ran the §2a0 debt gate, tsc/eslint/guards, the touched suites and one RED-verify, wrote the
+missing ledger — and never opened that section. **Six of the seven delegated probes went unexecuted**
+(only AC8 was caught independently). It surfaced because Awwal asked directly.
+
+- ⭐ **The §2a0 gate is about what the story ADMITS it did not finish. This is about what the story
+  ASKED YOU TO DO.** They are different questions and the first does not surface the second: unchecked
+  boxes, residual language and ledger presence were all checked, and all of them passed.
+- **A delegated probe is invisible to every automated gate.** It is not an AC, not a residual row and
+  not a test — the CI guard cannot see it, and neither can `tsc`. It exists only as prose addressed to
+  a reader who has to choose to read it. That makes it the same class as
+  [[pattern-ship-a-fix-that-never-fires]]: work that exists and never executes.
+- **When a review pass is deliberately skipped, its checks do not vanish — they are REASSIGNED.**
+  Treat "in lieu of a review" as a work order, not context.
+- ⚠️ **And report the probes' results in the story**, not only in chat. A probe executed and
+  recorded nowhere is indistinguishable from one never run.
+
 ### 2a2. READ A NEW GATE'S OUTPUT ONCE, EVEN WHEN IT IS GREEN
 
 **The rule:** the first time any new gate runs — a CI step, a workflow, a script, a
