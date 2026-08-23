@@ -8,6 +8,48 @@
 
 ---
 
+## ⛔ 0a. STOP — SEGMENTATION RESULT, 2026-08-22. Do not fire the blast on the raw cohort.
+
+Measured on prod by adjudication at Awwal's request, from the real `--dry-run`, not from a snapshot.
+**Cohort: 85. Only 15 of them should receive this message today.**
+
+| segment | n | disposition |
+|---|---|---|
+| Already linked to the register (via submission, magic-link **or** user account) | **14** | **HOLD** — they would get "come and finish registering". That copy is what produced 13-49's 7 duplicate records. |
+| `.co` typo whose `.com` twin **is already registered** | **4** | **HOLD, and do NOT correct the address.** Repairing it opens a SECOND route to a person already on the register. Suppress and leave. |
+| Received `draft-invite-2026-08` on 2026-08-05, still stalled | **52** | **HOLD for the jingle wave.** They have had this exact message and did not act; a repeat costs the same reputation for a lower yield. Week 1 of the radio buy is the thing that changes their mind, not a second email. |
+| **Never contacted, no register link** | **15** | **SEND** |
+
+### ⚠️ Why the script's own exclusions did not catch this — both zeroes are TRUE and both mislead
+
+`excluded: suppressed=0, contacted-within-5d=0` is arithmetically correct and reads as "nobody
+problematic here". It is not what it appears to be:
+
+- **`suppressed=0` is 13-51 working.** All 12 prod suppressions are soft/never-measured and past the
+  72 h retry window, so they are legitimately retry-eligible. **9 of them are in this cohort**, 4 with
+  domains that will bounce forever.
+- **`contacted-within-5d=0` is the 5-day gap working.** The last invite was 17 days ago. The gap
+  answers *"are we spamming them this week?"* — it has no idea whether they have **already been asked
+  and did not act**.
+- **The completed-registrant exclusion (Cat1) sees ONE of four contact routes** —
+  `magic_link_tokens → respondents → submissions`. Across all drafts it catches **73** and misses
+  **112**. A submissions-only check finds only 9 of the 14 here; you need the union of all three.
+
+Both defects are Story **13-66**. **Do not fire another marketing blast until it is ruled on.**
+
+### ⭐ And the yield number, which should drive the next decision
+
+`draft-invite-2026-08` (2026-08-05) — the first email blast this project can actually measure:
+
+| invited | now registered with answers | via magic-link | bounced |
+|---|---|---|---|
+| **75** | **17 (≈23%)** | 12 | **7 (≈9%)** |
+
+≈23% conversion is a real result. It is also the argument for holding the 52: they are the
+non-converters of that same message.
+
+---
+
 ## 0. State banner (update on every touch)
 
 | Gate | Status (2026-06-15) |
