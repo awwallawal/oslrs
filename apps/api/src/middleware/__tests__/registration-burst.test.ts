@@ -27,6 +27,12 @@ vi.mock('../../lib/redis.js', () => ({
 const { mockSendTelegram } = vi.hoisted(() => ({
   mockSendTelegram: vi.fn().mockResolvedValue(true),
 }));
+
+// Story 13-65 (AC5) — the burst alert now annotates itself with the email queue's WAITING depth.
+const { mockQueueStats } = vi.hoisted(() => ({ mockQueueStats: vi.fn() }));
+vi.mock('../../queues/email.queue.js', () => ({
+  getEmailQueueStats: () => mockQueueStats(),
+}));
 vi.mock('../../services/alerting/telegram-channel.js', () => ({
   sendTelegramMessage: (m: string) => mockSendTelegram(m),
   isAlertSendEnabled: () => true,
@@ -203,6 +209,71 @@ describe('a 429 WALL pages on its own (13-46 review A1 / finding H1)', () => {
 
     recordRegistration429('submit');
     await settle();
+    recordRegistration429('submit');
+    await settle();
+
+    expect(mockSendTelegram).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+/**
+ * Story 13-65 (AC5) — the queue-depth annotation, and the one property that matters about it:
+ * IT MUST NEVER BE ABLE TO SWALLOW THE PAGE IT ONLY ANNOTATES.
+ */
+describe('email queue depth annotation (Story 13-65 AC5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRedisClient.mockReturnValue(mockRedis);
+    mockRedis.pipeline.mockReturnValue({
+      incr: vi.fn().mockReturnThis(),
+      expire: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([]),
+    });
+    mockRedis.set.mockResolvedValue('OK');
+    mockSendTelegram.mockResolvedValue(true);
+    mockQueueStats.mockResolvedValue({ waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: false });
+  });
+
+  /** 5 minute-offsets × 4 signals: [0-4]=submits, [5-9]=blocked429, [10-14]=draft, [15-19]=autosends. */
+  const windowWith = (over: { submits?: string }) => {
+    const v = new Array(20).fill('0');
+    if (over.submits) v[0] = over.submits;
+    return v;
+  };
+
+  it('puts the real waiting depth into the single existing message', async () => {
+    mockRedis.mget.mockResolvedValue(windowWith({ submits: '80' }));
+    mockQueueStats.mockResolvedValue({ waiting: 412, active: 5, completed: 0, failed: 0, delayed: 0, paused: false });
+
+    recordRegistration429('submit');
+    await settle();
+
+    expect(mockSendTelegram).toHaveBeenCalledTimes(1);
+    expect(mockSendTelegram.mock.calls[0][0]).toContain('Email queue waiting: 412');
+  });
+
+  it('🔴 a FAILING queue read must NOT swallow the page — it degrades to "unavailable"', async () => {
+    /**
+     * `readWindow` throwing degrades the whole watch to `read_failed` and NO alert fires at all. A
+     * depth field is an annotation; losing it must never be able to cost the operator the burst
+     * page itself. Same reasoning `runBurstWatch` already applies to the marketing-headroom read.
+     * Remove `readEmailQueueWaiting`'s own try/catch and this test reddens.
+     */
+    mockRedis.mget.mockResolvedValue(windowWith({ submits: '80' }));
+    mockQueueStats.mockRejectedValue(new Error('redis: LOADING'));
+
+    recordRegistration429('submit');
+    await settle();
+
+    expect(mockSendTelegram).toHaveBeenCalledTimes(1);
+    expect(mockSendTelegram.mock.calls[0][0]).toContain('Email queue waiting: unavailable');
+  });
+
+  it('still pages exactly ONCE — no second alert was introduced (13-46 owns the breaker)', async () => {
+    mockRedis.mget.mockResolvedValue(windowWith({ submits: '80' }));
+    mockQueueStats.mockResolvedValue({ waiting: 9_999, active: 5, completed: 0, failed: 0, delayed: 0, paused: false });
+
     recordRegistration429('submit');
     await settle();
 

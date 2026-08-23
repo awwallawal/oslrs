@@ -5,7 +5,7 @@ import { like, eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { db } from '../../db/index.js';
 import { respondents, campaignSends } from '../../db/schema/index.js';
-import { SubmissionProcessingService } from '../submission-processing.service.js';
+import { handleRegistrationThankYouJob } from '../registration-email-jobs.js';
 import { EmailService } from '../email.service.js';
 import {
   NotificationMeter,
@@ -26,7 +26,26 @@ import { getMockEmailProvider, resetMockEmailProvider } from '../../providers/in
  *
  * PARALLEL-SAFE ISOLATION: this file owns the `@cannon.test` recipient keyspace and the
  * `13-46-TY-` reference-code prefix.
+ *
+ * ─── SETUP CHANGED BY STORY 13-65; EVERY ASSERTION IS UNCHANGED ───
+ * 13-65 took these sends off the request path: `sendRegistrationAutoEmails` now ENQUEUES, and the
+ * whole guard block — source gate, send-once marker, suppression, the per-address gap, the cap and
+ * the ledger write — executes in the email worker's handler
+ * (`services/registration-email-jobs.ts:handleRegistrationThankYouJob`).
+ *
+ * So the DRIVER moved to that handler. It HAD to: `isTestMode()` makes every producer return
+ * `'test-job-id'` without touching Redis, so driving the old entrypoint here would assert nothing
+ * at all — it would go green because no send was attempted, which is precisely the false-green
+ * shape 13-46 was written to prevent.
+ *
+ * What each test asserts is byte-identical to before. If one of these ever reddens, the guard
+ * moved WRONG — fix the code, do not relax the assertion.
  */
+const NOT_FINAL = { isFinalAttempt: false };
+
+/** The 13-46 chain, driven where 13-65 put it. Same inputs, same guards, same order. */
+const drive = (respondentId: string, email: string) =>
+  handleRegistrationThankYouJob({ respondentId, email }, NOT_FINAL);
 const DOMAIN = '@cannon.test';
 const REF_PREFIX = '13-46-TY-';
 
@@ -85,11 +104,7 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
     it('SENDS to an address never contacted before (the allowed direction)', async () => {
       const id = await seedPublicRespondent('fresh');
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({
-        respondentId: id,
-        email: `fresh${DOMAIN}`,
-        isNew: false,
-      });
+      await drive(id, `fresh${DOMAIN}`);
 
       expect(sent()).toHaveLength(1);
       expect(sent()[0].to).toBe(`fresh${DOMAIN}`);
@@ -102,11 +117,7 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
       await seedPriorContact(email, 1);
       const second = await seedPublicRespondent('repeat-2');
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({
-        respondentId: second,
-        email,
-        isNew: false,
-      });
+      await drive(second, email);
 
       expect(sent()).toHaveLength(0);
     });
@@ -116,11 +127,7 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
       await seedPriorContact(email, MARKETING_CONTACT_GAP_DAYS + 1);
       const id = await seedPublicRespondent('lapsed');
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({
-        respondentId: id,
-        email,
-        isNew: false,
-      });
+      await drive(id, email);
 
       expect(sent()).toHaveLength(1);
     });
@@ -129,11 +136,7 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
       await seedPriorContact(`mixed${DOMAIN}`, 1);
       const id = await seedPublicRespondent('mixed');
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({
-        respondentId: id,
-        email: `MiXeD${DOMAIN.toUpperCase()}`,
-        isNew: false,
-      });
+      await drive(id, `MiXeD${DOMAIN.toUpperCase()}`);
 
       expect(sent()).toHaveLength(0);
     });
@@ -142,11 +145,7 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
       await seedPriorContact(`other${DOMAIN}`, 1);
       const id = await seedPublicRespondent('distinct');
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({
-        respondentId: id,
-        email: `distinct${DOMAIN}`,
-        isNew: false,
-      });
+      await drive(id, `distinct${DOMAIN}`);
 
       expect(sent()).toHaveLength(1);
     });
@@ -155,17 +154,17 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
       const id = await seedPublicRespondent('once');
       const email = `once${DOMAIN}`;
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({ respondentId: id, email, isNew: false });
+      await drive(id, email);
       expect(sent()).toHaveLength(1);
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({ respondentId: id, email, isNew: false });
+      await drive(id, email);
       expect(sent()).toHaveLength(1); // still one — the marker held
     });
 
     it('writes the ledger row on a real send, so the NEXT registration is throttled by it', async () => {
       const email = `chain${DOMAIN}`;
       const first = await seedPublicRespondent('chain-1');
-      await SubmissionProcessingService.sendRegistrationAutoEmails({ respondentId: first, email, isNew: false });
+      await drive(first, email);
       expect(sent()).toHaveLength(1);
 
       const rows = await db.select().from(campaignSends).where(eq(campaignSends.email, email));
@@ -173,7 +172,7 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
 
       // A second registration with the same address, minutes later — the cannon shot.
       const second = await seedPublicRespondent('chain-2');
-      await SubmissionProcessingService.sendRegistrationAutoEmails({ respondentId: second, email, isNew: false });
+      await drive(second, email);
       expect(sent()).toHaveLength(1); // STILL one
     });
   });
@@ -182,11 +181,7 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
     it('POSITIVE CONTROL: the chain reaches the provider when the cap is not exhausted', async () => {
       const id = await seedPublicRespondent('control');
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({
-        respondentId: id,
-        email: `control${DOMAIN}`,
-        isNew: false,
-      });
+      await drive(id, `control${DOMAIN}`);
 
       expect(sent()).toHaveLength(1);
     });
@@ -199,11 +194,7 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
       );
       const id = await seedPublicRespondent('capped');
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({
-        respondentId: id,
-        email: `capped${DOMAIN}`,
-        isNew: false,
-      });
+      await drive(id, `capped${DOMAIN}`);
 
       expect(sent()).toHaveLength(0);
     });
@@ -216,11 +207,7 @@ describe('registration auto thank-you — per-address throttle + cap (13-46 AC2/
         String(MARKETING_DAILY_CAP),
       );
       const id = await seedPublicRespondent('nomarker');
-      await SubmissionProcessingService.sendRegistrationAutoEmails({
-        respondentId: id,
-        email: `nomarker${DOMAIN}`,
-        isNew: false,
-      });
+      await drive(id, `nomarker${DOMAIN}`);
 
       const row = await db.query.respondents.findFirst({ where: eq(respondents.id, id) });
       const metadata = (row?.metadata ?? {}) as Record<string, unknown>;

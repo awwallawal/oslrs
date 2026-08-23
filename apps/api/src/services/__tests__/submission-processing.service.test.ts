@@ -136,6 +136,30 @@ vi.mock('../../queues/marketplace-extraction.queue.js', () => ({
   queueMarketplaceExtraction: (...args: unknown[]) => mockQueueMarketplaceExtraction(...args),
 }));
 
+/**
+ * Story 13-65 — THE REGISTRATION AUTO-EMAILS ARE NOW AN ENQUEUE, AND THIS SERVICE IS ONLY
+ * RESPONSIBLE FOR THAT ENQUEUE.
+ *
+ * The sends, and every guard in front of them (source gate, both send-once markers, suppression,
+ * 13-46's per-address gap, the cap, the ledger write) execute in the email worker's handler module
+ * `services/registration-email-jobs.ts`. They had to move with the send: a guard evaluated at
+ * enqueue and a send executed from a backlog ten minutes later is a guard that did not run, and the
+ * contact gap in particular is a TIME window.
+ *
+ * ⚠️ SO THE GUARD ASSERTIONS MOVED TOO — they are NOT deleted. They live in
+ * `registration-email-jobs.test.ts` (source gate, marker, suppression, gap, fail-open, cap) and
+ * `registration-email-jobs.integration.test.ts` (the real marker over the real DB, the double-send
+ * proof, the ledger row). Leaving them here asserting "no email was sent" would be
+ * [[pattern-test-that-passes-over-a-hole]] in its purest form: they would pass because NOTHING in
+ * this file can send an email any more, not because any guard held.
+ */
+const mockQueueRegistrationConfirmation = vi.fn();
+const mockQueueRegistrationThankYou = vi.fn();
+vi.mock('../../queues/email.queue.js', () => ({
+  queueRegistrationConfirmationEmail: (...args: unknown[]) => mockQueueRegistrationConfirmation(...args),
+  queueRegistrationThankYouEmail: (...args: unknown[]) => mockQueueRegistrationThankYou(...args),
+}));
+
 vi.mock('uuidv7', () => ({
   uuidv7: () => 'mock-uuid-v7-001',
 }));
@@ -260,6 +284,9 @@ describe('SubmissionProcessingService', () => {
     mockRecordAutoSendFailure.mockResolvedValue({ failuresToday: 0, alerted: false }); // Story 13-21
     mockQueueFraudDetection.mockResolvedValue('fraud-job-id'); // Story 13-27 — awaited
     mockQueueMarketplaceExtraction.mockResolvedValue('mkt-job-id'); // Story 13-27 — awaited
+    // Story 13-65 — awaited enqueues; `mockReset: true` strips any factory implementation.
+    mockQueueRegistrationConfirmation.mockResolvedValue('test-job-id');
+    mockQueueRegistrationThankYou.mockResolvedValue('test-job-id');
   });
 
   describe('processSubmission', () => {
@@ -313,13 +340,19 @@ describe('SubmissionProcessingService', () => {
 
       await SubmissionProcessingService.processSubmission('sub-001');
 
-      expect(mockSendGenericEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'field.respondent@example.com' }),
+      // Story 13-65 — ENQUEUED, not dialled. The rendering (and the reference code inside it) is
+      // the worker handler's job; see `registration-email-jobs.integration.test.ts`.
+      expect(mockQueueRegistrationConfirmation).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'field.respondent@example.com' }),
       );
-      // Carries the human-friendly reference code (no unsolicited magic-link).
-      const arg = mockSendGenericEmail.mock.calls[0][0] as { text: string; html: string };
-      expect(arg.text).toContain('OSL-2026-TEST00');
-      expect(arg.html).not.toMatch(/\/auth\/magic/);
+      // ⚠️ IDENTIFIERS, NOT A RENDERED EMAIL. A rendered HTML body in a Redis job record puts the
+      // very thing this story removes from the API heap into Redis instead, and it goes stale.
+      const payload = mockQueueRegistrationConfirmation.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload.referenceCode).toBe('OSL-2026-TEST00');
+      expect(payload).not.toHaveProperty('html');
+      expect(payload).not.toHaveProperty('text');
+      // Nothing dialled a provider on the ingestion path.
+      expect(mockSendGenericEmail).not.toHaveBeenCalled();
     });
 
     it('does NOT send a confirmation email when no address is on file (Story 9-58)', async () => {
@@ -334,6 +367,10 @@ describe('SubmissionProcessingService', () => {
 
       await SubmissionProcessingService.processSubmission('sub-001');
 
+      // Story 13-65 — the no-address gate is the ONE guard that legitimately stays at this layer:
+      // with no address there is nothing to put in a job payload, so nothing is enqueued either.
+      expect(mockQueueRegistrationConfirmation).not.toHaveBeenCalled();
+      expect(mockQueueRegistrationThankYou).not.toHaveBeenCalled();
       expect(mockSendGenericEmail).not.toHaveBeenCalled();
     });
 
@@ -402,45 +439,57 @@ describe('SubmissionProcessingService', () => {
       );
       mockSendGenericEmail.mockResolvedValue({ success: true, messageId: 'msg-ty' });
     }
-    const wasAutoThankYouSent = () =>
-      mockSendGenericEmail.mock.calls.some((c) => c[2] === 'thankyou-referral-auto');
     const flush = () => new Promise((r) => setTimeout(r, 0));
 
-    it('13-12: auto-sends the thank-you (tagged thankyou-referral-auto) to a public completer', async () => {
+    it('13-12/13-65: ENQUEUES the thank-you for a public completer, with identifiers only', async () => {
       setupPublicCompletion();
       await SubmissionProcessingService.processSubmission('sub-001');
-      await vi.waitFor(() => expect(wasAutoThankYouSent()).toBe(true));
-      const call = mockSendGenericEmail.mock.calls.find((c) => c[2] === 'thankyou-referral-auto')!;
-      expect((call[0] as { subject: string }).subject).toMatch(/thank you for registering/i);
+      await vi.waitFor(() => expect(mockQueueRegistrationThankYou).toHaveBeenCalled());
+
+      const payload = mockQueueRegistrationThankYou.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload).toEqual({ respondentId: 'resp-001', email: 'pub.user@example.com' });
+      expect(payload).not.toHaveProperty('html');
+      expect(mockSendGenericEmail).not.toHaveBeenCalled();
     });
 
-    it('13-12: does NOT auto-send for a NON-public (enumerator) respondent', async () => {
+    /**
+     * ⚠️ Story 13-65 — THE SOURCE / MARKER / SUPPRESSION CASES DELIBERATELY DO NOT LIVE HERE ANY MORE.
+     *
+     * They used to assert "no thank-you was sent" for an enumerator respondent, for an
+     * already-marked one, and for a suppressed address. All three guards moved INTO the worker
+     * handler with the send (13-65 AC2), because each of them has to be evaluated immediately
+     * before the provider call rather than at enqueue — the 5-day contact gap is a TIME window, and
+     * a job can sit in a backlog for minutes.
+     *
+     * Re-pointing those three assertions at this layer would have been the easy move and a false
+     * one: `processSubmission` now enqueues UNCONDITIONALLY once an address exists, so
+     * "no email was sent" is true here for every input, guard or no guard. That is
+     * [[pattern-test-that-passes-over-a-hole]] — the safe outcome asserted over a path that never
+     * enters the guard.
+     *
+     * The real assertions live where the real guards do:
+     *   - source gate, send-once marker, suppression, gap, fail-open, cap refusal
+     *       → `registration-email-jobs.test.ts`
+     *   - the marker over a REAL respondent row, and the double-send proof
+     *       → `registration-email-jobs.integration.test.ts`
+     */
+    it('13-65: enqueues for a NON-public respondent too — the source gate is the WORKER\'s job now', async () => {
+      // Stated as a positive assertion rather than left implicit, so the behaviour change is
+      // recorded rather than discovered later by someone debugging a "why did this enqueue" ticket.
       setupPublicCompletion({ source: 'enumerator' });
       await SubmissionProcessingService.processSubmission('sub-001');
       await flush();
-      expect(wasAutoThankYouSent()).toBe(false);
+      expect(mockQueueRegistrationThankYou).toHaveBeenCalledTimes(1);
+      expect(mockSendGenericEmail).not.toHaveBeenCalled();
     });
 
-    it('13-12: does NOT auto-send when the marker is already set (idempotent)', async () => {
-      setupPublicCompletion({ metadata: { thankyou_referral_sent_at: '2026-06-01T00:00:00.000Z' } });
-      await SubmissionProcessingService.processSubmission('sub-001');
-      await flush();
-      expect(wasAutoThankYouSent()).toBe(false);
-    });
-
-    it('13-12: does NOT auto-send when the address is suppressed (13-9)', async () => {
+    it('13-12/13-65: an ENQUEUE failure does NOT fail ingestion (the caller .catch guards it)', async () => {
+      // Story 13-27's property, preserved through the move: a comms/queue failure must never sink a
+      // committed registration. `processSubmission` propagates; the wizard controller `void`s it
+      // with a `.catch()` + a Telegram page (13-65 AC6/AC7), and the route test asserts the 201.
       setupPublicCompletion();
-      mockGetSuppressed.mockResolvedValue(new Set(['pub.user@example.com']));
-      await SubmissionProcessingService.processSubmission('sub-001');
-      await flush();
-      expect(wasAutoThankYouSent()).toBe(false);
-    });
-
-    it('13-12: a thank-you email failure does NOT fail ingestion (fire-and-forget)', async () => {
-      setupPublicCompletion();
-      mockSendGenericEmail.mockRejectedValue(new Error('resend down'));
-      const result = await SubmissionProcessingService.processSubmission('sub-001');
-      expect(result.action).toBe('processed'); // ingestion succeeds regardless of comms
+      mockQueueRegistrationThankYou.mockRejectedValue(new Error('redis down'));
+      await expect(SubmissionProcessingService.processSubmission('sub-001')).rejects.toThrow('redis down');
       await flush();
     });
 
@@ -1887,29 +1936,28 @@ describe('SubmissionProcessingService', () => {
   // after its own commit — the fix for the whole public channel getting NEITHER
   // email (0/140 markers). The confirmation gates on isNew + referenceCode; the
   // thank-you self-gates on source='public' + send-once marker + suppression.
-  describe('sendRegistrationAutoEmails (Story 13-21)', () => {
-    const wasConfirmation = () =>
-      mockSendGenericEmail.mock.calls.find((c) => c[2] === undefined); // no campaign tag
-    const wasThankYou = () =>
-      mockSendGenericEmail.mock.calls.find((c) => c[2] === 'thankyou-referral-auto');
-
-    it('sends BOTH the confirmation and the thank-you for a NEW public registrant', async () => {
-      // Confirmation reads columns.metadata; thank-you reads columns.source/firstName/metadata.
-      mockFindFirstRespondent.mockResolvedValue({ source: 'public', firstName: 'Modupe', metadata: null });
-      mockSendGenericEmail.mockResolvedValue({ success: true, messageId: 'm1' });
-
+  describe('sendRegistrationAutoEmails (Story 13-21, enqueue since 13-65)', () => {
+    it('ENQUEUES both the confirmation and the thank-you for a NEW public registrant', async () => {
       await SubmissionProcessingService.sendRegistrationAutoEmails({
         respondentId: 'resp-pub',
-        email: 'modupe@example.test.real', // non-suppressed, non-test for this unit
+        email: 'modupe@example.test.real',
         referenceCode: 'OSL-2026-ABC123',
         status: 'active',
         isNew: true,
       });
 
-      expect(wasConfirmation()).toBeTruthy();
-      expect(wasThankYou()).toBeTruthy();
-      // Confirmation carries the reference code.
-      expect((wasConfirmation()![0] as { text: string }).text).toContain('OSL-2026-ABC123');
+      expect(mockQueueRegistrationConfirmation).toHaveBeenCalledWith({
+        respondentId: 'resp-pub',
+        email: 'modupe@example.test.real',
+        referenceCode: 'OSL-2026-ABC123',
+        status: 'active',
+      });
+      expect(mockQueueRegistrationThankYou).toHaveBeenCalledWith({
+        respondentId: 'resp-pub',
+        email: 'modupe@example.test.real',
+      });
+      // Nothing dialled a provider on this path any more.
+      expect(mockSendGenericEmail).not.toHaveBeenCalled();
     });
 
     it('does NOTHING when there is no email on file', async () => {
@@ -1920,13 +1968,14 @@ describe('SubmissionProcessingService', () => {
         status: 'active',
         isNew: true,
       });
+      expect(mockQueueRegistrationConfirmation).not.toHaveBeenCalled();
+      expect(mockQueueRegistrationThankYou).not.toHaveBeenCalled();
       expect(mockSendGenericEmail).not.toHaveBeenCalled();
     });
 
-    it('skips the confirmation when NOT new (isNew=false) but still attempts the thank-you', async () => {
-      mockFindFirstRespondent.mockResolvedValue({ source: 'public', firstName: 'Repeat', metadata: null });
-      mockSendGenericEmail.mockResolvedValue({ success: true, messageId: 'm1' });
-
+    it('skips the confirmation when NOT new (isNew=false) but still enqueues the thank-you', async () => {
+      // The `isNew && referenceCode` gate is a property of the SUBMISSION, not of the send, so it
+      // legitimately stays at this layer.
       await SubmissionProcessingService.sendRegistrationAutoEmails({
         respondentId: 'resp-pub',
         email: 'repeat@example.test.real',
@@ -1935,29 +1984,33 @@ describe('SubmissionProcessingService', () => {
         isNew: false,
       });
 
-      expect(wasConfirmation()).toBeUndefined();
-      expect(wasThankYou()).toBeTruthy();
+      expect(mockQueueRegistrationConfirmation).not.toHaveBeenCalled();
+      expect(mockQueueRegistrationThankYou).toHaveBeenCalledTimes(1);
     });
 
-    it('AC4: records a counted failure when a send fails (was a swallowed warn)', async () => {
-      mockFindFirstRespondent.mockResolvedValue({ source: 'public', firstName: 'Fail', metadata: null });
-      mockSendGenericEmail.mockResolvedValue({ success: false, error: 'resend 500' });
+    /**
+     * ⚠️ Story 13-65 — 13-21's AC4 "records a counted failure" case MOVED, it was not dropped.
+     *
+     * `recordAutoSendFailure` can no longer fire from this layer: there is no send here to fail.
+     * And 13-65 AC6 changed WHEN it fires — only on the FINAL BullMQ attempt, so that a transient
+     * 5xx which succeeds on retry does not page an operator who was told the auto-emails are down.
+     * The attempts-1-2-vs-final assertions live in `registration-email-jobs.test.ts`.
+     */
+    it('13-65: an ENQUEUE failure propagates rather than being swallowed here', async () => {
+      // It has to reach the caller: the wizard controller pages Telegram from its `.catch()`, and a
+      // Redis outage during a jingle must stay loud. A `void`-ed enqueue would make it an unhandled
+      // rejection instead — which is exactly the defect this assertion now pins.
+      mockQueueRegistrationThankYou.mockRejectedValue(new Error('redis unreachable'));
 
-      await SubmissionProcessingService.sendRegistrationAutoEmails({
-        respondentId: 'resp-fail',
-        email: 'fail@example.test.real',
-        referenceCode: 'OSL-2026-ABC123',
-        status: 'active',
-        isNew: true,
-      });
-
-      // Both the confirmation and the thank-you failed → both recorded to the monitor.
-      expect(mockRecordAutoSendFailure).toHaveBeenCalledWith(
-        expect.objectContaining({ kind: 'confirmation', respondentId: 'resp-fail' }),
-      );
-      expect(mockRecordAutoSendFailure).toHaveBeenCalledWith(
-        expect.objectContaining({ kind: 'thankyou', respondentId: 'resp-fail' }),
-      );
+      await expect(
+        SubmissionProcessingService.sendRegistrationAutoEmails({
+          respondentId: 'resp-fail',
+          email: 'fail@example.test.real',
+          referenceCode: 'OSL-2026-ABC123',
+          status: 'active',
+          isNew: true,
+        }),
+      ).rejects.toThrow('redis unreachable');
     });
   });
 
@@ -2041,7 +2094,7 @@ describe('SubmissionProcessingService', () => {
       );
     });
 
-    it('still fires the auto-emails (fire-and-forget) alongside the queue side-effects', async () => {
+    it('still fires the auto-emails — as ENQUEUES — alongside the queue side-effects', async () => {
       await SubmissionProcessingService.runPostSubmissionSideEffects({
         respondentId: 'resp-pub',
         submissionId: 'sub-pub',
@@ -2053,11 +2106,27 @@ describe('SubmissionProcessingService', () => {
         gps: null,
       });
 
-      // The confirmation (no campaign tag) + marketplace both fired.
-      await vi.waitFor(() =>
-        expect(mockSendGenericEmail.mock.calls.some((c) => c[2] === undefined)).toBe(true),
-      );
+      // 13-27's property is unchanged: the one shared entrypoint fires ALL the side-effects. Only
+      // the email half's mechanism changed, from a detached provider call to an awaited enqueue.
+      expect(mockQueueRegistrationConfirmation).toHaveBeenCalledTimes(1);
+      expect(mockQueueRegistrationThankYou).toHaveBeenCalledTimes(1);
       expect(mockQueueMarketplaceExtraction).toHaveBeenCalledOnce();
+    });
+
+    it('13-65: an EMAIL enqueue failure reaches the caller, exactly like the marketplace one', async () => {
+      // The wizard `.catch()` + Telegram page is the thing that makes a Redis outage loud during a
+      // jingle (AC6). A detached email enqueue would have made it an invisible unhandled rejection.
+      mockQueueRegistrationThankYou.mockRejectedValueOnce(new Error('redis down'));
+      await expect(
+        SubmissionProcessingService.runPostSubmissionSideEffects({
+          respondentId: 'resp-pub',
+          submissionId: 'sub-pub',
+          email: 'pub@example.test.real',
+          isNew: false,
+          consentMarketplace: false,
+          gps: null,
+        }),
+      ).rejects.toThrow('redis down');
     });
 
     it('propagates a marketplace queue failure to the caller (the wizard .catch guards it)', async () => {

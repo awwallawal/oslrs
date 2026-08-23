@@ -21,10 +21,13 @@
  * (bounce / complaint / unsubscribe) still applies, because retrying a hard bounce helps
  * nobody. The D4 INVITATION is marketing and does inherit the shared filter, in the script.
  */
+import pino from 'pino';
 import { EmailService } from '../email.service.js';
 import { getSuppressedEmails } from '../email-events.service.js';
 import { SubmissionProcessingService } from '../submission-processing.service.js';
 import { buildAdoptionConfirmationEmail, ADOPTION_CAMPAIGN_ID } from './messages.js';
+
+const logger = pino({ name: 'draft-adoption-send' });
 
 export interface SendAdoptionArgs {
   respondentId: string;
@@ -78,11 +81,35 @@ export async function sendAdoptionMessages({
     throw new Error(`adoption confirmation failed for ${respondentId}: ${result.error ?? 'unknown'}`);
   }
 
-  await SubmissionProcessingService.sendRegistrationAutoEmails({
-    respondentId,
-    email,
-    isNew: false,
-  });
+  /**
+   * Story 13-65 — this ENQUEUES the thank-you now; it no longer dials the provider.
+   *
+   * ⚠️ review B6 / finding M6 — THE ENQUEUE FAILURE MUST NOT FAIL THE ROW. An earlier version let
+   * it throw, on the reasoning that a failed row is better than a silently dropped referral link.
+   * That reasoning is right in general and WRONG here, because of what has already happened by this
+   * line: the adoption confirmation was dispatched and ledgered ABOVE. Throwing now reports a row
+   * whose citizen-facing email SUCCEEDED as failed — and this runner has a recorded duplicate
+   * history (13-49: 174 adopted, 7 duplicate records). There is no send-once marker on the adoption
+   * confirmation, so re-driving that "failed" row re-sends it. We would be trading a missing
+   * referral link for a duplicate confirmation, which is the worse of the two.
+   *
+   * So: catch, log LOUDLY (a persistent Redis failure must be visible), and still report
+   * `{ sent: true }` — which is the truth about the half that matters to the citizen.
+   */
+  try {
+    await SubmissionProcessingService.sendRegistrationAutoEmails({
+      respondentId,
+      email,
+      isNew: false,
+    });
+  } catch (err) {
+    logger.error({
+      event: 'draft_adoption.thankyou_enqueue_failed',
+      respondentId,
+      error: err instanceof Error ? err.message : String(err),
+      note: 'adoption confirmation ALREADY SENT and ledgered; the row is reported sent so a re-run cannot duplicate it. The referral thank-you was not queued — re-drive it separately if this persists.',
+    });
+  }
 
   return { sent: true };
 }

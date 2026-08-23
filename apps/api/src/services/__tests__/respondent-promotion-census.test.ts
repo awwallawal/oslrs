@@ -181,11 +181,15 @@ describe('13-55 R2 — raw `UPDATE "respondents"` sites are inventoried, not mer
       count: 1,
       reason: 'THE promote. The one site AC1.4 sanctions; every route reaches respondents through it.',
     },
-    'src/services/submission-processing.service.ts': {
+    'src/services/registration-email-jobs.ts': {
       count: 2,
       reason:
         'R2 — metadata marker stamps only (9-58 confirmation-email, 13-21 thank-you send-once). ' +
-        'Neither writes a NIN, so neither is a promote and the census above correctly ignores them.',
+        'Neither writes a NIN, so neither is a promote and the census above correctly ignores them. ' +
+        '⚠️ Story 13-65 MOVED both, verbatim, out of `submission-processing.service.ts`: the sends ' +
+        'they mark now execute in the email worker, and the handlers had to leave that service to ' +
+        'avoid an ESM cycle (worker -> submission-processing -> queues). The guard caught the move, ' +
+        'which is exactly what it is for — the count and the reason are unchanged, only the file is.',
     },
     'scripts/migrate-lgaid-uuid-to-slug.ts': {
       count: 1,

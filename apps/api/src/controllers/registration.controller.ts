@@ -9,6 +9,8 @@ import { uuidv7 } from 'uuidv7';
 import { AuthService } from '../services/auth.service.js';
 import { buildRegistrantFullName } from '../utils/registrant-name.js';
 import { MagicLinkService } from '../services/magic-link.service.js';
+// Story 13-65 (AC1) — the pending-NIN magic-link SEND is enqueued; `issueToken` stays on the request.
+import { queueRegistrationMagicLinkEmail } from '../queues/email.queue.js';
 import { NativeFormService } from '../services/native-form.service.js';
 import {
   validateSubmissionCompleteness,
@@ -1290,8 +1292,14 @@ export class RegistrationController {
         void sendTelegramMessage(
           `⚠️ OSLRS — post-submission side-effects FAILED for a public registration\n` +
             `respondent=${respondent.id}\nsubmission=${submissionUid}\nerror: ${errMsg}\n\n` +
-            `The registration is committed, but its marketplace profile / auto-emails may not have queued. ` +
-            `Check Redis + the marketplace-extraction worker; the _backfill-marketplace-extraction.ts script can re-queue.`,
+            // Story 13-65 (AC6) — "may not have queued" was hedging about a direct provider call.
+          // It is now LITERALLY the failure: the registration auto-emails are BullMQ jobs on
+          // `email-notification`, so a failure here means they were never enqueued and nothing will
+          // retry them. A Redis outage during a jingle has to stay loud.
+          `The registration is committed, but its marketplace profile and its registration ` +
+            `auto-emails (reference-code confirmation + thank-you/referral) were NOT ENQUEUED — ` +
+            `nothing will retry them. Check Redis + the email/marketplace-extraction workers; ` +
+            `_backfill-registration-autosends.ts and _backfill-marketplace-extraction.ts can re-drive.`,
         );
       });
 
@@ -1387,15 +1395,27 @@ export class RegistrationController {
             requestedIp: req.ip,
             userAgent: req.get('user-agent') ?? undefined,
           });
-          // Best-effort send.
-          MagicLinkService.sendMagicLinkEmail({
+          /**
+           * Story 13-65 (AC1) — ENQUEUE the send; the token above stays MINTED ON THE REQUEST.
+           *
+           * `issueToken` is deliberately still awaited: it is what the T+2d pending-NIN reminder
+           * worker references, and minting it in a worker would open a window in which a pending-NIN
+           * respondent exists with no token at all. Only the provider call moved.
+           *
+           * The `void`/`.catch()` shape is KEPT (AC7). The enqueue is fast and local, but it is not
+           * free and it can throw (Redis). Making this branch await the enqueue would put the 201 —
+           * and therefore a citizen's committed registration — behind Redis availability, trading an
+           * email outage for a REGISTRATION outage. That is the 9-26 inversion.
+           */
+          void queueRegistrationMagicLinkEmail({
+            respondentId: respondent.id,
             email: normalisedEmail,
             tokenPlaintext: issued.tokenPlaintext,
             purpose: 'pending_nin_complete',
-            expiresAt: issued.expiresAt,
+            expiresAt: issued.expiresAt.toISOString(),
           }).catch((emailErr) => {
             logger.warn({
-              event: 'wizard.pending_nin_email_failed',
+              event: 'wizard.pending_nin_email_enqueue_failed',
               respondentId: respondent.id,
               err: emailErr,
             });

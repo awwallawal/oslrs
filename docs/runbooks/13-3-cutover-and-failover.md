@@ -29,6 +29,128 @@ A **toggleable redirect rule** is safer than swapping the apex DNS (no record ed
 
 If you later upgrade to Pro and want **hands-off** failover on a true outage: the ready-to-upload asset is `cloudflare-fallback/5xx.html` (live at `https://oslsr-fallback.pages.dev/5xx.html`, carries the `::CLOUDFLARE_ERROR_500S_BOX::` token). Set it via **Rules → Custom Error Rules + Custom Error Assets** (the current model): upload the asset, then a rule matching **origin status 500–599 → serve custom error page**. Skipped for launch (cost + the resize lowers the need).
 
+## Write-path capacity (13-65 AC8) — the measurement that discharges roadmap gate item 7
+
+> **Status 2026-08-22: THE RIG IS BUILT, THE METHOD IS BELOW, THE NUMBERS ARE NOT IN.** The verdict
+> table at the end of this section is deliberately empty. Do not mark gate item 7 green from the code
+> change alone: "it didn't fall over" is not evidence that the change did anything
+> (`[[pattern-a-record-about-the-work-is-not-the-work]]`).
+
+**What changed in the code (Story 13-65, in `review`).** All three registration-triggered emails —
+the pending-NIN magic link, the reference-code confirmation and the thank-you/referral — are now
+ENQUEUED onto the existing `email-notification` queue instead of dialled on the request that created
+them. Every guard in front of them (source gate, both send-once markers, suppression, 13-46's 5-day
+per-address gap, the marketing cap, the ledger write) moved into the worker handler WITH the send,
+because a guard evaluated at enqueue and a send executed from a backlog minutes later is a guard that
+did not run. ⚠️ **CORRECTED 2026-08-22 (13-65 review C5):** an earlier version of this note said the
+two `critical` sends are "exempt from the queue-wide budget-exhaustion pause". They are classified
+`critical`, but that exemption was never sufficient — the queue-wide budget-exhaustion **auto-pause was REMOVED** (13-65 review B1). BullMQ's `Queue.pause()` is GLOBAL — jobs enqueued after a pause land in the paused list and are never dequeued — so an exemption inside the processor could only ever help a job already picked up, and an exhausted **marketing** budget would still have stopped every subsequent citizen **login link**, durably, with manual-only recovery. Budget exhaustion now refuses the offending `standard` job ONLY. This is the doc an operator
+reads DURING the jingle, so the mechanism named here has to be the one that exists. Without the
+removal, an exhausted **marketing** budget would stop a citizen's
+**login link**, a failure that did not exist before the change.
+
+**The claim, bounded, and it stays bounded.** The queue buys **bounded concurrency, durability, retry
+and backpressure**; it does **not** reduce total CPU and does **not** give event-loop isolation,
+because the workers run in the API process. State it exactly this way and no stronger. The multiplier
+is a property of the burst, not a constant — quote it as "5 concurrent instead of unbounded", never
+as a fixed ratio.
+
+### The rig
+
+`apps/api/scripts/load-test.ts` was GET-only (13-3). It now takes `--method` and `--body`. The
+parsing, the validation and the non-localhost refusal live in `apps/api/src/lib/load-test-eval.ts`
+(type-checked and unit-tested — `scripts/` is neither); the evaluator and its thresholds are
+UNCHANGED from 13-3, so a verdict here is comparable with item 4's. Every request still carries
+`x-load-test: 13-3` + the distinct user-agent, so allow-list the source in cf-traffic-watch (9-52)
+first or expect and annotate the alert.
+
+```bash
+# always start here
+pnpm tsx apps/api/scripts/load-test.ts --dry-run --method PUT --path /api/v1/registration/draft --body '{...}'
+```
+
+⚠️ **On Windows/Git-Bash, MSYS rewrites a leading-slash argument into a Windows path** (`--path
+/api/v1/...` arrives as `C:/Program Files/Git/api/v1/...`). Run the rig from PowerShell, or from the
+VPS. The dry-run prints the resolved URL — read it before every run.
+
+### Half A — draft-save at the modelled peak (high volume, cheap teardown)
+
+`PUT /api/v1/registration/draft` at the stated peak (default `LOAD_PROFILE`: 50 × 60s — the operator
+confirms or raises it to the modelled jingle reach BEFORE the run). This is the high-volume half of
+the write path, because the wizard autosaves. Its rows are `wizard_drafts` keyed by resume token:
+cheap to enumerate and delete.
+
+### Half B — submit, deliberately SMALL N
+
+`POST /api/v1/registration/wizard`. 🔴 **A write-path test is not the read test with a different
+path, and the difference is not the HTTP verb — it is that the requests LEAVE ROWS.** Each one
+creates a respondent, a user, a submission, a magic-link token, a marketplace profile and possibly a
+`campaign_sends` row, **and sends real email** (prod holds the real Resend key; the 9-63 dev-credential
+isolation does NOT apply). So: small N, the established smoke tagging (surname **`ZZSMOKE`**, the
+`7000000001x` NIN sentinel series, phones `0800000001x`, a `+tag` address the operator controls), and
+the **child-first teardown chain in the AC9 attribution dry-run section above** (and its source of truth, `enumerator-prod-smoke-and-golive-gate.md` §B.4) — reading every `DELETE n`, never restoring to a
+baseline number.
+
+⚠️ **`campaign_sends` above all.** 13-46's per-address throttle reads that ledger, so a leftover row
+silently suppresses the next real thank-you to that address for the whole 5-day window.
+
+### The reading — BOTH functions, and they are different functions
+
+`getSystemHealth` is two things and naming the wrong one produces a measurement with no memory figure
+in it:
+
+| Read | Where | Gives |
+|---|---|---|
+| `getSystemHealth` | `apps/api/src/services/operations.service.ts` (Operations dashboard — 13-3's reading) | `pm2Memory`, `pm2CpuPct`, `pm2RestartCount`, `ramUsedPct` |
+| `MonitoringService.getSystemHealth` | `apps/api/src/services/monitoring.service.ts` | `queues[].waiting` — ⚠️ **10-second cache (`CACHE_TTL_MS`), which sets the sampling floor** |
+
+🔴 **`pm2RestartCount` moving during a run IS the OOM kill, and it is a RED verdict regardless of
+latency.** The box is 2GB with no swap: the kernel does not degrade, it kills. There is no p95 that
+creeps up and warns you first.
+
+The burst alert also now carries the `email-notification` waiting depth (13-65 AC5), in the single
+existing Telegram message — no second alert, no second threshold, no second cooldown.
+
+⚠️ **AND THE NEW BLIND SPOT, BECAUSE A READER WHO DOES NOT KNOW IT WILL MISDIAGNOSE THE RUN.** The
+auto-send counter now increments when the WORKER sends, on a minute-resolution bucket — not when the
+registration arrives. Under a backlog it LAGS the submit count in the same window. Before 13-65 those
+two numbers moved together, so "300 submits, 40 auto-sends" meant something had STOPPED; it now
+usually means QUEUED. The queue-depth field is what tells the two apart, and the alert text says so.
+
+### The finding must be a COMPARISON
+
+Run each half **before** the queue change and **after**, on the same box with the same profile, and
+report peak RSS and peak concurrent provider calls for both. A single "after" number proves nothing.
+
+**Where it runs is a recorded decision, not a default.** Prod is the only 2GB/no-swap box, and it is
+also the only box where the rows and the emails are real. Write down which box each half ran on and
+what that costs the conclusion — **a local run on a 16GB laptop cannot reach the OOM cliff and must
+not be reported as if it had.**
+
+📅 **Decided 2026-08-22: the numbers come from WEEK 1 OF THE FLIGHT, not from a synthetic prod run.**
+The first spot is **Monday 24 August 2026 — Fresh FM Ibadan, one station, one 60-second spot**: a real
+measurement, with a small blast radius, two days away. Hundreds of synthetic registrations against
+prod would leave thousands of rows and fire thousands of real emails to real-looking addresses. ⚠️ The
+BEFORE half must be captured from the currently-deployed build, i.e. **before 13-65 deploys**, or the
+comparison has only one side.
+
+### Verdict table — FILL THIS IN; IT IS THE GATE
+
+| Half | Box | Profile | When | peak `pm2Memory` | peak `pm2CpuPct` | `pm2RestartCount` delta | peak queue `waiting` | p95 / error% / req·s | Verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| A — draft-save, BEFORE | | | | | | | | | ⬜ |
+| A — draft-save, AFTER | | | | | | | | | ⬜ |
+| B — submit, BEFORE | | | | | | | | | ⬜ |
+| B — submit, AFTER | | | | | | | | | ⬜ |
+
+**Teardown log (Half B) — read every `DELETE n`:**
+
+| Run date | `fraud_detections` | `marketplace_profiles` | `magic_link_tokens` | `submissions` | `respondents` | `wizard_drafts` | `users` | `campaign_sends` |
+|---|---|---|---|---|---|---|---|---|
+| | | | | | | | | |
+
+---
+
 ## Monitoring during the jingle (so you know when to toggle ①)
 
 - **Telegram is CRITICAL-only** (cpu>90, mem>90, **api_p95>350ms** — lowered from 500 by Story 13-8 so a *graceful slowdown* pages, not just emails); warnings (p95 250–350) go to a ≤30-min **email digest**.

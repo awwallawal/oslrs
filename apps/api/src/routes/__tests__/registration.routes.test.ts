@@ -1176,6 +1176,54 @@ describe('POST /registration/wizard', () => {
     );
   });
 
+  /**
+   * Story 13-65 (AC7) — 🔴 THE ENQUEUE MUST NOT BE ABLE TO SINK A REGISTRATION.
+   *
+   * 13-65 put the three registration emails on the `email-notification` queue. The enqueue is fast
+   * and local, but it is NOT free and it CAN throw: it is a Redis write, and Redis being down during
+   * a jingle is exactly the scenario this story exists for. Making the 201 depend on that would
+   * trade an email outage for a REGISTRATION outage — the 9-26 inversion, and strictly worse than
+   * the problem being solved.
+   *
+   * So the `void ... .catch()` fan-out at the call site is KEPT, deliberately, and this is the test
+   * that stops someone "tidying" it into an `await`. Delete the `void`/`.catch()` in
+   * `registration.controller.ts` and this reddens with a 500.
+   *
+   * ⚠️ The registration is committed BEFORE this point (the transaction has already returned), so a
+   * 201 here is not optimism — the row exists. What is lost on a rejection is the email, and AC6's
+   * one-shot Telegram page is what makes that loud.
+   */
+  it('Story 13-65 AC7 — still returns 201 when the post-submission ENQUEUE rejects (Redis down)', async () => {
+    mockRunPostSubmissionSideEffects.mockRejectedValueOnce(new Error('redis unreachable'));
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const respondentsInsertChain = {
+        values: () => ({ returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]) }),
+      };
+      const submissionsInsertChain = { values: () => Promise.resolve(undefined) };
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({ createdAt: new Date('2026-07-10T00:00:00Z'), formData: {} }),
+          },
+        },
+        insert: vi.fn().mockReturnValueOnce(respondentsInsertChain).mockReturnValueOnce(submissionsInsertChain),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      return cb(tx);
+    });
+
+    const res = await request(buildApp())
+      .post('/registration/wizard')
+      .send(validBody({ nin: '12345678901' }));
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.referenceCode).toBe('OSL-2026-TEST00');
+    // And the failure genuinely reached the caller's catch rather than being swallowed upstream.
+    expect(mockRunPostSubmissionSideEffects).toHaveBeenCalled();
+  });
+
   it('Story 13-21 — an UNEXPECTED validator crash is logged at ERROR but the submit still proceeds (no 500)', async () => {
     // A NON-AppError from the completeness gate must not sink the submit: it is
     // swallowed + logged at error level (wizard.completeness_error), then the

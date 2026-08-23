@@ -23,6 +23,9 @@ import {
   type MarketingHeadroomView,
 } from '../lib/registration-burst.js';
 import { NotificationMeter } from '../services/notification-meter.service.js';
+// Story 13-65 (AC5) — the burst alert now carries the email queue's WAITING depth, because 13-65
+// moved the registration sends onto that queue. No new alert, no new threshold, no new cooldown.
+import { getEmailQueueStats } from '../queues/email.queue.js';
 import { sendTelegramMessage } from '../services/alerting/telegram-channel.js';
 
 const logger = pino({ name: 'registration-burst' });
@@ -65,7 +68,40 @@ async function readWindow(now: Date = new Date()): Promise<BurstCounts> {
     blocked429: sum(values.slice(per, per * 2)),
     blocked429Draft: sum(values.slice(per * 2, per * 3)),
     autoSends: sum(values.slice(per * 3)),
+    ...(await readEmailQueueState()),
   };
+}
+
+/**
+ * Story 13-65 (AC5) — the `email-notification` waiting depth, or `null` if it cannot be read.
+ *
+ * ⚠️ ITS OWN try/catch, DELIBERATELY. `readWindow` throwing degrades the whole watch to
+ * `read_failed` and no alert fires at all. A depth field is an ANNOTATION on the burst alert; losing
+ * it must never be able to swallow the page it was only meant to annotate — the same reasoning
+ * `runBurstWatch` already applies to the marketing-headroom read.
+ */
+async function readEmailQueueState(): Promise<Pick<BurstCounts, 'emailQueueWaiting' | 'emailQueuePaused'>> {
+  try {
+    const stats = await getEmailQueueStats();
+    /**
+     * Story 13-65 (review B12 / finding L12) — `paused` is the single most diagnostic field during a
+     * queue stall, and it was being read and discarded. A deep queue that is PAUSED reads identically
+     * to one that is draining, and the operator's remedy is completely different: resume it, versus
+     * wait. Story 13-65 B1 removed the automatic pause, but an admin can still pause deliberately
+     * (`admin.routes.ts`), and a paused queue holding citizen mail is exactly the state nobody should
+     * have to infer.
+     */
+    return { emailQueueWaiting: stats.waiting, emailQueuePaused: Boolean(stats.paused) };
+  } catch (err) {
+    // review C12 / finding R12 — a silent catch made a persistently failing queue read
+    // indistinguishable from a healthy empty queue. The alert already prints "unavailable"; this is
+    // so the CAUSE is recoverable from the logs.
+    logger.warn({
+      event: 'registration_burst.queue_stats_unavailable',
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { emailQueueWaiting: null, emailQueuePaused: null };
+  }
 }
 
 /**

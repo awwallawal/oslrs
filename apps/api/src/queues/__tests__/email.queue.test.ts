@@ -99,8 +99,9 @@ describe('Email Queue', () => {
     });
 
     it('should respect AC3 retry specification (3 attempts)', () => {
-      // AC3: support exponential backoff retry (3 attempts: 30s, 2min, 10min)
-      // Note: Our implementation uses 30s, 60s, 120s which is stricter
+      // AC3: support exponential backoff retry (3 attempts). ⚠️ The EFFECTIVE schedule is 2min
+      // then 10min — BullMQ passes `attemptsMade >= 1`, so the 30s entry is unreachable (13-65 C9).
+      // NOTE CORRECTED 13-65 D5: the implementation does NOT use 30s/60s/120s; BACKOFF_DELAYS is [30s, 2min, 10min] and the 30s entry is unreachable, so the effective schedule is 2min then 10min
       // This is acceptable as it retries more quickly
       const attempts = 3;
       expect(attempts).toBe(3);

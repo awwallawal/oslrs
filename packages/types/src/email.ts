@@ -251,6 +251,51 @@ export interface BackupNotificationEmailData {
 }
 
 // ============================================================================
+// Registration Email Types (Story 13-65 — the three registration sends, queued)
+// ============================================================================
+
+/**
+ * Story 13-65 (AC1) — payloads carry IDENTIFIERS, never a rendered body.
+ *
+ * A rendered HTML body in a Redis job record puts the very thing this story removes from the API
+ * heap into Redis instead, and it goes stale between enqueue and send. All three are re-rendered by
+ * the worker handler at send time, immediately after the guards re-run.
+ */
+
+/**
+ * Pending-NIN resume magic link. The token is ALREADY ISSUED on the request
+ * (`MagicLinkService.issueToken` stays awaited at the call site) — only the SEND is queued, so a
+ * pending-NIN respondent can never exist with no token for the T+2d reminder worker to reference.
+ */
+export interface RegistrationMagicLinkEmailData {
+  respondentId: string;
+  email: string;
+  tokenPlaintext: string;
+  /** The only magic-link purpose the registration write path issues. */
+  purpose: 'pending_nin_complete';
+  /** ISO-8601. Serialised because a job record is JSON. */
+  expiresAt: string;
+}
+
+/** Story 9-58 reference-code confirmation. Transactional — no category, no marketing cap. */
+export interface RegistrationConfirmationEmailData {
+  respondentId: string;
+  email: string;
+  referenceCode: string;
+  /** `respondents.status` — drives the plain-language status line. */
+  status: string;
+}
+
+/**
+ * Story 13-12 evergreen thank-you / referral. MARKETING — category `thankyou-referral`,
+ * campaign `thankyou-referral-auto`. Every 13-46 guard re-runs in the worker before the send.
+ */
+export interface RegistrationThankYouEmailData {
+  respondentId: string;
+  email: string;
+}
+
+// ============================================================================
 // Email Priority Classification (Story prep-7: Backpressure)
 // ============================================================================
 
@@ -263,12 +308,53 @@ export type EmailPriority = 'critical' | 'standard';
 
 /** All email job type strings */
 // Story 9-12 Task 10.3 (2026-05-11 session 8) — `'verification'` removed.
-export type EmailJobType = 'staff-invitation' | 'password-reset' | 'payment-notification' | 'dispute-notification' | 'dispute-resolution' | 'backup-notification';
+// Story 13-65 — the three registration sends added ({domain}-{action} kebab-case, project-context
+// §10), so a burst becomes bounded-concurrency queue work instead of unbounded in-request fan-out.
+export type EmailJobType = 'staff-invitation' | 'password-reset' | 'payment-notification' | 'dispute-notification' | 'dispute-resolution' | 'backup-notification' | 'registration-magic-link' | 'registration-confirmation' | 'registration-thankyou';
 
 /**
  * Maps each email job type to its priority tier.
  * Alert digests are out-of-scope — they bypass the queue entirely.
  */
+/**
+ * Story 13-65 (review C10 / finding R10) — the citizen-facing registration sends, AS A SET.
+ *
+ * ⚠️ This replaced `String(type).startsWith('registration-')` in the worker. A prefix test throws
+ * away compile-time enforcement: a future registration job type that does not happen to match the
+ * prefix would silently fall back into the ops-digest deferral — which is EXACTLY the bug review B2
+ * fixed (a citizen's thank-you delivered as "[OSLRS] You have 1 notification", with no category, no
+ * unsubscribe header, no cap and no ledger row, possibly to an unsubscribed address).
+ *
+ * ⚠️ Story 13-65 (review D4 / finding T4) — THE COMPILE-TIME GUARANTEE IS NOW REAL. It previously
+ * was not: this JSDoc claimed "a `satisfies`-checked set", and no `satisfies` existed. Adding a new
+ * `EmailJobType` compiled clean, so the regression the set was written to prevent was exactly as
+ * open as before — with a comment asserting it could not happen, which is worse than no comment.
+ *
+ * An EXHAUSTIVE map is what actually buys the guarantee: `satisfies Record<EmailJobType, boolean>`
+ * makes a missing key a compile error, so a new email type cannot be added without deciding, right
+ * here, whether it is citizen-facing registration mail. A readonly array could never do that —
+ * nothing in the type system requires an array to mention every member of a union.
+ */
+const CITIZEN_REGISTRATION_EMAIL_TYPE_MAP = {
+  'staff-invitation': false,
+  'password-reset': false,
+  'payment-notification': false,
+  'dispute-notification': false,
+  'dispute-resolution': false,
+  'backup-notification': false,
+  'registration-magic-link': true,
+  'registration-confirmation': true,
+  'registration-thankyou': true,
+} as const satisfies Record<EmailJobType, boolean>;
+
+export const CITIZEN_REGISTRATION_EMAIL_TYPES = (
+  Object.keys(CITIZEN_REGISTRATION_EMAIL_TYPE_MAP) as EmailJobType[]
+).filter((t) => CITIZEN_REGISTRATION_EMAIL_TYPE_MAP[t]);
+
+export function isCitizenRegistrationEmailType(type: string): boolean {
+  return CITIZEN_REGISTRATION_EMAIL_TYPE_MAP[type as EmailJobType] === true;
+}
+
 export const EMAIL_TYPE_PRIORITY: Record<EmailJobType, EmailPriority> = {
   'staff-invitation': 'critical',
   'password-reset': 'critical',
@@ -276,6 +362,17 @@ export const EMAIL_TYPE_PRIORITY: Record<EmailJobType, EmailPriority> = {
   'dispute-notification': 'standard',
   'dispute-resolution': 'standard',
   'backup-notification': 'standard',
+  // Story 13-65 (AC3/AC4) — the two TRANSACTIONAL registration sends are `critical`: they carry a
+  // citizen's own login link and their own reference code. `critical` is what keeps them out of the
+  // >=80%-budget deferral. ⚠️ CORRECTED 2026-08-22 (13-65 review C5): this also claimed the type
+  // was held out of "the queue-wide budget-exhaustion pause". There is no such pause any more —
+  // it was REMOVED (review B1) because BullMQ's Queue.pause() is global and parked citizen mail
+  // that was enqueued after it. Budget exhaustion now refuses the offending `standard` job only, so an
+  // exhausted MARKETING budget can never stop a citizen's login link.
+  'registration-magic-link': 'critical',
+  'registration-confirmation': 'critical',
+  // The thank-you IS marketing: it stays `standard`, under 13-46's cap and inside the ledger.
+  'registration-thankyou': 'standard',
 };
 
 // ============================================================================
@@ -352,7 +449,28 @@ export interface BackupNotificationJob extends BaseEmailJob {
 /**
  * Union type for all email job payloads
  */
-export type EmailJob = StaffInvitationJob | PasswordResetJob | PaymentNotificationJob | DisputeNotificationJob | DisputeResolutionJob | BackupNotificationJob;
+/** Story 13-65 — pending-NIN magic-link send, queued. */
+export interface RegistrationMagicLinkJob extends BaseEmailJob {
+  type: 'registration-magic-link';
+  data: RegistrationMagicLinkEmailData;
+  userId: string;
+}
+
+/** Story 13-65 — reference-code confirmation send, queued. */
+export interface RegistrationConfirmationJob extends BaseEmailJob {
+  type: 'registration-confirmation';
+  data: RegistrationConfirmationEmailData;
+  userId: string;
+}
+
+/** Story 13-65 — evergreen thank-you/referral send, queued. */
+export interface RegistrationThankYouJob extends BaseEmailJob {
+  type: 'registration-thankyou';
+  data: RegistrationThankYouEmailData;
+  userId: string;
+}
+
+export type EmailJob = StaffInvitationJob | PasswordResetJob | PaymentNotificationJob | DisputeNotificationJob | DisputeResolutionJob | BackupNotificationJob | RegistrationMagicLinkJob | RegistrationConfirmationJob | RegistrationThankYouJob;
 
 // ============================================================================
 // Email Configuration Types

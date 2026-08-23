@@ -14,6 +14,12 @@ import { users, roles } from '../db/schema/index.js';
 import { eq, sql } from 'drizzle-orm';
 import { queueFraudDetection } from '../queues/fraud-detection.queue.js';
 import { queueMarketplaceExtraction } from '../queues/marketplace-extraction.queue.js';
+// Story 13-65 (AC1) — this service now ENQUEUES the two registration auto-emails; the sends (and
+// every guard in front of them) execute in the email worker, via `services/registration-email-jobs.ts`.
+import {
+  queueRegistrationConfirmationEmail,
+  queueRegistrationThankYouEmail,
+} from '../queues/email.queue.js';
 import type { NativeFormSchema, Section, Question } from '@oslsr/types';
 import type { RespondentMetadata, RespondentSource, RespondentStatus } from '../db/schema/respondents.js';
 import {
@@ -31,24 +37,6 @@ import { evaluateMinorGuardianConsent, isValidReferenceCode, type GuardianData }
 import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 import { ReferenceCodeService } from './reference-code.service.js';
 import { canonicalizeLgaId } from './lga-canonical.service.js';
-import { EmailService } from './email.service.js';
-import { getSuppressedEmails } from './email-events.service.js'; // Story 13-12 (13-9 suppression)
-import { buildThankYouEmail, buildThankYouReferralUrl, firstNameFrom } from './thankyou-email.js'; // Story 13-12
-import { recordAutoSendFailure } from './email-autosend-monitor.js'; // Story 13-21 (AC4)
-// Story 13-46 (AC2) — the SAME gap query + gap constant the four blast/backfill scripts inherit via
-// `filterMarketingCohort`; this is the one in-request path that never consumed it.
-import { getRecentlyContactedEmails, resolveGapDays } from './campaign-contact.service.js';
-import { toCanonicalEmail } from '../lib/canonical-email.js';
-import {
-  recordRegistrationAutoSend,
-  recordThankYouSuppressed,
-} from '../middleware/registration-burst.js'; // Story 13-46 (AC3 / review A3)
-
-/**
- * Story 13-46 (review A3) — the ONLY category the auto thank-you's gap read considers.
- * Deliberately NOT the whole marketing set; see the block in `sendThankYouReferralEmail`.
- */
-const AUTO_SEND_GAP_CATEGORY = 'thankyou-referral';
 import pino from 'pino';
 
 const logger = pino({ name: 'submission-processing-service' });
@@ -1308,10 +1296,22 @@ export class SubmissionProcessingService {
    *   6. PII normalisation / form-schema resolution — wizard is structured +
    *      pre-validated (controller.ts:658); INTENTIONALLY not run for the wizard.
    *
-   * The emails are fired void (fail-soft internally); the GPS/consent QUEUE ops
-   * are awaited so the queue worker preserves its existing throw-on-failure
-   * behaviour. The wizard invokes this fire-and-forget (`void ...catch`) so a
-   * transient queue/comms failure can never sink a committed registration.
+   * Story 13-65 - THE EMAILS ARE NOW AN AWAITED ENQUEUE, NOT A VOIDED SEND, and that change is
+   * load-bearing rather than cosmetic. They used to be `void`-ed here because they DIALLED a
+   * provider and a slow round trip must not delay the queue side-effects. They no longer dial
+   * anything: they add two small job records to `email-notification`, which is the same kind of
+   * operation as the marketplace and fraud enqueues below, and those have always been awaited.
+   *
+   * Awaiting is what makes AC6 true. A detached `void` enqueue that REJECTS (Redis down during a
+   * jingle) produces an UNHANDLED REJECTION and is invisible to the caller - so the wizard's
+   * one-shot Telegram page, whose entire job is to make exactly that outage loud, could never fire.
+   * Verified: the first version of this change did precisely that, and the integration suite
+   * surfaced it as an unhandled error.
+   *
+   * The 201 is still not behind Redis: BOTH callers of this method keep their existing detachment.
+   * The wizard invokes it fire-and-forget (`void ...catch` + the Telegram page), so a queue outage
+   * costs the registrant nothing; the enumerator/clerk queue worker awaits it and keeps its
+   * throw-on-failure behaviour, identical to the two queue ops that already behaved this way.
    */
   static async runPostSubmissionSideEffects(args: {
     respondentId: string;
@@ -1326,15 +1326,7 @@ export class SubmissionProcessingService {
     consentMarketplace: boolean;
     gps?: { latitude: number; longitude: number } | null;
   }): Promise<void> {
-    // 3. Registration auto-emails — fire-and-forget + internally fail-soft, so a
-    //    slow/failing provider never delays (or sinks) the queue side-effects.
-    void this.sendRegistrationAutoEmails({
-      respondentId: args.respondentId,
-      email: args.email,
-      referenceCode: args.referenceCode,
-      status: args.status ?? 'active',
-      isNew: args.isNew,
-    });
+    // 3. Registration auto-emails — an ENQUEUE (13-65), awaited like the other two queue ops so an
 
     // 5. Fraud detection — GPS-gated (no GPS ⇒ skipped; see AC4 note above).
     if (args.gps) {
@@ -1365,6 +1357,28 @@ export class SubmissionProcessingService {
         respondentId: args.respondentId,
       });
     }
+
+    /**
+     * ⚠️ Story 13-65 (review B4 / finding H5) — THIS RUNS LAST, AND THE ORDER IS LOAD-BEARING.
+     *
+     * It was the FIRST statement here, and it can now THROW (both producers call
+     * `getEmailQueue().add()`), so a Redis blip skipped fraud detection AND marketplace
+     * extraction below. On the enumerator/clerk path that loss is PERMANENT: the caller awaits
+     * this and lets it throw, but `submissions.processed = true` is already committed, so a
+     * BullMQ retry hits the already-processed early return. The marketplace profile and the
+     * fraud check vanish with no record — the exact 13-27 bypass class that story exists to
+     * prevent. The wizard path was protected by its `.catch()`; this one was not.
+     *
+     * Moved last so the two queue ops that have ALWAYS been awaited cannot be pre-empted by
+     * the newest one. An enqueue failure still reaches the caller.
+     */
+    await this.sendRegistrationAutoEmails({
+      respondentId: args.respondentId,
+      email: args.email,
+      referenceCode: args.referenceCode,
+      status: args.status ?? 'active',
+      isNew: args.isNew,
+    });
   }
 
   /**
@@ -1376,8 +1390,12 @@ export class SubmissionProcessingService {
    * thank-you was dead-on-arrival since it shipped). Both the queue path and the
    * wizard controller now call this, so there is one code path and no drift.
    *
-   * Fully fire-and-forget + fail-soft: each send self-contains its try/catch and
-   * never throws, and a failure records to the AC4 monitor (loud + counted). The
+   * ⚠️ Story 13-65 (review B11) — "never throws" WAS TRUE AND IS NOT. Each send is now ENQUEUED,
+   * and an enqueue failure (Redis unavailable) DOES throw out of here. Each JOB still self-gates and
+   * is fail-soft inside its handler, and a failure records to the AC4 monitor (loud + counted) — see
+   * `registration-email-jobs.ts`. The wizard caller keeps its `.catch()`, and this call is made LAST
+   * inside `runPostSubmissionSideEffects` (review B4) so a throw cannot pre-empt fraud detection or
+   * marketplace extraction. The
    * confirmation is gated on a NEW respondent carrying a reference code; the
    * thank-you self-gates on source='public' + the send-once marker + suppression.
    */
@@ -1389,337 +1407,48 @@ export class SubmissionProcessingService {
     isNew: boolean;
   }): Promise<void> {
     if (!args.email) return;
+    /**
+     * Story 13-65 (AC1) — ENQUEUE, DO NOT DIAL.
+     *
+     * ⚠️ "Fire-and-forget" was never "off the request path". `void`/`.catch()` detaches the
+     * RESPONSE, not the WORK: the socket, the TLS session, the rendered HTML body and the pending
+     * promise all lived in this process, on this event loop, for the whole provider round trip. The
+     * 201 returned early; the memory did not. Nothing anywhere bounded how many of those could be in
+     * flight at once, and the box is 2GB with NO SWAP — which does not degrade, it OOM-kills.
+     *
+     * Queued, at most 5 run at once (`email.worker.ts` concurrency) and the rest are small JSON job
+     * records in Redis rather than in the API heap. The queue buys BOUNDED CONCURRENCY, DURABILITY,
+     * RETRY and BACKPRESSURE; it does NOT reduce total CPU and does NOT give event-loop isolation,
+     * because the workers run in the API process.
+     *
+     * 🔴 THE PAYLOAD IS IDENTIFIERS ONLY, AND NO GUARD RUNS HERE. Every gate these two sends carry —
+     * the source gate, both send-once markers, suppression, 13-46's 5-day per-address gap — is
+     * evaluated by the worker handler immediately before its send (`services/registration-email-jobs.ts`).
+     * Evaluating a TIME window here and sending from a backlog ten minutes later would be a guard
+     * that did not run.
+     */
     // 9-58 reference-code confirmation — only for a NEW respondent with a code.
     if (args.isNew && args.referenceCode) {
-      await this.sendReferenceConfirmationEmail({
+      await queueRegistrationConfirmationEmail({
         respondentId: args.respondentId,
         email: args.email,
         referenceCode: args.referenceCode,
-        status: args.status ?? 'active',
+        status: String(args.status ?? 'active'),
       });
     }
-    // 13-12 evergreen thank-you/referral — self-gates on source='public' inside.
-    await this.sendThankYouReferralEmail({ respondentId: args.respondentId, email: args.email });
+    // 13-12 evergreen thank-you/referral — self-gates on source='public' inside the HANDLER.
+    await queueRegistrationThankYouEmail({ respondentId: args.respondentId, email: args.email });
   }
 
   /**
-   * Story 9-58 — proactive registration-confirmation email for an
-   * enumerator/clerk-entered respondent who supplied an email. Carries the
-   * human-friendly reference code + plain-language status + a pointer to the
-   * self-service status check. NO magic-link (the respondent didn't initiate
-   * this; they self-serve a secure link via /check-registration if needed) and
-   * an explicit anti-phishing line. Fully best-effort: any failure is logged,
-   * never thrown (ingestion must not depend on email).
+   * Story 13-65 — `sendReferenceConfirmationEmail`, `sendThankYouReferralEmail` and their shared
+   * `STATUS_CONFIRMATION_TEXT` MOVED OUT of this class to `services/registration-email-jobs.ts`,
+   * where the email worker executes them. They were `private static` here, and having the worker
+   * reach back into this service would have closed an ESM cycle (worker -> submission-processing ->
+   * queues) that fails as `undefined` at call time rather than as a build error. They were
+   * RELOCATED, not merely widened — nothing about them is public on this class.
+   *
+   * The guard blocks moved WHOLE and in their original order. This service now knows only how to
+   * enqueue.
    */
-  private static readonly STATUS_CONFIRMATION_TEXT: Record<string, string> = {
-    active: 'Active — your registration is complete.',
-    pending_nin_capture: 'Pending — we still need your NIN to finish your registration.',
-    nin_unavailable: 'Pending — your details are saved.',
-    imported_unverified: 'On file — your record is awaiting verification.',
-  };
-
-  private static async sendReferenceConfirmationEmail(args: {
-    respondentId: string;
-    email: string;
-    referenceCode: string;
-    status: RespondentStatus | string;
-  }): Promise<void> {
-    try {
-      // Story 9-58 (review L1) — explicit idempotency guard: only send when the
-      // respondent has no `metadata.confirmation_email_sent_at` stamp. Makes the
-      // "send once" guarantee a stored fact rather than emergent from the
-      // `_isNew` flag (which a re-run on a partially-processed submission could
-      // in theory mis-evaluate). Set the stamp AFTER a successful dispatch.
-      const existing = await db.query.respondents.findFirst({
-        where: eq(respondents.id, args.respondentId),
-        columns: { metadata: true },
-      });
-      const existingMetadata = (existing?.metadata ?? null) as RespondentMetadata | null;
-      if (existingMetadata?.confirmation_email_sent_at) {
-        logger.info({
-          event: 'registration_confirmation.email_skipped_already_sent',
-          respondentId: args.respondentId,
-        });
-        return;
-      }
-
-      const brand = '#9C1E23';
-      const statusText =
-        SubmissionProcessingService.STATUS_CONFIRMATION_TEXT[args.status] ??
-        'Your registration is on file.';
-      const checkUrl = `${process.env.SUPPORT_URL || 'https://oyoskills.com'}/check-registration`;
-      const subject = "You've been registered — Oyo State Skills Registry";
-      const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${subject}</title></head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background-color: ${brand}; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="color: white; margin: 0;">OSLSR</h1>
-    <p style="color: #f0f0f0; margin: 5px 0 0 0;">Oyo State Labour &amp; Skills Registry</p>
-  </div>
-  <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 8px 8px;">
-    <p>You've been registered in the Oyo State Skills Registry.</p>
-    <p style="font-weight: bold;">${statusText}</p>
-    <p style="margin:20px 0;padding:12px 16px;background:#f6f6f6;border-radius:6px;font-size:14px;">Your application reference: <strong style="font-family:ui-monospace,monospace;letter-spacing:0.5px;">${args.referenceCode}</strong></p>
-    <p style="color: #666; font-size: 14px;">Quote this reference if you contact support, or check your status anytime at <a href="${checkUrl}" style="color: ${brand};">${checkUrl}</a>.</p>
-    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-    <p style="color: #999; font-size: 12px;">We will never ask for your password or NIN by email.</p>
-    <p style="color: #999; font-size: 12px; text-align: center;">&copy; ${new Date().getFullYear()} Government of Oyo State. All rights reserved.</p>
-  </div>
-</body></html>`;
-      const text = `You've been registered in the Oyo State Skills Registry.\n\n${statusText}\n\nYour application reference: ${args.referenceCode}\n\nQuote this reference if you contact support, or check your status anytime at ${checkUrl}.\n\nWe will never ask for your password or NIN by email.\n\n— Oyo State Labour & Skills Registry`;
-
-      const result = await EmailService.sendGenericEmail({ to: args.email, subject, html, text });
-      if (!result.success) {
-        // Story 13-21 (AC4) — was a swallowed warn; now a counted ERROR that can page.
-        await recordAutoSendFailure({
-          kind: 'confirmation',
-          respondentId: args.respondentId,
-          error: result.error,
-        });
-        return;
-      }
-
-      // Story 9-58 (review L1) — stamp the explicit idempotency marker only after
-      // a confirmed dispatch. JSONB `||` preserves any sibling metadata keys
-      // (guardian, normalisation_warnings, etc.).
-      // Story 13-21 (review M1) — the email ALREADY dispatched successfully here;
-      // a marker-stamp failure must NOT route through recordAutoSendFailure — that
-      // would false-count a good send and could trip a spurious AC4 page. It DOES
-      // risk a duplicate on the next backfill/re-process (the marker is the
-      // idempotency guard), so log it loudly at warn. Own try so it can't reach
-      // the outer send-failure catch.
-      try {
-        await db.execute(sql`
-          UPDATE "respondents"
-          SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ confirmation_email_sent_at: new Date().toISOString() })}::jsonb
-          WHERE "id" = ${args.respondentId}
-        `);
-      } catch (stampErr) {
-        logger.warn({
-          event: 'registration_confirmation.marker_stamp_failed',
-          respondentId: args.respondentId,
-          error: stampErr instanceof Error ? stampErr.message : String(stampErr),
-        });
-      }
-    } catch (err) {
-      // Story 13-21 (AC4) — a genuine pre/at-send failure: counted + loud.
-      await recordAutoSendFailure({
-        kind: 'confirmation',
-        respondentId: args.respondentId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  /**
-   * Story 13-12 — evergreen thank-you + referral auto-send on end-to-end completion.
-   * Gated to SELF-SERVICE (`source='public'`) completers (they hold the link + can refer peers;
-   * enumerator/clerk/imported rows get the 9-58 confirmation instead). Idempotent via the
-   * `metadata.thankyou_referral_sent_at` send-once marker; honors the 13-9 suppression list; tagged
-   * `thankyou-referral-auto` (DISTINCT from the one-off blast) so the funnel separates organic
-   * onboarding referrals from the campaign blast. Fully FAIL-SOFT — any error is logged, never thrown
-   * (a registration must succeed even if this email doesn't), mirroring sendReferenceConfirmationEmail.
-   */
-  private static async sendThankYouReferralEmail(args: { respondentId: string; email: string }): Promise<void> {
-    const AUTO_CAMPAIGN_ID = 'thankyou-referral-auto';
-    try {
-      const r = await db.query.respondents.findFirst({
-        where: eq(respondents.id, args.respondentId),
-        columns: { source: true, firstName: true, metadata: true },
-      });
-      if (!r) return;
-      if (r.source !== 'public') return; // referral ask is for self-service registrants only
-      const metadata = (r.metadata ?? null) as RespondentMetadata | null;
-      if (metadata?.thankyou_referral_sent_at) {
-        logger.info({ event: 'thankyou_referral_auto.skipped_already_sent', respondentId: args.respondentId });
-        return;
-      }
-      const suppressed = await getSuppressedEmails([args.email]);
-      if (suppressed.has(args.email.trim().toLowerCase())) {
-        logger.info({ event: 'thankyou_referral_auto.skipped_suppressed', respondentId: args.respondentId });
-        return;
-      }
-
-      /**
-       * Story 13-46 (AC2) — PER-ADDRESS THROTTLE. This is the ONE marketing path that skips the
-       * shared cohort guard: `filterMarketingCohort` is inherited by all four blast/backfill
-       * scripts and by NO in-request path.
-       *
-       * ⚠️ WHY THE EXISTING GUARDS DO NOT COVER THIS. The send-once marker above is stamped on the
-       * RESPONDENT row, and there is no `email` column on `respondents` at all — the address lives
-       * in `submissions.raw_data` and `users.email`, and the wizard's user insert is
-       * `onConflictDoNothing`, so it REUSES an account rather than rejecting the registration.
-       * A second registration with the same address therefore mints a NEW respondent row that
-       * walks straight past the marker. One address, N registrations, N emails — the mail cannon.
-       * The ADDRESS is the only key that holds.
-       *
-       * Reuses `getRecentlyContactedEmails` — the exact gap query `filterMarketingCohort` runs
-       * (`campaign-contact.service.ts:179-188`) — and `MARKETING_CONTACT_GAP_DAYS`. A second gap
-       * constant here would drift from the blasts' within days.
-       *
-       * ─── THE FAIL-SOFT-LEDGER DIRECTION, DECIDED AND RECORDED (AC2's warning) ───
-       * `recordCampaignSend` is fail-soft: a ledger write can fail and only log
-       * (`campaign-contact.service.ts:89-96`). So a MISSING row is genuinely ambiguous — it can
-       * mean "never contacted" or "contacted, write failed" — and reading it as the former is what
-       * licenses a send.
-       *
-       * CHOSEN: on a ledger READ ERROR, and on a missing row, ALLOW the send.
-       * WHY, explicitly:
-       *   - The opposite direction converts a degraded INSTRUMENTATION event into total loss of a
-       *     citizen-facing email. If the ledger is unavailable, "treat everyone as recently
-       *     contacted" silently stops every thank-you the jingle earns, and nothing distinguishes
-       *     that from the feature working.
-       *   - The residual risk of the permissive direction is BOUNDED by AC1's cap, which is
-       *     evaluated independently at `EmailService.dispatch` from Redis, not from this ledger.
-       *     Two guards with two different failure modes: the address gap fails open, the volume
-       *     cap fails closed. The cap is what makes this direction survivable.
-       *   - A soft-failed ledger write is already LOUD (`campaign_contact.record_failed` at error),
-       *     so the ambiguous state is detectable rather than silent.
-       */
-      const canonicalEmail = toCanonicalEmail(args.email);
-      try {
-        /**
-         * Story 13-46 (review A3 / finding H3) — SCOPED TO THIS CATEGORY. ⚖️ Awwal's ruling, 2026-08-22.
-         *
-         * ⚠️ THIS READ USED TO SPAN ALL MARKETING CATEGORIES, AND THAT LOST REAL EMAIL. Because
-         * `dispatch` ledgers EVERY marketing send, a re-engagement blast on Monday suppressed the
-         * thank-you for someone who registered on Tuesday — permanently, since nothing re-drives it
-         * and the blast script applies the same gap. That is the growth loop the jingle exists to
-         * feed, silently dropped.
-         *
-         * The narrower read is also the MORE PRECISE guard for AC2's own stated threat. AC2 exists
-         * to stop the mail cannon — *one address, N registrations, N thank-yous* — so the question
-         * is "has this address already had a THANK-YOU recently", not "has it had any marketing at
-         * all". Scoped this way the only suppressed send is a DUPLICATE thank-you, which is not
-         * mail anyone wants redelivered late; it is mail that should be dropped. That is why the
-         * defer-and-catch-up alternative was NOT built — it would be machinery whose job is to
-         * eventually deliver email that should not be sent, plus an unbounded-deferral failure mode
-         * (every new marketing contact inside the window re-defers).
-         *
-         * ⚠️ Blast-then-register now yields two emails inside the gap. That is intended: "please
-         * finish registering" followed by "thanks, you're registered" is a conversation, not two
-         * campaigns.
-         *
-         * ⚠️ TOCTOU, NAMED (review A14 / finding L1): this reads `campaign_sends` BEFORE the send,
-         * and the row is written AFTER it. Two registrations for the same address landing inside the
-         * same instant therefore both pass this check and both send — which is precisely the burst
-         * shape the story is written for. The window is milliseconds and the overshoot is one extra
-         * email, so it is accepted rather than closed: an atomic reserve-then-send would have to
-         * decide what to do when the reserve fails, and every answer there is worse than a duplicate
-         * thank-you. Stated because every other number in this story carries its derivation, and a
-         * guard's bound deserves the same treatment.
-         */
-        const recentlyContacted = await getRecentlyContactedEmails([args.email], undefined, undefined, {
-          categories: [AUTO_SEND_GAP_CATEGORY],
-        });
-        if (recentlyContacted.has(canonicalEmail)) {
-          // COUNTED, not just logged — the half of the defer-and-catch-up instinct that survives.
-          // If this ruling is wrong we learn it from a rising counter, not from a citizen who never
-          // got their referral link. REOPEN TRIGGER: a non-trivial count on a day with no
-          // duplicate-registration activity.
-          recordThankYouSuppressed();
-          logger.info({
-            event: 'thankyou_referral_auto.skipped_duplicate_thankyou',
-            respondentId: args.respondentId,
-            gapDays: resolveGapDays(),
-            category: AUTO_SEND_GAP_CATEGORY,
-            note: 'this ADDRESS already had a thank-you inside the gap — the mail-cannon case AC2 exists for',
-          });
-          return;
-        }
-      } catch (gapErr) {
-        // Fail-OPEN, per the decision recorded above. Loud so a persistent failure is visible.
-        logger.warn({
-          event: 'thankyou_referral_auto.contact_gap_check_failed',
-          respondentId: args.respondentId,
-          error: gapErr instanceof Error ? gapErr.message : String(gapErr),
-          note: 'contact-gap read failed — ALLOWING the send; AC1 volume cap remains the ceiling',
-        });
-      }
-
-      const referralUrl = buildThankYouReferralUrl(AUTO_CAMPAIGN_ID);
-      const content = buildThankYouEmail(firstNameFrom(r.firstName), referralUrl);
-      const result = await EmailService.sendGenericEmail(
-        { to: args.email, subject: content.subject, html: content.html, text: content.text },
-        'thankyou-referral',
-        AUTO_CAMPAIGN_ID,
-      );
-      if (!result.success) {
-        /**
-         * Story 13-46 (review A2 / finding H2) — A DELIBERATE CAP REFUSAL IS NOT A FAILURE.
-         *
-         * `recordAutoSendFailure` pages at its 5th occurrence with "Registration auto-emails are
-         * FAILING… the confirmation + thank-you/referral loop may be down. Check the Resend
-         * dashboard." Routing cap refusals into it would hand the operator the WRONG DIAGNOSIS at
-         * the exact moment the right one matters, bypass `reportCapRefusal`'s one-page-per-window
-         * cooldown, and corrupt 13-21's failure metric with the system working as designed.
-         *
-         * The operator has already been told, once per window, by `notification.cap_exceeded`.
-         */
-        if (result.refusedByCap) {
-          logger.warn({
-            event: 'thankyou_referral_auto.refused_by_cap',
-            respondentId: args.respondentId,
-            reason: result.error,
-            note: 'marketing cap refused this send — NOT an auto-send failure; no marker stamped, so it can be re-driven once the cap clears',
-          });
-          return;
-        }
-        // Story 13-21 (AC4) — was a swallowed warn; now a counted ERROR that can page.
-        await recordAutoSendFailure({
-          kind: 'thankyou',
-          respondentId: args.respondentId,
-          error: result.error,
-        });
-        return;
-      }
-
-      // Story 13-46 (AC3) — count a DISPATCHED auto thank-you for the burst alert's
-      // "auto-sends in window". Counted here, after a confirmed send, so a refused or failed send
-      // never inflates the number the operator uses to judge outbound pressure.
-      recordRegistrationAutoSend();
-
-      // Stamp the send-once marker only after a confirmed dispatch (JSONB merge preserves siblings).
-      // Story 13-21 (review M1) — the email already dispatched; a stamp failure
-      // must NOT count as a send failure (false AC4 page). It risks a duplicate on
-      // re-run, so log loudly at warn instead. Own try so a stamp error can't reach
-      // the outer send-failure catch.
-      try {
-        await db.execute(sql`
-          UPDATE "respondents"
-          SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${JSON.stringify({ thankyou_referral_sent_at: new Date().toISOString() })}::jsonb
-          WHERE "id" = ${args.respondentId}
-        `);
-      } catch (stampErr) {
-        logger.warn({
-          event: 'thankyou_referral_auto.marker_stamp_failed',
-          respondentId: args.respondentId,
-          error: stampErr instanceof Error ? stampErr.message : String(stampErr),
-        });
-      }
-
-      AuditService.logAction({
-        actorId: null,
-        action: AUDIT_ACTIONS.OPERATOR_THANKYOU_REFERRAL_SENT,
-        targetResource: AUDIT_TARGETS.RESPONDENT,
-        targetId: args.respondentId,
-        details: {
-          email: args.email,
-          channel: 'email',
-          campaign: AUTO_CAMPAIGN_ID,
-          auto: true,
-          provider_message_id: result.messageId ?? null,
-        },
-        ipAddress: 'system',
-        userAgent: 'submission-processing.auto-thankyou',
-      });
-    } catch (err) {
-      // Story 13-21 (AC4) — counted + loud (was a swallowed warn).
-      await recordAutoSendFailure({
-        kind: 'thankyou',
-        respondentId: args.respondentId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
 }

@@ -42,6 +42,28 @@ export interface BurstCounts {
   blocked429Draft: number;
   /** Registration auto thank-you sends that actually dispatched in the window. */
   autoSends: number;
+  /**
+   * Story 13-65 (AC5) — `email-notification` WAITING depth at evaluation time, or `null` when the
+   * queue could not be read.
+   *
+   * ⚠️ THIS FIELD EXISTS TO MAKE A NEW BLIND SPOT LEGIBLE, NOT TO TRIGGER ANYTHING. 13-65 moved the
+   * registration sends onto the queue, so `autoSends` is now counted when the WORKER sends, on a
+   * minute-resolution bucket — not when the registration arrives. Under a backlog it therefore LAGS
+   * `submits` in the same window. Before 13-65 those two numbers moved together, so "300 submits, 40
+   * auto-sends" meant something had STOPPED; it now usually means something is QUEUED. The depth is
+   * what tells the two apart.
+   *
+   * ⛔ It is NOT a threshold and NOT a second breaker: `evaluateBurst` never reads it. 13-46 owns the
+   * breaker — one alert, one set of thresholds, one cooldown.
+   */
+  emailQueueWaiting: number | null;
+  /**
+   * Story 13-65 (review B12 / finding L12) — is the email queue PAUSED?
+   *
+   * A deep queue that is paused reads identically to one that is draining, and the two remedies are
+   * opposite: resume it, versus wait. `null` when the stats read failed.
+   */
+  emailQueuePaused: boolean | null;
 }
 
 export interface MarketingHeadroomView {
@@ -177,6 +199,18 @@ export function formatBurstAlert(
     `Refused — submits (429): ${n(finding.counts.blocked429)}`,
     `Refused — autosaves (429): ${n(finding.counts.blocked429Draft)}`,
     `Auto thank-you sends: ${n(finding.counts.autoSends)}`,
+    finding.counts.emailQueueWaiting === null
+      ? 'Email queue waiting: unavailable (queue read failed)'
+      : `Email queue waiting: ${n(finding.counts.emailQueueWaiting)}` +
+        (finding.counts.emailQueuePaused
+          ? ' — ⛔ QUEUE IS PAUSED: nothing is draining and citizen mail is parked. Resume it.'
+          : ''),
+    '',
+    // Story 13-65 (AC5) — the caveat lives in the MESSAGE, not only in a comment. A reader who sees
+    // only the counts will misdiagnose a backlog as a stoppage.
+    'ℹ️ Auto thank-you sends are counted when the QUEUE sends them, not when the registration ' +
+      'arrives. Under a backlog this number LAGS the submits in the same window — a gap between ' +
+      'them plus a non-zero queue depth means QUEUED, not stopped.',
   ];
 
   if (headroom) {

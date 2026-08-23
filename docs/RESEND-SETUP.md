@@ -189,7 +189,7 @@ Contains:
 ### Daily Limit Reached (Free Tier)
 
 ```
-"Daily email limit reached - emails queued for tomorrow"
+"Daily email limit reached — this STANDARD job retries its remaining attempts and is then discarded; it is NOT held until tomorrow (13-65 review C7). Transactional mail is unaffected"
 ```
 
 Options:
@@ -245,6 +245,34 @@ RESEND_API_KEY=re_test_key_here
 ```
 
 Use Resend's test API key or a verified domain.
+
+## ⚠️ What budget exhaustion does and does NOT stop (Story 13-65, 2026-08-23)
+
+Two changes here are operator-visible, and both are deliberate.
+
+**1. Budget exhaustion no longer pauses the queue.** It used to call BullMQ's `Queue.pause()`, which
+is **global**: jobs enqueued *after* the pause land in the paused list and are never dequeued.
+Once the registration sends moved onto that queue, an exhausted **marketing** budget would therefore
+have stopped every subsequent citizen **login link** — durably (the flag lives in Redis and survives
+`pm2 restart` and deploy) with **manual-only** recovery. The auto-pause was removed. Exhaustion now
+refuses only the offending `standard` job, which retries its remaining attempts and is then
+discarded. **It is not held until tomorrow.** The spend control is intact: the budget check runs
+*before* the provider call, so a refused job costs worker cycles, not money.
+
+**2. `critical` mail is exempt from budget exhaustion — including `staff-invitation` and
+`password-reset`.** Those two were already classified `critical`, but before this story there was no
+exemption at all, so exhaustion blocked them too. It no longer does.
+
+That second point is a deliberate ruling, not an accident: **the budget is a SPEND guard, and a
+password reset is someone locked out of their account.** Blocking it to save a fraction of a cent is
+the wrong trade — the same one this story rejects for a citizen's magic link. Marketing *volume* is
+governed by 13-46's marketing cap, which is category-aware, loud, and has its own operator page.
+
+➜ **What this means at the console:** if the daily/monthly budget is exhausted you will still see
+magic links, reference confirmations, password resets and staff invitations go out. Marketing mail
+(thank-you/referral, re-engagement, supplemental-survey) is what stops. If you need marketing to
+resume, raise the budget — do **not** look for a paused queue to resume, because nothing pauses it
+any more.
 
 ## Security Notes
 

@@ -16,6 +16,10 @@ import type {
   DisputeNotificationEmailData,
   DisputeResolutionEmailData,
   BackupNotificationEmailData,
+  // Story 13-65 — the three registration sends, taken off the request path.
+  RegistrationMagicLinkEmailData,
+  RegistrationConfirmationEmailData,
+  RegistrationThankYouEmailData,
 } from '@oslsr/types';
 import { EMAIL_TYPE_PRIORITY } from '@oslsr/types';
 
@@ -41,9 +45,16 @@ function getConnection() {
 }
 
 /**
- * Custom backoff delays per AC3: 30s, 2min, 10min
+ * Custom backoff delays per AC3.
+ *
+ * ⚠️ Story 13-65 (review C9 / finding R9) — THE EFFECTIVE SCHEDULE IS **2min then 10min**, not
+ * "30s / 2min / 10min" as this was documented in five places. BullMQ calls the backoff strategy with
+ * `attemptsMade` counting attempts ALREADY MADE, so the first retry arrives with `attemptsMade = 1`
+ * and index 0 (the 30s entry) is unreachable. The array is left as-is deliberately — changing the
+ * indexing would change live retry timing, which is not a documentation fix — but every claim about
+ * the schedule now states what actually happens.
  */
-const BACKOFF_DELAYS = [30000, 120000, 600000]; // 30s, 2min, 10min
+const BACKOFF_DELAYS = [30000, 120000, 600000]; // declared 30s/2min/10min; effective 2min then 10min — BullMQ passes attemptsMade>=1, so index 0 is unreachable (13-65 D5)
 
 /**
  * Get the email queue instance (lazy-initialized)
@@ -72,7 +83,8 @@ function getEmailQueue(): Queue<EmailJob> {
 
 /**
  * Get backoff delay for a given attempt number (0-indexed)
- * Returns delay in milliseconds: 30s, 2min, 10min
+ * Returns delay in milliseconds. ⚠️ Effective schedule is 2min then 10min: `attemptsMade` is 1 on
+ * the first retry, so the 30s entry at index 0 is never reached (review C9).
  */
 export function getBackoffDelay(attemptsMade: number): number {
   return BACKOFF_DELAYS[Math.min(attemptsMade, BACKOFF_DELAYS.length - 1)];
@@ -409,6 +421,111 @@ export async function queueBackupNotificationEmail(
     data,
     userId: 'system',
     priority: EMAIL_TYPE_PRIORITY['backup-notification'],
+  } as EmailJob);
+  return job.id || '';
+}
+
+// ============================================================================
+// Registration sends (Story 13-65) — enqueue, do not dial
+// ============================================================================
+
+/**
+ * Story 13-65 (AC1/AC9) — the three registration producers.
+ *
+ * WHAT THE QUEUE BUYS, STATED EXACTLY AND NO STRONGER: bounded concurrency (5 at a time),
+ * durability (a restart mid-burst resumes; today it drops), retry (3 attempts; effective backoff 2min then 10min — review C9)
+ * and backpressure. It does NOT reduce total CPU and does NOT give event-loop isolation, because
+ * the workers run in the API process.
+ *
+ * ⚠️ THE PAYLOAD IS IDENTIFIERS ONLY. The guards and the rendering both happen in the worker,
+ * immediately before the send (AC2) — a guard evaluated here and a send executed ten minutes later
+ * is a guard that did not run, and the 5-day contact gap in particular is a TIME window.
+ */
+
+/**
+ * Pending-NIN resume magic link. `critical` — never deduped, never deferred, never stopped by the
+ * budget-exhaustion pause (AC4).
+ */
+export async function queueRegistrationMagicLinkEmail(
+  data: RegistrationMagicLinkEmailData,
+): Promise<string> {
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  const job = await getEmailQueue().add(
+    'registration-magic-link',
+    {
+      type: 'registration-magic-link',
+      data,
+      userId: data.respondentId,
+      priority: EMAIL_TYPE_PRIORITY['registration-magic-link'],
+    } as EmailJob,
+    {
+      /**
+       * Story 13-65 (review B7 / finding M7) — THE PLAINTEXT TOKEN MUST NOT LINGER AT REST.
+       *
+       * `magic-link.service.ts` stores only `sha256Hex(tokenPlaintext)` in the database,
+       * deliberately: the plaintext has never existed at rest anywhere. Queueing this email puts it
+       * in the job record beside the citizen's email address, and the queue defaults would keep it
+       * for an hour on success and a DAY on failure — while the token itself is valid for 72h.
+       *
+       * So this job, uniquely, discards its record the moment it completes and keeps a failed one
+       * only long enough to debug. Exposure still requires box/Redis access, but a credential that
+       * need not be at rest should not be at rest.
+       */
+      removeOnComplete: true,
+      removeOnFail: { age: 900 },
+    },
+  );
+  return job.id || '';
+}
+
+/**
+ * Story 9-58 reference-code confirmation. `critical` for the same reason: it carries the citizen's
+ * own application reference, which the success screen has already shown them.
+ */
+export async function queueRegistrationConfirmationEmail(
+  data: RegistrationConfirmationEmailData,
+): Promise<string> {
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  const job = await getEmailQueue().add('registration-confirmation', {
+    type: 'registration-confirmation',
+    data,
+    userId: data.respondentId,
+    priority: EMAIL_TYPE_PRIORITY['registration-confirmation'],
+  } as EmailJob);
+  return job.id || '';
+}
+
+/**
+ * Story 13-12 evergreen thank-you/referral. `standard`, so it is the ONE of the three that the
+ * dedup prelude applies to.
+ *
+ * ⛔ Story 13-65 (AC2) — THIS DEDUP KEY IS BELT-AND-BRACES, NEVER THE IDEMPOTENCY GUARANTEE. It is
+ * produce-side, a non-atomic EXISTS-then-SET, and its TTL is 300s while the third worker retry
+ * lands at 10 minutes. The only mechanism that actually survives a retry is the send-once marker
+ * `metadata.thankyou_referral_sent_at`, which the worker handler re-checks before every send.
+ */
+export async function queueRegistrationThankYouEmail(
+  data: RegistrationThankYouEmailData,
+): Promise<string> {
+  if (isTestMode()) {
+    return 'test-job-id';
+  }
+
+  if (await checkDedup(data.email, 'registration-thankyou')) {
+    return 'dedup-skipped';
+  }
+
+  const job = await getEmailQueue().add('registration-thankyou', {
+    type: 'registration-thankyou',
+    data,
+    userId: data.respondentId,
+    priority: EMAIL_TYPE_PRIORITY['registration-thankyou'],
   } as EmailJob);
   return job.id || '';
 }

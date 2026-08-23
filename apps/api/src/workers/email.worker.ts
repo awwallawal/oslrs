@@ -6,13 +6,21 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 // Story 9-12 Task 10.3 (2026-05-11 session 8) — `VerificationEmailData`
 // removed from imports alongside the retired hybrid Magic-Link/OTP flow.
-import type { EmailJob, StaffInvitationEmailData, PasswordResetEmailData, PaymentNotificationEmailData, DisputeNotificationEmailData, DisputeResolutionEmailData, BackupNotificationEmailData, EmailJobType } from '@oslsr/types';
+import type { EmailJob, StaffInvitationEmailData, PasswordResetEmailData, PaymentNotificationEmailData, DisputeNotificationEmailData, DisputeResolutionEmailData, BackupNotificationEmailData, EmailJobType, RegistrationMagicLinkEmailData, RegistrationConfirmationEmailData, RegistrationThankYouEmailData } from '@oslsr/types';
 import { resolveEmailTier } from '@oslsr/types';
-import { EMAIL_TYPE_PRIORITY } from '@oslsr/types';
+import { EMAIL_TYPE_PRIORITY, isCitizenRegistrationEmailType } from '@oslsr/types';
 import { EmailService } from '../services/email.service.js';
 import { EmailBudgetService } from '../services/email-budget.service.js';
 import { AuditService } from '../services/audit.service.js';
-import { getBackoffDelay, pauseEmailQueue, deferEmail, getDeferredRecipients, getDeferredEmails, clearDeferredEmails } from '../queues/email.queue.js';
+import { getBackoffDelay, deferEmail, getDeferredRecipients, getDeferredEmails, clearDeferredEmails } from '../queues/email.queue.js';
+// Story 13-65 — the three registration sends execute HERE, in their own module (never reached back
+// into `SubmissionProcessingService`: that would close an ESM cycle worker -> service -> queues).
+import {
+  handleRegistrationMagicLinkJob,
+  handleRegistrationConfirmationJob,
+  handleRegistrationThankYouJob,
+  type RegistrationJobContext,
+} from '../services/registration-email-jobs.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,6 +52,10 @@ function getRecipientEmail(job: EmailJob): string {
     case 'dispute-notification': return job.data.to;
     case 'dispute-resolution': return job.data.staffEmail;
     case 'backup-notification': return job.data.to;
+    // Story 13-65 — this switch has NO `default`, so the compiler enforced these three.
+    case 'registration-magic-link': return job.data.email;
+    case 'registration-confirmation': return job.data.email;
+    case 'registration-thankyou': return job.data.email;
   }
 }
 
@@ -56,6 +68,13 @@ function buildDeferralSummary(job: EmailJob): string {
     case 'dispute-notification': return `Dispute raised by ${job.data.staffName}`;
     case 'dispute-resolution': return `Dispute ${job.data.action}: ${job.data.trancheName}`;
     case 'backup-notification': return job.data.subject;
+    // Story 13-65 (AC1/AC4) — added EXPLICITLY. Unlike `getRecipientEmail` above, this switch HAS a
+    // `default`, so an omission here compiles fine and silently ships a generic digest line. Only
+    // `registration-thankyou` can ever reach the deferral path (the other two are `critical`), but
+    // all three are listed so the next person does not have to work that out.
+    case 'registration-magic-link': return 'Your registration resume link';
+    case 'registration-confirmation': return 'Your registration reference code';
+    case 'registration-thankyou': return 'Thank you for registering — refer someone';
     default: return `${job.type} notification`;
   }
 }
@@ -66,7 +85,7 @@ function buildDeferralSummary(job: EmailJob): string {
  * Processes email jobs from the email-notification queue.
  * Handles different email types, tracks budget, and logs failures to audit trail.
  *
- * AC3: Exponential backoff (30s, 2min, 10min)
+ * AC3: Exponential backoff — effective 2min then 10min — BullMQ passes attemptsMade>=1, so index 0 is unreachable (13-65 D5).
  * AC4: Budget tracking with automatic queue pause when exhausted
  */
 export const emailWorker = new Worker<EmailJob>(
@@ -92,7 +111,36 @@ export const emailWorker = new Worker<EmailJob>(
     const budgetCheck = await budgetService.checkBudget();
     const emailPriority = job.data.priority ?? EMAIL_TYPE_PRIORITY[type as EmailJobType] ?? 'standard';
 
-    if (!budgetCheck.allowed) {
+    /**
+     * Story 13-65 (AC4) — 🔴 BUDGET EXHAUSTION MUST NOT BE ABLE TO STOP A CITIZEN'S TRANSACTIONAL EMAIL.
+     *
+     * The block below pauses the WHOLE `email-notification` queue and throws. Before 13-65 that was
+     * safe, because a registrant's magic link and reference code bypassed the queue entirely and
+     * every queued type was ops/staff mail. Putting them ON the queue without this exemption would
+     * create a failure mode THAT DOES NOT EXIST TODAY and is strictly worse than the one being
+     * cured: an exhausted MARKETING budget silently stopping a citizen's LOGIN LINK.
+     *
+     * So the gate applies to `standard` work only. `critical` jobs proceed; the pause/throw path is
+     * unreachable for them. 13-46's spend control is intact for everything else — a `standard`
+     * thank-you under the same denial still pauses and still throws, and there is a test asserting
+     * exactly that converse.
+     *
+     * ⚠️ This does NOT mean critical mail is free: `budgetService.recordSend()` below still counts
+     * every send, so the overage stays visible and the exhaustion warning still fires once an hour.
+     */
+    if (!budgetCheck.allowed && emailPriority === 'critical') {
+      logger.warn({
+        event: 'email.job.budget_exhausted_critical_exempt',
+        jobId: job.id,
+        type,
+        userId,
+        reason: budgetCheck.reason,
+        tier: budgetCheck.tier,
+        note: 'critical/transactional job proceeding despite an exhausted budget — the queue is NOT paused for it (13-65 AC4)',
+      });
+    }
+
+    if (!budgetCheck.allowed && emailPriority !== 'critical') {
       // Budget fully exhausted — pause queue, single alert via log (not email)
       // Use Redis key to ensure only one exhaustion alert per hour (L2)
       const alertKey = 'email:budget:exhaustion_alert';
@@ -110,18 +158,41 @@ export const emailWorker = new Worker<EmailJob>(
         });
       }
 
-      try {
-        await pauseEmailQueue();
-        await connection.set('email:queue:paused', 'true');
-        logger.info({ event: 'email.queue.auto_paused', reason: budgetCheck.reason });
-      } catch (pauseErr) {
-        logger.error({
-          event: 'email.queue.pause_failed',
-          error: pauseErr instanceof Error ? pauseErr.message : 'Unknown error',
-        });
-      }
-
-      throw new Error(`Budget exhausted: ${budgetCheck.reason}. Daily email limit reached - emails queued for tomorrow.`);
+      /**
+       * ⚠️ Story 13-65 (review B1 / finding H1) — THE QUEUE-WIDE AUTO-PAUSE IS GONE. Do not restore it.
+       *
+       * It used to call `pauseEmailQueue()` here. `Queue.pause()` in BullMQ v5 is documented as
+       * pausing the queue **GLOBALLY**: it RENAMEs the wait list, and jobs added afterwards go to the
+       * PAUSED list instead of wait. The `critical` exemption above can therefore only ever help a
+       * job the worker has ALREADY picked up — every magic link and reference confirmation enqueued
+       * after the pause was silently parked and never dequeued.
+       *
+       * That did not matter before 13-65, because those two emails were dialled in-request and were
+       * immune to queue state. It matters enormously now that they ride this queue: an exhausted
+       * MARKETING budget would stop a citizen's LOGIN LINK, durably (the flag lives in Redis and
+       * survives `pm2 restart` and deploy) with MANUAL-ONLY recovery — the sole `resumeEmailQueue()`
+       * caller is an admin route. Silent, durable, needs a human: worse than the OOM this story cures.
+       *
+       * ⚠️ Gating the pause on "no critical work queued" was considered and REJECTED: it is a TOCTOU
+       * (a magic link enqueued a millisecond later still lands in the paused list), so it would look
+       * like a fix without being one.
+       *
+       * THE PER-JOB REFUSAL IS THE SPEND CONTROL, and it is sufficient. This check runs BEFORE the
+       * provider call, so a denied `standard` job costs worker cycles, not money, and is bounded
+       * (3 attempts, then terminal). Everything the operator relied on is unchanged: the exhaustion
+       * warning above, its hourly dedup, and `recordSend()` accounting.
+       *
+       * An admin can still pause deliberately via `admin.routes.ts`; review B12 surfaces that state
+       * in the burst alert so a paused queue no longer reads like a draining one.
+       */
+      // review C7 / finding R4 — the old text said "emails queued for tomorrow", which was true only
+      // while the queue-wide pause HELD the job until budget rollover. Since review B1 removed that
+      // pause the job simply retries its remaining attempts and is then DISCARDED, so the old wording
+      // promised an operator a delivery that will never arrive.
+      throw new Error(
+        `Budget exhausted: ${budgetCheck.reason}. This STANDARD job will retry its remaining attempts ` +
+          `and then be discarded — it is NOT held until tomorrow. Transactional mail is unaffected.`,
+      );
     }
 
     // Calculate budget usage percentage for graduated throttling
@@ -130,8 +201,33 @@ export const emailWorker = new Worker<EmailJob>(
     const monthlyPct = usage.monthlyCount / usage.monthlyLimit;
     const budgetUsage = Math.max(dailyPct, monthlyPct);
 
+    /**
+     * ⚠️ Story 13-65 (review B2 / finding H2) — CITIZEN-FACING REGISTRATION MAIL IS NEVER DEFERRED.
+     *
+     * The deferral/digest mechanism was built for OPS/STAFF notifications: it swallows the job and
+     * later mails a rolled-up "[OSLRS] You have N notifications" summary. Routing a citizen's
+     * thank-you through it was a genuine regression, and a compliance one:
+     *
+     *   - it returns BEFORE the type switch, so the `source='public'` gate, the 13-9 suppression
+     *     check, 13-46's 5-day per-address gap, the send-once marker and the burst counter are ALL
+     *     skipped — every guard this story moved into the handler;
+     *   - the digest is sent by `sendGenericEmail` with NO category, so it classifies as
+     *     `notification-digest`: no List-Unsubscribe header, no marketing cap, no `campaign_sends`
+     *     row — marketing mail laundered into an ops category;
+     *   - it can therefore reach an address on the bounce / complaint / UNSUBSCRIBE list;
+     *   - and it returns `{success: true, deferred: true}`, so nothing retries and nothing is
+     *     counted lost. The real thank-you is simply never sent.
+     *
+     * Marketing VOLUME is already governed by 13-46's marketing cap, consulted per-send inside
+     * `dispatch` — that is the correct control for this mail, and it is category-aware, loud, and
+     * has its own operator page. The budget digest is not.
+     */
+    // review C10 — an explicit typed set, not a prefix test: adding a registration type without
+    // deciding its digest behaviour must be a compile error, not a silent fall-through.
+    const isCitizenRegistrationMail = isCitizenRegistrationEmailType(String(type));
+
     // Defer standard emails when budget is constrained (80%+)
-    if (budgetUsage >= BUDGET_THRESHOLD_DEFER && emailPriority === 'standard') {
+    if (budgetUsage >= BUDGET_THRESHOLD_DEFER && emailPriority === 'standard' && !isCitizenRegistrationMail) {
       const recipientEmail = getRecipientEmail(job.data);
       const summary = buildDeferralSummary(job.data);
 
@@ -164,8 +260,17 @@ export const emailWorker = new Worker<EmailJob>(
       };
     }
 
+    /**
+     * Story 13-65 (AC6) — the registration handlers must know whether this is the LAST attempt, so
+     * `recordAutoSendFailure` (a PAGING counter) fires only when the email is genuinely lost. Same
+     * condition `logEmailFailureToAudit` already uses below.
+     */
+    const jobContext: RegistrationJobContext = {
+      isFinalAttempt: job.attemptsMade + 1 >= (job.opts.attempts || 3),
+    };
+
     try {
-      let result;
+      let result: { success: boolean; messageId?: string; error?: string };
 
       switch (type) {
         case 'staff-invitation':
@@ -195,6 +300,34 @@ export const emailWorker = new Worker<EmailJob>(
 
         case 'backup-notification':
           result = await EmailService.sendGenericEmail(data as BackupNotificationEmailData);
+          break;
+
+        /**
+         * Story 13-65 (AC1/AC2/AC9) — THE THREE REGISTRATION SENDS.
+         *
+         * What the queue buys here, stated exactly and no stronger: BOUNDED CONCURRENCY,
+         * DURABILITY, RETRY and BACKPRESSURE. It does NOT reduce total CPU and does NOT give
+         * event-loop isolation, because the workers run in the API process.
+         *
+         * Each handler re-runs its OWN guard block immediately before its send — send-once marker,
+         * suppression, per-address gap — because a guard evaluated at enqueue and a send executed
+         * minutes later is a guard that did not run. They resolve to `{ success: true }` here
+         * because the handler either completed (sent, or deliberately skipped by a guard) or threw,
+         * and a throw is what makes BullMQ retry.
+         */
+        case 'registration-magic-link':
+          await handleRegistrationMagicLinkJob(data as RegistrationMagicLinkEmailData);
+          result = { success: true };
+          break;
+
+        case 'registration-confirmation':
+          await handleRegistrationConfirmationJob(data as RegistrationConfirmationEmailData, jobContext);
+          result = { success: true };
+          break;
+
+        case 'registration-thankyou':
+          await handleRegistrationThankYouJob(data as RegistrationThankYouEmailData, jobContext);
+          result = { success: true };
           break;
 
         default:
@@ -247,7 +380,7 @@ export const emailWorker = new Worker<EmailJob>(
     connection,
     concurrency: 5, // Process up to 5 emails concurrently
     settings: {
-      // AC3: Custom backoff strategy (30s, 2min, 10min)
+      // AC3: Custom backoff strategy — effective 2min then 10min — BullMQ passes attemptsMade>=1, so index 0 is unreachable (13-65 D5)
       backoffStrategy: (attemptsMade: number) => {
         return getBackoffDelay(attemptsMade);
       },

@@ -50,23 +50,44 @@ describe('Email Backpressure', () => {
       expect(EMAIL_TYPE_PRIORITY['backup-notification']).toBe('standard');
     });
 
-    it('should have exactly 2 critical types and 4 standard types (post Story 9-12 Task 10.3 retirement of verification)', () => {
+    // Story 13-65 — 2+4 became 4+5 when the three registration sends joined the queue. These counts
+    // are the mechanism working: adding a type without deciding its priority reddens them loudly.
+    it('should have exactly 4 critical types and 5 standard types (post Story 13-65 registration sends)', () => {
       const priorities = Object.values(EMAIL_TYPE_PRIORITY);
       const critical = priorities.filter((p) => p === 'critical');
       const standard = priorities.filter((p) => p === 'standard');
-      expect(critical).toHaveLength(2);
-      expect(standard).toHaveLength(4);
+      expect(critical).toHaveLength(4);
+      expect(standard).toHaveLength(5);
     });
 
-    it('should cover all 6 email job types (post Story 9-12 Task 10.3 retirement of verification)', () => {
+    it('should cover all 9 email job types (post Story 13-65 registration sends)', () => {
       const types = Object.keys(EMAIL_TYPE_PRIORITY);
-      expect(types).toHaveLength(6);
+      expect(types).toHaveLength(9);
       expect(types).toContain('staff-invitation');
       expect(types).toContain('password-reset');
       expect(types).toContain('payment-notification');
       expect(types).toContain('dispute-notification');
       expect(types).toContain('dispute-resolution');
       expect(types).toContain('backup-notification');
+      expect(types).toContain('registration-magic-link');
+      expect(types).toContain('registration-confirmation');
+      expect(types).toContain('registration-thankyou');
+    });
+
+    /**
+     * Story 13-65 (AC3/AC4) — the classification is the whole guard, so it is asserted directly.
+     * `critical` is what keeps a citizen's login link and reference code out of the >=80% deferral
+     * AND — since 13-65 review B1 — there is no queue-wide budget-exhaustion pause at all: it was
+     * REMOVED because BullMQ Queue.pause() is global and parked citizen mail enqueued after it.
+     * MARKETING budget can stop a transactional email.
+     */
+    it('classifies the two TRANSACTIONAL registration sends as critical', () => {
+      expect(EMAIL_TYPE_PRIORITY['registration-magic-link']).toBe('critical');
+      expect(EMAIL_TYPE_PRIORITY['registration-confirmation']).toBe('critical');
+    });
+
+    it('classifies the MARKETING thank-you as standard, so 13-46 cap and deferral still bind', () => {
+      expect(EMAIL_TYPE_PRIORITY['registration-thankyou']).toBe('standard');
     });
 
     it('should map every priority to exactly "critical" or "standard"', () => {
@@ -117,10 +138,12 @@ describe('Email Backpressure', () => {
       );
     });
 
-    it('should generate dedup keys for all 7 email types without error', () => {
+    it('should generate dedup keys for all 9 email types without error', () => {
       const allTypes: EmailJobType[] = [
         'staff-invitation', 'password-reset',
         'payment-notification', 'dispute-notification', 'dispute-resolution', 'backup-notification',
+        // Story 13-65 — the three registration sends.
+        'registration-magic-link', 'registration-confirmation', 'registration-thankyou',
       ];
       for (const type of allTypes) {
         const key = buildDedupKey('user@test.com', type);
@@ -330,10 +353,12 @@ describe('Email Backpressure', () => {
       expect(result.budgetUsage).toBe(0.002);
     });
 
-    it('should exercise all 7 email types through deferral logic', () => {
+    it('should exercise all 9 email types through deferral logic', () => {
       const allTypes: EmailJobType[] = [
         'staff-invitation', 'password-reset',
         'payment-notification', 'dispute-notification', 'dispute-resolution', 'backup-notification',
+        // Story 13-65 — the three registration sends.
+        'registration-magic-link', 'registration-confirmation', 'registration-thankyou',
       ];
       for (const type of allTypes) {
         const priority = EMAIL_TYPE_PRIORITY[type];

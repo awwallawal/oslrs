@@ -20,6 +20,8 @@ const counts = (over: Partial<BurstCounts> = {}): BurstCounts => ({
   blocked429: 0,
   blocked429Draft: 0,
   autoSends: 0,
+  // Story 13-65 (AC5) — queue depth is reported, never a trigger.
+  emailQueueWaiting: 0,
   ...over,
 });
 
@@ -188,5 +190,76 @@ describe('draft refusals are their OWN signal (13-46 review A12 / finding L2)', 
     expect(msg).toContain('99');
     expect(msg).toMatch(/autosave/i);
     expect(msg).toMatch(/lost/i); // a lost draft looks like someone who didn't finish
+  });
+});
+
+
+/**
+ * Story 13-65 (AC5) — the email-queue depth composes with 13-46's breaker; it does not duplicate it.
+ *
+ * ⛔ NO SECOND ALERT, NO SECOND THRESHOLD, NO SECOND COOLDOWN. 13-46 owns the breaker. These tests
+ * pin BOTH halves of that: the depth appears in the one existing message, and it can never on its
+ * own cause (or suppress) a finding.
+ */
+describe('email queue depth in the burst alert (Story 13-65 AC5)', () => {
+  it('is NOT a trigger — a huge backlog on quiet traffic produces NO finding', () => {
+    // If this ever fails, a second breaker has been introduced by accident.
+    expect(evaluateBurst(counts({ submits: 2, emailQueueWaiting: 100_000 }))).toBeNull();
+  });
+
+  it('does NOT suppress a finding either — a burst still pages with an empty queue', () => {
+    const finding = evaluateBurst(
+      counts({ submits: BURST_THRESHOLDS.submitsPerWindow, emailQueueWaiting: 0 }),
+    );
+    expect(finding).not.toBeNull();
+    expect(finding!.kind).toBe('registration_burst');
+  });
+
+  it('reports the waiting depth in the SINGLE existing message', () => {
+    const finding = evaluateBurst(
+      counts({ submits: BURST_THRESHOLDS.submitsPerWindow, autoSends: 4, emailQueueWaiting: 137 }),
+    );
+    const msg = formatBurstAlert(finding!, null);
+    expect(msg).toContain('Email queue waiting: 137');
+  });
+
+  it('says so when the queue could not be read, rather than printing a misleading 0', () => {
+    const finding = evaluateBurst(
+      counts({ submits: BURST_THRESHOLDS.submitsPerWindow, emailQueueWaiting: null }),
+    );
+    const msg = formatBurstAlert(finding!, null);
+    expect(msg).toContain('Email queue waiting: unavailable');
+    expect(msg).not.toContain('Email queue waiting: 0');
+  });
+
+  it('🔴 NAMES THE NEW BLIND SPOT IN THE MESSAGE TEXT, not only in a comment', () => {
+    /**
+     * 13-65 moved the registration sends onto the queue, so `recordRegistrationAutoSend()` now fires
+     * at WORKER time on a minute-resolution bucket. Under a backlog the auto-send count LAGS the
+     * submit count in the same window. Before this story those two numbers moved together, so
+     * "300 submits, 40 auto-sends" meant something had STOPPED — it now usually means QUEUED. A
+     * reader who sees only the counts will misdiagnose it, and a comment in the source is not
+     * something the operator reading a Telegram message at 6am can see.
+     */
+    const finding = evaluateBurst(
+      counts({ submits: 300, autoSends: 40, emailQueueWaiting: 260 }),
+    );
+    const msg = formatBurstAlert(finding!, null);
+    expect(msg).toMatch(/counted when the QUEUE sends them/i);
+    expect(msg).toMatch(/LAGS/);
+    expect(msg).toMatch(/QUEUED, not stopped/i);
+  });
+
+  it('still carries every number 13-46 AC3 asked for, in ONE message', () => {
+    const finding = evaluateBurst(
+      counts({ submits: 300, blocked429: 4, blocked429Draft: 7, autoSends: 40, emailQueueWaiting: 260 }),
+    );
+    const msg = formatBurstAlert(finding!, headroom);
+    expect(msg).toContain('Submits: 300');
+    expect(msg).toContain('Refused — submits (429): 4');
+    expect(msg).toContain('Refused — autosaves (429): 7');
+    expect(msg).toContain('Auto thank-you sends: 40');
+    expect(msg).toContain('Email queue waiting: 260');
+    expect(msg).toContain('Marketing cap headroom');
   });
 });
