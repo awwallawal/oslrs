@@ -1,6 +1,8 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-19 · ⚠️ **TWO WORKTREES — parallel streams, read §1a** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-08-23 · ⚠️ **TWO WORKTREES — parallel streams, read §1a** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+
+📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
 ✅ **D6 DONE 2026-08-18 — the prod SHA is no longer recorded here.** It had been wrong FOUR times (2026-07-26, 07-30, 08-09, and again today: the header read `19b51f5` while prod was on `9490449`). A number that is wrong more often than right is worse than no number, because it is read as fact. **There is exactly one way to know, and it takes three seconds:**
 ```bash
@@ -2162,6 +2164,99 @@ only profession, LGA and experience level. That decision is only actionable whil
 preview.
 
 > ✅ **R7 RULED 2026-08-18: PUBLISH** — measured first (8 of 235), then decided. See the story ledger.
+
+## 9. 📻 JINGLE WATCH — open the moment week 1 settles (written 2026-08-23, read ~2026-08-31)
+
+**Why this section exists:** the first radio spot airs **Monday 24 August** (Fresh FM, Ibadan 1 & 2,
+one 60-second spot x3). Everything below was true on 23 August and is the *before* half of a
+comparison that only exists if someone writes it down now.
+
+### 9a. ⛔ THE TRAFFIC WATCH IS NOT RUNNING, AND ITS DOCUMENTED CRON LINE IS BROKEN
+
+Story 9-52 built `cf-traffic-watch.ts` to run every 15 minutes and page via Telegram on bot-flood
+patterns. **It has never run. Verified on prod 2026-08-23:**
+
+- `crontab -l` → **empty**
+- systemd timers → only OS units (sysstat, droplet-agent, fwupd, e2scrub). Nothing OSLRS.
+- `/etc/cron.d` → certbot, e2scrub_all, sysstat only
+- pm2 → no cron-like process (just `oslsr-api` + `pm2-logrotate`)
+
+⚠️ **AND THE COMMAND IN ITS OWN JSDOC DOES NOT WORK.** The prescribed line is
+`cd /root/oslrs && pnpm --filter @oslsr/api exec tsx apps/api/scripts/cf-traffic-watch.ts` —
+`--filter` sets cwd to `apps/api`, so the path resolves to `apps/api/apps/api/scripts/...` and it dies
+with `ERR_MODULE_NOT_FOUND`. **Anyone who had installed that cron would have had it fail silently
+every 15 minutes** — [[pattern-ship-a-fix-that-never-fires]] with the failure pre-installed.
+
+✅ **The working invocation** (verified, token present, `findingCount: 0`):
+```bash
+cd /root/oslrs/apps/api && pnpm exec tsx scripts/cf-traffic-watch.ts --dry-run
+```
+
+### 9b. 📊 PRE-JINGLE TRAFFIC BASELINE — captured 2026-08-23, the "before" half
+
+Requests/day from Cloudflare (`cf-analytics.ts`):
+
+| date | requests | threats |
+|---|---|---|
+| 2026-08-16 | 2,329 | 162 |
+| 2026-08-17 | 3,805 | 169 |
+| 2026-08-18 | 2,053 | — |
+| 2026-08-19 | 1,423 | 123 |
+| 2026-08-20 | 1,613 | 3 |
+| 2026-08-21 | 5,276 | 22 |
+| 2026-08-22 | 4,325 | **961** |
+| 2026-08-23 (partial) | 955 | 11 |
+
+**Status:** 200 → 14,892 · 301 → 4,106 · 403 → 1,570 · 404 → 557 · 401 → 168
+**Countries:** US **8,267** · NG **3,585** · FR 3,322 · SG 1,239 · DE 886 · NL 628 · BE 575 · BR 572
+
+### ⭐ 9c. THE SIGNAL TO WATCH IS **NG REQUESTS**, NOT TOTAL REQUESTS
+
+**This is the most useful thing in this section.** For a Nigerian state registry, **the top country is
+the United States**, and NG is third behind FR. Total traffic is dominated by scanners and bots, and
+it is *volatile* — threats swung from 3 to 961 in two days, and daily totals from 1,423 to 5,276 with
+no campaign running at all.
+
+➡ **A jingle spike measured against TOTAL requests is unreadable.** The band is already 1.4k–5.3k/day
+from noise. Watch **NG-origin requests** (baseline ~3,585 over the window, i.e. roughly 450/day) and
+**registration starts**, not the headline number. Otherwise the campaign's own signal drowns in
+somebody else's port scan — [[pattern-monitor-measuring-something-else]].
+
+### 9d. What to compare when week 1 settles
+
+1. **NG requests, day by day, against the table above.** Fresh FM is Ibadan 1 & 2 — the densest zone.
+2. **13-46 AC7's after-count** — `registration.rate_limit_exceeded` + `wizard_draft.rate_limit_exceeded`
+   turn-aways. The BEFORE baseline is already collected in 13-46 Task 7. **This closes R8**, the one
+   residual genuinely blocking 13-46's `done`.
+3. **Whether any cap ever bound.** `MARKETING_DAILY_CAP` 2000 / monthly 20000 are armed and verified
+   mounted. If nothing came near them, say so — a cap that never binds is still evidence.
+4. **Station attribution by timestamp.** The 7-station buy is strictly sequential with clean gaps, so
+   a registration's timestamp attributes it to a station without any code. **13-46 R3's trigger is
+   CONCURRENT STATIONS, not a date** — it only fires if the 11-station wave overlaps them.
+5. **The email side stayed still.** No marketing blast fired (13-66 stop). So any registration lift in
+   week 1 is attributable to radio alone — an unusually clean read, worth not spoiling.
+
+### ⭐ 9e. RETRO THEME — "what can this guard NOT see?"
+
+Three defects in one week were the same shape: **a guard that is correct about what it checks and
+blind to the rest.** None errored; every one returned a true number.
+
+| guard | correct about | blind to |
+|---|---|---|
+| `lint-story-residuals` | stories that adopted the ledger FORMAT | stories with no table, and `DISCHARGE-ON-*` states |
+| Cat1 blast exclusion | the magic-link route into the register | the other three contact routes — caught 73, **missed 112** |
+| `filterMarketingCohort` | "are we spamming them this week" (5-day gap) | "have they already been asked and not acted" — 52 re-invitees |
+
+➡ **The retro question is not "does this guard work?" but "what is outside its field of view?"**
+Ask it of the rate limiters after week 1 too: they are correct about what they count — what don't they
+count? Do NOT run this retro before the jingle settles; it needs week 1's numbers to be worth
+anything.
+
+### 9f. Housekeeping carried in
+- **13-65** — dev reports it functionally complete, documentation being finished. Branched off
+  `a69156e`; **needs a rebase onto current main before adjudication.**
+- **13-66 R1** — the 18 hold-list people need a disposition (different copy, not silence). Awwal's.
+- **13-51 R13** — CLOSED, script retired. R3 and R12 remain.
 
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
