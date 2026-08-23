@@ -791,6 +791,48 @@ _32 paths total._
 | 2026-08-22 | **Implemented (Tasks 1-6, 8; Task 7 deferred). Status → `review`.** All three registration sends are ENQUEUED onto `email-notification` instead of dialled in-request, with the whole guard block relocated verbatim into a dedicated `services/registration-email-jobs.ts` (the handlers could not stay on `SubmissionProcessingService` — worker → service → queues is an ESM cycle that fails as `undefined` at call time). 🔴 **AC4 shipped as the load-bearing guard: `critical` types are exempt from the queue-wide budget-exhaustion pause, so an exhausted MARKETING budget can never stop a citizen's LOGIN LINK — with the converse pinned too, and BOTH directions falsified by deleting the guard and watching exactly the right tests red.** **Two defects in my own first implementation were caught by these tests and fixed:** (1) a `void`-ed enqueue produced an UNHANDLED REJECTION and silently disarmed AC6's operator page — the enqueue is now awaited and the rejection reaches the caller's `.catch()`, while the 201 stays protected at the call site; (2) the AC2 double-send test PASSED with the marker check deleted, because 13-46's ledger gap was suppressing the second send — `[[pattern-test-that-passes-over-a-hole]]` inside the AC that names it — fixed by isolating the marker and adding a control. **Consumer sweep:** `_backfill-registration-autosends.ts` would have reported 100% failure on a successful run (it re-read worker-written markers immediately); it now counts enqueues and prints the delivery-confirmation procedure. **Story Dev Notes CORRECTED against the tree:** the confirmation email DOES already have a send-once marker (9-58 review L1), so the required decision is KEEP IT, moved with the guard block; no new marker added. Three 13-46 test files had their SETUP re-pointed at the moved guard with **every assertion unchanged**; the raw-`UPDATE` census guard fired correctly and was re-pinned (same count, same file count, new path). ⛔ **Gate item 7 is NOT discharged and all three docs stay RED: the AC8 MEASUREMENT has not run.** Rig, method, both correctly-named readings, teardown chain and an EMPTY verdict table are recorded in `13-3-cutover-and-failover.md`; the numbers come from the first real spot (Mon 24 Aug 2026, Fresh FM, one station, one 60s spot) rather than a synthetic prod run that would leave thousands of rows and send thousands of real emails. 🔴 **The BEFORE half must be captured before 13-65 deploys.** `magic-link.service.ts` was not touched at all (Non-goal 3), and the honest cost — the queued magic link gains durability and bounded concurrency but NOT retry-on-5xx, because that method swallows provider failures by design — is written into the handler rather than glossed. Full API suite (4195 passed), full web suite (3010 passed), `tsc --noEmit` on all three packages and `pnpm --filter @oslsr/api lint` (3 drift guards) all green, run directly. Not committed. | Amelia (DEV) |
 | 2026-08-22 | **Story drafted** to discharge `roadmap-to-launch.md` pre-flight gate item 7 by BOTH of its offered routes — (b) queue the registration sends and (a) measure the write path — authored as ONE story on Awwal's explicit instruction not to split it into gating and non-gating halves. Carries 13-46 residual **R6**. **Four corrections against the drafting brief, each verified against the tree, three of which changed an AC:** (i) 🔴 the brief assumes the registration path has no user-blocking send because the blocking magic link is "the `/login` flow" — but `WizardPage.tsx:559` **awaits** `POST /auth/public/magic-link` before painting the success screen, and `magic-link.controller.ts:92` awaits the provider before its 200, so the registration journey *does* block on a send; it is out of scope by instruction, and §7 + Non-goal 3 record the one-keyword fix and a reopen trigger rather than losing the finding. (ii) 🔴 **queueing creates a failure mode that does not exist today** — `email.worker.ts:92` pauses the WHOLE queue and throws on budget exhaustion, so naively queued magic links and reference codes would be stopped by an exhausted *marketing* budget; AC4 exists solely for this. (iii) the dedup key cannot answer the retry question the brief raised — produce-side, non-atomic, 300s TTL, skipped for `critical`, while the third retry lands at 10 min — so AC2 moves the **whole guard block** into the worker and names the send-once marker as the only load-bearing mechanism, while stating honestly that the send-then-stamp window is *unchanged* and merely entered up to 3× instead of once. (iv) `getSystemHealth` is **two different functions** — `operations.service.ts:93` (pm2 RSS/CPU, what 13-3 actually read) and `monitoring.service.ts:59` (queue depths, 10s cache) — and AC8 needs both, since naming the wrong one yields a measurement with no memory figure. Also found: the confirmation email has **no** send-once marker at all, so AC2 forces that decision to be made and stated rather than left implicit; and 13-3's rig is **GET-only** (no `method`/`body`), so AC8 splits draft-save (high volume, cheap teardown) from submit (small N, real rows, real email, child-first teardown) because a write test *leaves rows*. **The PM2 topology is recorded ONCE, in §3, as a constraint** — battle-tested and hardened, not changing (Awwal, 2026-08-22); story 11-8 stays in backlog and AC9 forbids "process isolation" appearing as a follow-up in any artefact. The claim is bounded throughout to **bounded concurrency, durability, retry and backpressure — never CPU reduction or event-loop isolation**, since all 10 workers run in the API process. 9 ACs / 8 Tasks. Status `ready-for-dev`. | Bob (SM) |
 
+## Residual ledger (13-65)
+
+⚠️ **Added at adjudication 2026-08-23 — the story arrived with NO ledger.** Its Task 7 deferral was
+recorded only as unchecked boxes, which §2a0's debt gate surfaces but the CI guard cannot police: the
+guard scans residual TABLE ROWS, so a story with no table is policed by nothing until it reads
+`done`. Written now so the deferral is a row with an owner and a trigger rather than three ticks.
+
+| # | Item | State | Re-runnable evidence | Owner | Reopen trigger |
+|---|---|---|---|---|---|
+| **R1** | **AC8's before/after measurement has NOT been run** (Task 7, both halves). The queue is deployed but its behaviour under real load is unmeasured — peak RSS, peak CPU, `pm2RestartCount` delta, peak queue depth. | ⏳ **OPEN — BLOCKS `done`** | `apps/api/scripts/load-test.ts` (now `--method`/`--body` capable, non-localhost refusal intact). **Deliberately deferred to JINGLE WEEK 1** — one station, one 60-second spot, the smallest real blast radius available, against a 2 GB box. A synthetic run at production would be a worse measurement AND a worse risk. | Awwal / ops, week 1 | Week 1 passing without the measurement being taken — the window does not recur |
+| **R2** | The two transactional registration sends are `critical` and therefore **bypass dedup**. That is correct (a citizen's login link must not be deduplicated away) but it means a genuine double-submit sends two magic links. | ✅ **ACCEPTED** | `EMAIL_TYPE_PRIORITY` in `packages/types/src/email.ts`; guarded by *"classifies the two TRANSACTIONAL registration sends as critical"* | — | A complaint about duplicate login emails, which would mean the submit path is not idempotent upstream |
+| **R3** | 13-65 moves the code 13-46's burst guards live in. Those guards' behavioural tests are the contract and were **not** rewritten — but the concurrency residual the review raised as M9 is real and unstated in the ACs. | ✅ **ACCEPTED — documented in the review, not silently carried** | `## Senior Developer Review (AI)` → M9 | 13-46 R8's week-1 numbers will show whether it matters | Queue depth behaving unlike the M9 analysis predicts under week-1 load |
+
+### Closing verdict
+
+**NOT CLOSED — `review`, closing on the week-1 measurement. Deploy SHA: ⏳ PENDING.**
+**R1 blocks `done` and cannot be discharged early** — it needs the jingle to have aired
+([[pattern-verification-that-cannot-run-yet]]). Deploying is fine and expected; closing is not.
+
+| Gate | Evidence — run by adjudication, not accepted from the dev |
+|---|---|
+| `tsc` | API **0**, web **0** (re-run after the rebase onto `b87dff7`) |
+| `eslint` + 3 drift guards | **0 errors**, guards green at **393 files** |
+| Touched suites | **210 passed / 11 files** pre-rebase; **129 passed / 9 files** re-run post-rebase |
+| Rebase | clean onto current main; one board conflict, resolved keeping BOTH 13-65's `review` and main's new 13-66 row |
+
+### ⭐ RED-verify by adjudication — AC4's red line, which is the whole story
+
+Downgrading `registration-magic-link` from `critical` to `standard` in `EMAIL_TYPE_PRIORITY` reds
+**exactly the right two tests**:
+
+```
+× should have exactly 4 critical types and 5 standard types (post Story 13-65 registration sends)
+× classifies the two TRANSACTIONAL registration sends as critical
+```
+
+That is the property AC4 exists to protect: the email worker pauses on budget exhaustion, so a
+`standard` login link could be held behind an exhausted MARKETING budget — a citizen unable to sign in
+because a campaign spent its quota. The sibling assertion (*"classifies the MARKETING thank-you as
+standard, so 13-46 cap and deferral still bind"*) proves the separation cuts both ways rather than
+just exempting everything. Restored by hand, zero residue, 45/45.
+
 ## Senior Developer Review (AI)
 
 **Reviewer:** adversarial code-review workflow (`bmad:bmm:workflows:code-review`), 2026-08-22, on the
