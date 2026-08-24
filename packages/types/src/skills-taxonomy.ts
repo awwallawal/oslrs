@@ -1,6 +1,9 @@
-// ===== Story 13-20: Canonical 150-skill occupational taxonomy =================
-// Source of truth: _bmad-output/baseline-report/appendices/appendix-c-skills-taxonomy.md
-// (150 rows, ISCO-08 aligned, 20 sectors). This mirrors the `Lga` enum + lga_list
+// ===== Story 13-20: Canonical occupational taxonomy ==========================
+// Source of truth for entries 0..149: _bmad-output/baseline-report/appendices/
+// appendix-c-skills-taxonomy.md (150 rows, ISCO-08 aligned, 20 sectors).
+// Entries past index 149 are the OSLRS EXTENSION BLOCK — see the comment at the
+// end of SKILL_TAXONOMY. The appendix is a signed deliverable and stays at 150.
+// This mirrors the `Lga` enum + lga_list
 // `canonicalValues` guard from Story 13-16: SKILL_SLUGS pins the exact allowed
 // skill_list VALUES so the XLSForm parser flags any non-canonical skill on upload.
 //
@@ -181,13 +184,107 @@ export const SKILL_TAXONOMY = [
   { name: 'facility_management', label: 'Facility Management', sector: 'Real Estate & Property Services', isco: '1219' },
   { name: 'pool_maintenance', label: 'Swimming Pool Construction/Maintenance', sector: 'Real Estate & Property Services', isco: '7119' },
   { name: 'storage_construction', label: 'Pest-Proof Storage Construction', sector: 'Real Estate & Property Services', isco: '7119' },
+  // ===== EXTENSION BLOCK — beyond Appendix C's 150 ==========================
+  // Appendix C is a SIGNED baseline deliverable (CHM/OSLR/2026/001) and stays
+  // frozen at 150; a study is not retro-edited. Everything past index 149 is an
+  // OSLRS-side extension, and `skill-taxonomy-canonical.test.ts` still enforces
+  // row-for-row parity against the appendix for indices 0..149 — appending here
+  // shifts no existing index, so that guard keeps its full strength.
+  //
+  // Rule for this block: EXISTING SECTORS ONLY (the 20-sector count is pinned by
+  // test), ISCO-08 backed, and each entry justified by observed demand.
+  //
+  // 2026-08-23 — the farming-group intake (N-Cares / L-PRES / fish rosters,
+  // ~9.5k people) had no home for these five occupations. Counts below are rows
+  // in that intake that name the trade as their OWN business, not rows that
+  // merely mention it (an early read of 216 "veterinary" hits was mostly the
+  // supply-chain ENTITY column and business names containing "…vet").
+  { name: 'veterinary', label: 'Veterinary/Animal Health Services', sector: 'Food, Agriculture & Processing', isco: '3240' },      // 20 businesses; the 150 had animal-health nowhere
+  { name: 'feed_milling', label: 'Animal Feed Milling/Production', sector: 'Food, Agriculture & Processing', isco: '8160' },        // 29 value-chain rows + 3 businesses
+  { name: 'agric_extension', label: 'Agricultural Extension/Advisory', sector: 'Food, Agriculture & Processing', isco: '3142' },    // 10 rows
+  { name: 'beekeeping', label: 'Beekeeping/Apiculture', sector: 'Food, Agriculture & Processing', isco: '6123' },                   // 7 rows
+  { name: 'snail_farming', label: 'Snail/Grasscutter Farming', sector: 'Food, Agriculture & Processing', isco: '6121' },            // 7 rows; ISCO per FAP-11
+  //
+  // 2026-08-23 (second pass) — MERGE of docs/skills-taxonomy-isco08.md v1.0.
+  // That document (2026-03-08, 151 skills, its own 20 sectors) is the vocabulary
+  // Story 13-22 replaced with the Appendix-C 150. Reconciling the two showed 92 of
+  // its 151 already present and 15 more that were the same trade under different
+  // wording; the 37 below are the trades the consolidation genuinely lost — heavily
+  // weighted to the Oyo-specific ones. Sectors are mapped onto the EXISTING 20 (the
+  // v1.0 sector names are not adopted; the 20-sector count is pinned by test).
+  // docs/skills-taxonomy-isco08.md is SUPERSEDED by this file as of that merge.
+  //
+  // Food, Agriculture & Processing
+  { name: 'cassava_processing', label: 'Cassava Processing (Garri, Fufu, Lafun)', sector: 'Food, Agriculture & Processing', isco: '7514' },
+  { name: 'palm_oil_processing', label: 'Palm Oil & Kernel Processing', sector: 'Food, Agriculture & Processing', isco: '7514' },
+  { name: 'cocoa_farming', label: 'Cocoa Farming & Post-Harvest Handling', sector: 'Food, Agriculture & Processing', isco: '6112' },
+  { name: 'farm_machinery', label: 'Irrigation & Farm Mechanisation', sector: 'Food, Agriculture & Processing', isco: '8341' },
+  { name: 'landscaping', label: 'Gardening & Landscaping', sector: 'Food, Agriculture & Processing', isco: '6113' },
+  // Artisan & Traditional Crafts
+  { name: 'aso_oke_weaving', label: 'Aso-Oke Weaving', sector: 'Artisan & Traditional Crafts', isco: '7318' },
+  { name: 'adire_dyeing', label: 'Adire & Textile Dyeing', sector: 'Artisan & Traditional Crafts', isco: '7318' },
+  { name: 'woodcarving', label: 'Woodcarving & Sculpture', sector: 'Artisan & Traditional Crafts', isco: '7317' },
+  { name: 'basket_weaving', label: 'Mat & Basket Weaving', sector: 'Artisan & Traditional Crafts', isco: '7318' },
+  { name: 'bronze_casting', label: 'Bronze & Brass Casting', sector: 'Artisan & Traditional Crafts', isco: '7211' },
+  // Sales & Commerce
+  { name: 'pos_agent', label: 'POS Agent & Mobile Money Services', sector: 'Sales & Commerce', isco: '3312' },
+  { name: 'market_trading', label: 'Market Trading & Open-Market Selling', sector: 'Sales & Commerce', isco: '5211' },
+  { name: 'patent_medicine', label: 'Patent Medicine Vending (PPMV)', sector: 'Sales & Commerce', isco: '5221' },
+  { name: 'telecom_retail', label: 'Mobile Recharge & Telecom Retail', sector: 'Sales & Commerce', isco: '5211' },
+  { name: 'retail_store', label: 'Supermarket & Retail Store Operation', sector: 'Sales & Commerce', isco: '5222' },
+  { name: 'ecommerce_selling', label: 'E-Commerce & Online Selling', sector: 'Sales & Commerce', isco: '5244' },
+  { name: 'insurance_sales', label: 'Insurance & Financial Product Sales', sector: 'Sales & Commerce', isco: '3321' },
+  // Construction & Building
+  { name: 'iron_bending', label: 'Iron Bending & Steel Fixing', sector: 'Construction & Building', isco: '7214' },
+  { name: 'ceiling_installation', label: 'POP Ceiling & Suspended Ceiling Installation', sector: 'Construction & Building', isco: '7123' },
+  { name: 'interlocking_paving', label: 'Interlocking Paving & Concrete Work', sector: 'Construction & Building', isco: '7114' },
+  // Healthcare & Wellness
+  { name: 'dental_technology', label: 'Dental Technology', sector: 'Healthcare & Wellness', isco: '3214' },
+  { name: 'optometry', label: 'Optometry & Optical Dispensing', sector: 'Healthcare & Wellness', isco: '3254' },
+  { name: 'health_records', label: 'Health Records & Information Management', sector: 'Healthcare & Wellness', isco: '3252' },
+  // Digital, Technology & Office
+  { name: 'mobile_app_dev', label: 'Mobile App Development', sector: 'Digital, Technology & Office', isco: '2514' },
+  { name: 'it_support', label: 'Networking & IT Support', sector: 'Digital, Technology & Office', isco: '2522' },
+  // Education & Professional Services
+  { name: 'vocational_instruction', label: 'Vocational & Technical Instruction', sector: 'Education & Professional Services', isco: '2320' },
+  { name: 'adult_literacy', label: 'Adult Literacy & Non-Formal Education', sector: 'Education & Professional Services', isco: '2359' },
+  // Transport & Logistics
+  { name: 'driving_instruction', label: 'Driving Instruction', sector: 'Transport & Logistics', isco: '5165' },
+  { name: 'fleet_management', label: 'Fleet Management & Vehicle Tracking', sector: 'Transport & Logistics', isco: '3339' },
+  // remaining sectors
+  { name: 'cosmetology', label: 'Cosmetology & Skincare', sector: 'Fashion, Beauty & Personal Care', isco: '5142' },
+  { name: 'gemstone_cutting', label: 'Gemstone Cutting & Polishing', sector: 'Mining & Quarrying', isco: '7313' },
+  { name: 'petroleum_distribution', label: 'Petroleum Product Distribution', sector: 'Energy & Utilities', isco: '8312' },
+  { name: 'lpg_operation', label: 'Gas Plant Operation & LPG Dispensing', sector: 'Energy & Utilities', isco: '8131' },
+  { name: 'mc_hype', label: 'Master of Ceremonies (MC) & Hype Services', sector: 'Entertainment & Creative Arts', isco: '2655' },
+  { name: 'ohs', label: 'Occupational Health & Safety', sector: 'Security & Safety Services', isco: '3257' },
+  { name: 'mediation', label: 'Mediation & Alternative Dispute Resolution', sector: 'Religious & Community Services', isco: '2611' },
+  { name: 'cooperative_management', label: 'Cooperative & Thrift Society Management', sector: 'Religious & Community Services', isco: '1439' },
 ] as const satisfies readonly SkillDefinition[];
 
-/** Union of the canonical skill slugs (literal 150-member union). */
+/**
+ * Appendix C's row count. The taxonomy's first BASELINE_SKILL_COUNT entries are a
+ * faithful, index-aligned extraction of the signed baseline study; anything after
+ * is the extension block above.
+ */
+export const BASELINE_SKILL_COUNT = 150;
+
+/** Union of the canonical skill slugs (literal union: the 150 + the extensions). */
 export type SkillSlug = (typeof SKILL_TAXONOMY)[number]['name'];
 
-/** The 150 canonical skill slugs — pins skill_list.canonicalValues (Story 13-20). */
+/** The canonical skill slugs — pins skill_list.canonicalValues (Story 13-20). */
 export const SKILL_SLUGS: readonly SkillSlug[] = SKILL_TAXONOMY.map((s) => s.name);
+
+/**
+ * Slugs that exist in the taxonomy but are NOT yet selectable in the shipped
+ * XLSForm — a registrant cannot pick these until the form is re-uploaded and
+ * `wizard.public_form_id` re-pinned. Imported records may already carry them.
+ * `skill-taxonomy-canonical.test.ts` pins this list against the real fixture, so
+ * it must be emptied by the same commit that ships the new form.
+ */
+export const SKILL_SLUGS_NOT_YET_IN_FORM: readonly SkillSlug[] = SKILL_TAXONOMY
+  .slice(BASELINE_SKILL_COUNT)
+  .map((s) => s.name);
 
 /**
  * The single bucket for non-canonical values — custom_* free-text skills a

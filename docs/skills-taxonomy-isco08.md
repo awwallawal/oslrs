@@ -1,6 +1,32 @@
 # Occupational Skills Taxonomy — Nigerian State Labour Registry
 
-**Version:** 1.0
+> ## ⛔ SUPERSEDED — 2026-08-24. Do not use as a source of truth.
+>
+> **The canonical taxonomy is `packages/types/src/skills-taxonomy.ts` (192 skills).**
+> This document is retained for provenance only: it is the v1.0 vocabulary Story 13-22
+> replaced with the Appendix-C 150, and it is the source the 2026-08-24 merge drew from.
+>
+> **Merge result** — its 151 skills reconciled against the shipped taxonomy:
+> * **92** were already present
+> * **15** more were the same trade under different wording (e.g. *Vulcanising & Tyre
+>   Services* → `vulcanizing`, *Nursing & Midwifery Assistance* → `nursing`)
+> * **37** were genuinely missing and have been ADDED — disproportionately the
+>   Oyo-specific trades (*Aso-Oke Weaving*, *Adire & Textile Dyeing*, *Cassava
+>   Processing*, *Palm Oil & Kernel Processing*, *Cocoa Farming*, *Bronze & Brass
+>   Casting*, *POS Agent*, *Cooperative & Thrift Society Management*)
+> * `snail_farming` was re-coded **6129 → 6121** to match FAP-11 here
+>
+> **Its 20 sector names were NOT adopted.** The shipped taxonomy's 20 sectors are
+> pinned by test and load-bearing for combobox grouping and analytics `byCategory`;
+> every merged skill was mapped onto an existing sector instead.
+>
+> ⚠️ **Two counting errors in this document, left uncorrected as part of the record:**
+> the Summary Statistics table totals **150** while its own sector figures sum to
+> **151**, and the "Discrepancy note" below asserts the same figures sum to 150. The
+> actual skill-row count is **151**. This is the "151-entry vocabulary" referred to in
+> the header comment of `skills-taxonomy.ts`.
+
+**Version:** 1.0 (superseded)
 **Date:** 2026-03-08
 **Standard:** ILO ISCO-08 (International Standard Classification of Occupations, 2008)
 **Scope:** 150 skills across 20 economic sectors, optimised for Southwestern Nigeria (Oyo State)
