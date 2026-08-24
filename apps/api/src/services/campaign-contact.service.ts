@@ -1,4 +1,4 @@
-import { and, gte, inArray } from 'drizzle-orm';
+import { and, gte, inArray, sql } from 'drizzle-orm';
 import pino from 'pino';
 import { db } from '../db/index.js';
 import { campaignSends, type CampaignSendChannel } from '../db/schema/index.js';
@@ -133,6 +133,131 @@ export async function getRecentlyContactedEmails(
   return new Set(rows.map((r) => r.email));
 }
 
+/**
+ * Story 13-50 AC5 — THE PRE-BLAST PHANTOM SWEEP.
+ *
+ * Any cohort assembled from `wizard_drafts` inherits AC4's phantoms: `wizard_drafts` is keyed on
+ * email and the wizard autosaves mid-typing, so a half-entered address gets its own row and
+ * becomes **a person who never existed**. Four of them were invited in D4 on 2026-08-06, at
+ * addresses that cannot receive mail, and all four belonged to people ALREADY in the register.
+ *
+ * AC4 closes the producer going forward. This closes the stock, and it closes it at the SHARED
+ * filter rather than in each blast script — same reason the magic-link audit moved into
+ * `issueToken`: a per-script check is a census of sites, and the next script simply doesn't have
+ * one ([[pattern-census-counts-sites-not-callers]]).
+ *
+ * ⚠️ EXCLUDED, NOT REPORTED (AC5.1). A report nobody reads is not a guard.
+ * ⚠️ AND LOGGED (AC5.2). A silent filter reads as "everyone was contacted" — the failure mode of
+ * [[pattern-test-that-passes-over-a-hole]] applied to operations rather than to tests.
+ */
+export interface PhantomSweepResult<T> {
+  cohort: T[];
+  phantomPrefixSkipped: number;
+  alreadyRegisteredSkipped: number;
+  /** Canonical addresses dropped as mid-typing prefixes — printed by the dry-run. */
+  droppedPhantomEmails: string[];
+  /** Canonical addresses dropped because their owner is already in the register. */
+  droppedRegisteredEmails: string[];
+}
+
+/**
+ * The detector, as the story wrote it: *a draft email that is a strict PREFIX of another draft
+ * email = abandoned mid-typing.* (`yusuffasiat@gmail.co` is a strict prefix of
+ * `yusuffasiat@gmail.com`.)
+ *
+ * PURE — the DB reads are the caller's job ({@link loadPhantomSweepContext}) so the rule itself is
+ * testable without fixtures, and so a zero here can be told apart from a query that returned
+ * nothing.
+ *
+ * `registeredEmails` is applied ONLY by campaigns that INVITE PEOPLE TO REGISTER. It must never
+ * be applied blanket-wide: `_cohort-a-supplemental-survey-blast.ts` and
+ * `_backfill-registration-autosends.ts` deliberately target people who ARE registered, and a
+ * shared "drop the registered" rule would silently empty both.
+ */
+export function sweepPhantomDrafts<T>(
+  rows: T[],
+  getEmail: (row: T) => string,
+  ctx: { allDraftEmails: Iterable<string>; registeredEmails: Iterable<string> },
+): PhantomSweepResult<T> {
+  const drafts = [...ctx.allDraftEmails].map(toCanonicalEmail);
+  const registered = new Set([...ctx.registeredEmails].map(toCanonicalEmail));
+
+  const droppedPhantomEmails: string[] = [];
+  const droppedRegisteredEmails: string[] = [];
+
+  const cohort = rows.filter((row) => {
+    const email = toCanonicalEmail(getEmail(row));
+    // A strict prefix of some OTHER draft address — the longer one is the real address.
+    if (drafts.some((other) => other !== email && other.startsWith(email))) {
+      droppedPhantomEmails.push(email);
+      return false;
+    }
+    if (registered.has(email)) {
+      droppedRegisteredEmails.push(email);
+      return false;
+    }
+    return true;
+  });
+
+  return {
+    cohort,
+    phantomPrefixSkipped: droppedPhantomEmails.length,
+    alreadyRegisteredSkipped: droppedRegisteredEmails.length,
+    droppedPhantomEmails,
+    droppedRegisteredEmails,
+  };
+}
+
+/**
+ * Load what {@link sweepPhantomDrafts} needs: every draft address (to find prefixes against) and
+ * the subset of `candidateEmails` whose owner is already in the register.
+ *
+ * ⚠️ ALL draft emails, not just the cohort's. The phantom is the SHORT address; the address that
+ * proves it is a phantom is the LONG one, which may well not be in this cohort — it belongs to
+ * somebody who finished typing and is therefore no longer an abandoned draft. Restricting the
+ * comparison set to the cohort would make the detector find nothing and report success.
+ */
+export async function loadPhantomSweepContext(
+  candidateEmails: string[],
+): Promise<{ allDraftEmails: string[]; registeredEmails: string[] }> {
+  const canonical = [...new Set(candidateEmails.map(toCanonicalEmail))].filter(Boolean);
+  if (canonical.length === 0) return { allDraftEmails: [], registeredEmails: [] };
+
+  const draftRows = (await db.execute(
+    sql`SELECT lower(email) AS email FROM "wizard_drafts" WHERE email IS NOT NULL`,
+  )) as unknown as { rows: Array<{ email: string }> };
+
+  // "Already registered" = has a respondent row reachable from the address on their submission,
+  // which is the same resolution `/check-registration` uses. `rolled_back` rows are soft-deleted
+  // and must not count as registered.
+  /**
+   * ⚠️ `IN (sql.join(...))`, NOT `= ANY(${canonical})`.
+   *
+   * The `ANY` spelling was written first and threw `malformed array literal` on the FIRST real
+   * execution against Postgres: drizzle binds a JS array as ONE parameter, so `= ANY($1)` hands
+   * `ANY` a scalar string. Every unit test passed — they exercise the pure `sweepPhantomDrafts`,
+   * not the loader — and it was `blast-cohort-dedupe.integration.test.ts` that caught it. Left
+   * unfixed it would have thrown on every draft-derived blast, i.e. on the next jingle-week send.
+   * `sql.join` emits one bound placeholder per address, which is what the neighbouring
+   * `inArray()` calls in this file already do.
+   */
+  const registeredRows = (await db.execute(sql`
+    SELECT DISTINCT lower(s.raw_data->>'email') AS email
+    FROM "respondents" r
+    JOIN "submissions" s ON s.respondent_id = r.id
+    WHERE r."status" <> 'rolled_back'
+      AND lower(s.raw_data->>'email') IN (${sql.join(
+        canonical.map((e) => sql`${e}`),
+        sql`, `,
+      )})
+  `)) as unknown as { rows: Array<{ email: string | null }> };
+
+  return {
+    allDraftEmails: draftRows.rows.map((r) => r.email).filter(Boolean),
+    registeredEmails: registeredRows.rows.map((r) => r.email).filter((e): e is string => !!e),
+  };
+}
+
 export interface MarketingCohortFilterResult<T> {
   /** The addresses that may be sent to — at most ONE row per canonical address (see below). */
   cohort: T[];
@@ -151,6 +276,15 @@ export interface MarketingCohortFilterResult<T> {
   recentlyContactedEmails: string[];
   gapDays: number;
   cutoff: Date;
+  /**
+   * Story 13-50 AC5 — 0 unless `draftCohortSweep` was requested. Reported separately from
+   * `duplicatesSkipped` because they are different failures: a duplicate is one inbox listed
+   * twice; a phantom is an inbox that does not exist.
+   */
+  phantomPrefixSkipped: number;
+  alreadyRegisteredSkipped: number;
+  droppedPhantomEmails: string[];
+  droppedRegisteredEmails: string[];
 }
 
 /**
@@ -167,7 +301,24 @@ export interface MarketingCohortFilterResult<T> {
 export async function filterMarketingCohort<T>(
   rows: T[],
   getEmail: (row: T) => string,
-  options: { gapDays?: number; now?: Date } = {},
+  options: {
+    gapDays?: number;
+    now?: Date;
+    /**
+     * Story 13-50 AC5 — opt-in, and opt-in ON PURPOSE.
+     *
+     * Set this for a cohort assembled from `wizard_drafts` whose purpose is to INVITE PEOPLE TO
+     * REGISTER (`_draft-adoption-programme` D4 invites, `_reengagement-email-blast`,
+     * `_recover-abandoned-wizard-drafts`).
+     *
+     * ⛔ DO NOT set it on `_cohort-a-supplemental-survey-blast` or
+     * `_backfill-registration-autosends`: those deliberately target people who ARE registered, so
+     * the already-registered exclusion would empty their cohorts entirely and the run would report
+     * a clean zero. Defaulting this to `true` would have been a silent, total outage of two live
+     * campaigns dressed up as a data-hygiene fix.
+     */
+    draftCohortSweep?: boolean;
+  } = {},
 ): Promise<MarketingCohortFilterResult<T>> {
   const gapDays = resolveGapDays(options.gapDays);
   const now = options.now ?? new Date();
@@ -182,6 +333,10 @@ export async function filterMarketingCohort<T>(
       recentlyContactedEmails: [],
       gapDays,
       cutoff,
+      phantomPrefixSkipped: 0,
+      alreadyRegisteredSkipped: 0,
+      droppedPhantomEmails: [],
+      droppedRegisteredEmails: [],
     };
   }
 
@@ -208,13 +363,42 @@ export async function filterMarketingCohort<T>(
   // guards ACROSS runs; this guards WITHIN one run, so a cohort that lists the same inbox twice
   // (two respondent rows sharing an email) still sends exactly once. Order-preserving.
   const seen = new Set<string>();
-  const cohort = afterRecent.filter((r) => {
+  const deduped = afterRecent.filter((r) => {
     const email = toCanonicalEmail(getEmail(r));
     if (seen.has(email)) return false;
     seen.add(email);
     return true;
   });
-  const duplicatesSkipped = afterRecent.length - cohort.length;
+  const duplicatesSkipped = afterRecent.length - deduped.length;
+
+  // 4. Story 13-50 AC5 — phantom sweep, for draft-derived invite cohorts only.
+  let cohort = deduped;
+  let phantomPrefixSkipped = 0;
+  let alreadyRegisteredSkipped = 0;
+  let droppedPhantomEmails: string[] = [];
+  let droppedRegisteredEmails: string[] = [];
+  if (options.draftCohortSweep) {
+    const ctx = await loadPhantomSweepContext(deduped.map(getEmail));
+    const swept = sweepPhantomDrafts(deduped, getEmail, ctx);
+    cohort = swept.cohort;
+    phantomPrefixSkipped = swept.phantomPrefixSkipped;
+    alreadyRegisteredSkipped = swept.alreadyRegisteredSkipped;
+    droppedPhantomEmails = swept.droppedPhantomEmails;
+    droppedRegisteredEmails = swept.droppedRegisteredEmails;
+
+    // AC5.2 — LOG THE EXCLUSIONS. A silent filter reads as "everyone was contacted".
+    // Emitted even at zero: "the sweep ran and found nothing" and "the sweep never ran" must not
+    // look the same in the log, which is exactly how an empty result gets read as a negative one.
+    logger.info({
+      event: 'campaign_contact.phantom_sweep',
+      considered: deduped.length,
+      phantomPrefixSkipped,
+      alreadyRegisteredSkipped,
+      remaining: cohort.length,
+      droppedPhantomEmails,
+      droppedRegisteredEmails,
+    });
+  }
 
   if (recentlyContactedSkipped > 0 || duplicatesSkipped > 0) {
     logger.info({
@@ -234,5 +418,9 @@ export async function filterMarketingCohort<T>(
     recentlyContactedEmails,
     gapDays,
     cutoff,
+    phantomPrefixSkipped,
+    alreadyRegisteredSkipped,
+    droppedPhantomEmails,
+    droppedRegisteredEmails,
   };
 }

@@ -392,7 +392,9 @@ export async function selectSendCohort(
   args: Args,
 ): Promise<MarketingCohortFilterResult<DraftRow>> {
   const rawCohort = await selectCohort(args);
-  return filterMarketingCohort(rawCohort, (r) => r.email);
+  return filterMarketingCohort(rawCohort, (r) => r.email, {
+    draftCohortSweep: true, // 13-50 AC5 — wizard_drafts cohort inviting people to register.
+  });
 }
 
 async function main() {
@@ -531,6 +533,12 @@ async function main() {
       const issued = await MagicLinkService.issueToken({
         email: row.email,
         purpose: 'wizard_resume',
+        // 13-50 AC2.2 — a legitimate mid-wizard resume. Naming it is what lets the count
+        // separate this from the /check-registration mints that were the defect.
+        trigger: 'reengagement_blast',
+        // CODE REVIEW 2026-08-24 (H2) — this script ends in process.exit(); a detached audit
+        // write would be lost mid-flight (Story 9-26 Part H / M1). Flush it.
+        auditMode: 'awaited',
       });
       // Story 13-9 (AC1) — tag the resume link so a completed registration attributes to THIS
       // blast: utm_campaign rides through /auth/magic (forwarded there) → the wizard's 13-1

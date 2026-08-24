@@ -171,7 +171,20 @@ describe('POST /api/v1/auth/public/magic-link', () => {
     expect(res.body.data).toMatchObject({ sent: false, reason: 'invalid_input' });
   });
 
-  it('returns 200 with sent=true on valid request; issues + sends; audits MAGIC_LINK_ISSUED', async () => {
+  /**
+   * Story 13-50 AC2 — THE AUDIT ASSERTION MOVED, IT WAS NOT DROPPED.
+   *
+   * `magic_link.issued` is now written inside `MagicLinkService.issueToken` rather than by this
+   * controller, so that all 10 mint sites emit it instead of the 4 that remembered to. This test
+   * MOCKS `issueToken`, which means a `mockLogAction` assertion here would exercise nothing: the
+   * real primitive never runs, so the expectation could only ever pass by the controller keeping
+   * a duplicate write. Asserting it here would be a test passing over a hole.
+   *
+   * The audit row is asserted against the REAL primitive in
+   * `src/services/__tests__/magic-link.audit.test.ts`. What this layer still owns, and what is
+   * asserted below, is that the route mints with the right purpose AND names its trigger.
+   */
+  it('returns 200 with sent=true on valid request; issues with a named trigger + sends', async () => {
     mockIssueToken.mockResolvedValueOnce({
       id: 'tok-new',
       tokenPlaintext: 'plain',
@@ -185,10 +198,15 @@ describe('POST /api/v1/auth/public/magic-link', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({ sent: true });
     expect(mockIssueToken).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'awwal@example.com', purpose: 'login' }),
+      expect.objectContaining({
+        email: 'awwal@example.com',
+        purpose: 'login',
+        trigger: 'public_magic_link_request',
+      }),
     );
     expect(mockSendMagicLinkEmail).toHaveBeenCalled();
-    expect(mockLogAction).toHaveBeenCalledWith(
+    // Exactly one row per mint (AC2): the controller must NOT write a second one.
+    expect(mockLogAction).not.toHaveBeenCalledWith(
       expect.objectContaining({ action: 'magic_link.issued' }),
     );
   });

@@ -231,6 +231,20 @@ export class RegistrationController {
         columns: { id: true },
       });
       if (ninCollision && ninCollision.id !== peeked.respondentId) {
+        // 13-50 AC3.2 — same reopen trigger, reached from the complete-NIN ladder.
+        AuditService.logAction({
+          actorId: null,
+          action: AUDIT_ACTIONS.REGISTRATION_NIN_DUPLICATE_BLOCKED,
+          targetResource: AUDIT_TARGETS.RESPONDENT,
+          targetId: ninCollision.id,
+          details: {
+            trigger: 'complete_nin',
+            path: 'pending_nin_complete',
+            attemptingRespondentId: peeked.respondentId,
+          },
+          ipAddress: req.ip || 'unknown',
+          userAgent: req.get('user-agent') || 'unknown',
+        });
         throw new AppError(
           'NIN_DUPLICATE',
           'This NIN is already registered. If you believe this is an error, please contact support.',
@@ -759,6 +773,21 @@ export class RegistrationController {
           columns: { id: true },
         });
         if (collision) {
+          // 13-50 AC3.2 — THE dead-end this story exists to end. Somebody who is already in the
+          // register was sent back through the wizard and has just been told the Registry does
+          // not know them. Record it against the COLLIDING record so the reopen trigger can join
+          // to `metadata->>'adopted_by'`; without this row the trigger reads 0 forever.
+          // Fire-and-forget: an audit hiccup must not change what the citizen sees.
+          AuditService.logAction({
+            actorId: null,
+            action: AUDIT_ACTIONS.REGISTRATION_NIN_DUPLICATE_BLOCKED,
+            targetResource: AUDIT_TARGETS.RESPONDENT,
+            targetId: collision.id,
+            // NEVER the NIN — the colliding record's id is enough to answer the question.
+            details: { trigger: 'public_wizard_submit', path: 'nin_provided' },
+            ipAddress: req.ip || 'unknown',
+            userAgent: req.get('user-agent') || 'unknown',
+          });
           throw new AppError(
             'NIN_DUPLICATE',
             'This NIN is already registered. If you believe this is an error, please contact support.',
@@ -1391,6 +1420,8 @@ export class RegistrationController {
           const issued = await MagicLinkService.issueToken({
             email: normalisedEmail,
             purpose: 'pending_nin_complete',
+            // 13-50 AC2 — the audit row moved into `issueToken`; this names the cause.
+            trigger: 'public_wizard_submit_pending_nin',
             respondentId: respondent.id,
             requestedIp: req.ip,
             userAgent: req.get('user-agent') ?? undefined,
@@ -1420,20 +1451,9 @@ export class RegistrationController {
               err: emailErr,
             });
           });
-          AuditService.logAction({
-            actorId: null,
-            action: AUDIT_ACTIONS.MAGIC_LINK_ISSUED,
-            targetResource: 'magic_link_token',
-            targetId: issued.id,
-            details: {
-              trigger: 'public_wizard_submit_pending_nin',
-              email: normalisedEmail,
-              purpose: 'pending_nin_complete',
-              respondentId: respondent.id,
-            },
-            ipAddress: req.ip || 'unknown',
-            userAgent: req.get('user-agent') || 'unknown',
-          });
+          // 13-50 AC2 — the MAGIC_LINK_ISSUED write that stood here is now emitted by
+          // `issueToken` itself, carrying the same trigger/purpose/email/respondentId. Kept here
+          // it would be a second row for one mint.
         } catch (err) {
           logger.warn({
             event: 'wizard.pending_nin_token_failed',

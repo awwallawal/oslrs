@@ -81,9 +81,13 @@ export class MagicLinkController {
       const requestedIp = req.ip;
       const userAgent = req.get('user-agent') || undefined;
 
+      // Story 13-50 AC2 — the `magic_link.issued` audit row that used to be written HERE now
+      // lives inside `issueToken`, so every one of the 10 mint sites writes one instead of the 4
+      // that remembered to. `trigger` is what makes this mint distinguishable from the others.
       const issued = await MagicLinkService.issueToken({
         email,
         purpose,
+        trigger: 'public_magic_link_request',
         requestedIp,
         userAgent,
       });
@@ -94,17 +98,6 @@ export class MagicLinkController {
         tokenPlaintext: issued.tokenPlaintext,
         purpose,
         expiresAt: issued.expiresAt,
-      });
-
-      // Audit log — fire-and-forget. NEVER include the plaintext token.
-      AuditService.logAction({
-        actorId: null,
-        action: AUDIT_ACTIONS.MAGIC_LINK_ISSUED,
-        targetResource: 'magic_link_tokens',
-        targetId: issued.id,
-        details: { email, purpose, expiresAt: issued.expiresAt.toISOString() },
-        ipAddress: requestedIp || 'unknown',
-        userAgent: userAgent || 'unknown',
       });
 
       return res.status(200).json({

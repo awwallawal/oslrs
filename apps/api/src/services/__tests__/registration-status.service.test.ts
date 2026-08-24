@@ -11,8 +11,14 @@ const mockRedisExpire = vi.fn();
 // Returned by getRedisClient(); null disables the throttle (fail-open) like other limiters in test mode.
 let mockRedisClient: { incr: typeof mockRedisIncr; expire: typeof mockRedisExpire } | null = null;
 
+// CODE REVIEW 2026-08-24 (C1) — `ensureSignInAccount` now reads the SAME `users` row
+// `loginByMagicLinkToken` reads, so the mock has to be able to answer that question.
+const mockFindUser = vi.fn();
 vi.mock('../../db/index.js', () => ({
-  db: { execute: (...args: unknown[]) => mockExecute(...args) },
+  db: {
+    execute: (...args: unknown[]) => mockExecute(...args),
+    query: { users: { findFirst: (...args: unknown[]) => mockFindUser(...args) } },
+  },
 }));
 vi.mock('../email.service.js', () => ({
   EmailService: { sendGenericEmail: (...args: unknown[]) => mockSendEmail(...args) },
@@ -21,6 +27,13 @@ vi.mock('../magic-link.service.js', () => ({
   MagicLinkService: {
     issueToken: (...args: unknown[]) => mockIssueToken(...args),
     buildMagicLinkUrl: (...args: unknown[]) => mockBuildUrl(...args),
+  },
+}));
+// 13-50 AC1.3 — the `login` branch provisions a sign-in account when the respondent has none.
+const mockProvisionPublicUser = vi.fn();
+vi.mock('../auth.service.js', () => ({
+  AuthService: {
+    provisionPublicUserForWizard: (...args: unknown[]) => mockProvisionPublicUser(...args),
   },
 }));
 vi.mock('../audit.service.js', () => ({
@@ -45,14 +58,20 @@ vi.mock('pino', () => ({
 const {
   classifyIdentifier,
   statusToPlainLanguage,
+  statusLinkPurposeFor,
   RegistrationStatusService,
 } = await import('../registration-status.service.js');
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockIssueToken.mockResolvedValue({ id: 'tok-1', tokenPlaintext: 'PLAINTEXT', expiresAt: new Date() });
-  mockBuildUrl.mockReturnValue('https://oyoskills.com/auth/magic?token=PLAINTEXT&purpose=wizard_resume');
+  mockBuildUrl.mockReturnValue('https://oyoskills.com/auth/magic?token=PLAINTEXT&purpose=login');
   mockSendEmail.mockResolvedValue({ success: true });
+  mockProvisionPublicUser.mockResolvedValue({ userId: 'u-1', created: true });
+  // Default: a healthy public_user account exists for the address.
+  mockFindUser.mockResolvedValue({
+    id: 'u-1', status: 'active', lockedUntil: null, role: { name: 'public_user' },
+  });
   // Default: no Redis client → throttle fails open (matches test-mode limiters).
   mockRedisClient = null;
   mockRedisIncr.mockResolvedValue(1);
@@ -82,19 +101,50 @@ describe('statusToPlainLanguage', () => {
   });
 });
 
+/**
+ * ── 13-50 AC1 — A COMPLETED REGISTRANT MUST NOT BE HANDED A WIZARD ─────────────────────────
+ *
+ * `/check-registration` used to mint `wizard_resume` for EVERY match. For someone whose
+ * registration is already complete that link is a trap that ends in `409 NIN_DUPLICATE` —
+ * which reads, to the person receiving it, as "the Registry has lost me".
+ *
+ * The branch is on REGISTRATION COMPLETENESS, not on the purpose (AC1.3). These tests assert
+ * the BRANCH — the purpose actually handed to `issueToken` — not merely that an email went out.
+ * A test that asserts the happy outcome without exercising the branch is
+ * [[pattern-test-that-passes-over-a-hole]].
+ */
+describe('13-50 AC1 — statusLinkPurposeFor (the branch itself)', () => {
+  it('a COMPLETE registration never resolves to wizard_resume', () => {
+    expect(statusLinkPurposeFor('active')).toBe('login');
+    expect(statusLinkPurposeFor('imported_unverified')).toBe('login');
+  });
+
+  it('pending_nin_capture resolves to the 9-12 ladder purpose, not the wizard', () => {
+    // Pinned against registration.controller.ts `allowedStatuses: ['pending_nin_capture']` —
+    // that endpoint accepts this status ALONE, so it is the only status for which
+    // `pending_nin_complete` is a valid link.
+    expect(statusLinkPurposeFor('pending_nin_capture')).toBe('pending_nin_complete');
+  });
+
+  it('does NOT blanket-disable wizard_resume (AC1.3)', () => {
+    expect(statusLinkPurposeFor('nin_unavailable')).toBe('wizard_resume');
+    expect(statusLinkPurposeFor('some_future_status')).toBe('wizard_resume');
+  });
+});
+
 describe('RegistrationStatusService.handleRequest', () => {
   const ctx = { ipAddress: '1.2.3.4', userAgent: 'jest' };
 
   it('on an email match: issues a magic-link, sends email, audits dispatched=true', async () => {
     // resolveRespondent(email) → one row
     mockExecute.mockResolvedValueOnce({
-      rows: [{ id: 'r-1', status: 'active', reference_code: 'OSL-2026-7F3K9Q' }],
+      rows: [{ id: 'r-1', status: 'active', reference_code: 'OSL-2026-7F3K9Q', user_id: 'u-1' }],
     });
 
     await RegistrationStatusService.handleRequest({ identifier: 'Jane@Example.com', ...ctx });
 
     expect(mockIssueToken).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'jane@example.com', purpose: 'wizard_resume', respondentId: 'r-1' }),
+      expect.objectContaining({ email: 'jane@example.com', purpose: 'login', respondentId: 'r-1' }),
     );
     expect(mockSendEmail).toHaveBeenCalledTimes(1);
     const audit = mockLogAction.mock.calls[0][0];
@@ -263,6 +313,173 @@ describe('RegistrationStatusService.handleRequest', () => {
         expect.objectContaining({ respondentId: 'only-r' }),
       );
       expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── 13-50 AC1 — the branch, end to end ────────────────────────────────────
+  describe('13-50 AC1 — a completed registrant is not sent back into the wizard', () => {
+    it('a COMPLETE registration is emailed a login link, never wizard_resume', async () => {
+      mockExecute.mockResolvedValueOnce({
+        rows: [{ id: 'r-1', status: 'active', reference_code: 'OSL-2026-COMPLETE', user_id: 'u-7' }],
+      });
+
+      await RegistrationStatusService.handleRequest({ identifier: 'done@example.com', ...ctx });
+
+      // Assert the BRANCH: the purpose handed to issueToken, not just "an email went out".
+      const issuedWith = mockIssueToken.mock.calls[0][0];
+      expect(issuedWith.purpose).toBe('login');
+      expect(issuedWith.purpose).not.toBe('wizard_resume');
+      // ...and the URL is built for the SAME purpose. Issuing `login` but building a
+      // `wizard_resume` URL would put the person back in the wizard with a token the
+      // resume page cannot redeem — the dead-end wearing a different hat.
+      expect(mockBuildUrl).toHaveBeenCalledWith('PLAINTEXT', 'login');
+    });
+
+    it('already-linked respondent: no account is provisioned (idempotent, no side effect)', async () => {
+      mockExecute.mockResolvedValueOnce({
+        rows: [{ id: 'r-1', status: 'active', reference_code: 'OSL-2026-LINKED', user_id: 'u-7' }],
+      });
+
+      await RegistrationStatusService.handleRequest({ identifier: 'linked@example.com', ...ctx });
+
+      expect(mockProvisionPublicUser).not.toHaveBeenCalled();
+      expect(mockIssueToken.mock.calls[0][0].purpose).toBe('login');
+    });
+
+    /**
+     * THE ADOPTED-174 CASE. `_draft-adoption-programme.ts` creates respondents with
+     * `source: 'public'` and never calls `provisionPublicUserForWizard`, so these people have a
+     * COMPLETE registration and NO account. Without provisioning, a `login` link fails
+     * `AUTH_INVALID_CREDENTIALS`, whose frontend copy is "Let's get you registered first" — a
+     * registered citizen told to register. A second dead-end is not a fix for the first.
+     */
+    it('complete but ACCOUNTLESS: provisions a sign-in account, then issues login', async () => {
+      mockExecute
+        // resolveRespondent
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 'r-adopted', status: 'active', reference_code: 'OSL-2026-ADOPTD',
+            user_id: null, first_name: 'Bisi', last_name: 'Adeyemi',
+          }],
+        })
+        // user_id stamp
+        .mockResolvedValueOnce({ rows: [] });
+      // No account yet, then the freshly provisioned one.
+      mockFindUser
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce({
+          id: 'u-1', status: 'active', lockedUntil: null, role: { name: 'public_user' },
+        });
+
+      await RegistrationStatusService.handleRequest({ identifier: 'adopted@example.com', ...ctx });
+
+      expect(mockProvisionPublicUser).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'adopted@example.com', fullName: 'Bisi Adeyemi' }),
+      );
+      expect(mockIssueToken.mock.calls[0][0].purpose).toBe('login');
+      // The durable respondent↔account link is stamped, guarded on user_id IS NULL.
+      // NOTE: `JSON.stringify` of a drizzle `sql` object escapes the identifier quotes, so the
+      // assertion must not expect a bare `"respondents"`.
+      const stampSql = JSON.stringify(mockExecute.mock.calls[1]?.[0] ?? {});
+      expect(stampSql).toMatch(/UPDATE\s+\\?"?respondents/i);
+      expect(stampSql).toMatch(/user_id\\?"?\s+IS\s+NULL/i);
+    });
+
+    it('provisioning failure degrades to a LINKLESS status email — never a dead-end link', async () => {
+      mockExecute.mockResolvedValueOnce({
+        rows: [{ id: 'r-2', status: 'active', reference_code: 'OSL-2026-NOACCT', user_id: null }],
+      });
+      mockFindUser.mockResolvedValue(undefined);
+      mockProvisionPublicUser.mockRejectedValueOnce(new Error('public_user role missing'));
+
+      await RegistrationStatusService.handleRequest({ identifier: 'noacct@example.com', ...ctx });
+
+      // No token of ANY purpose — emphatically not a wizard_resume fallback.
+      expect(mockIssueToken).not.toHaveBeenCalled();
+      // The status email still goes out: it carries the status text + reference code, which is
+      // the answer the person actually asked for.
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      const [{ html, text }] = mockSendEmail.mock.calls[0];
+      expect(text).toContain('OSL-2026-NOACCT');
+      expect(html).toContain('OSL-2026-NOACCT');
+      expect(html).not.toContain('/auth/magic');
+      expect(mockLogAction.mock.calls[0][0].details).toMatchObject({ dispatched: true });
+    });
+
+    it('pending_nin_capture is emailed the 9-12 ladder link, not the wizard', async () => {
+      mockExecute.mockResolvedValueOnce({
+        rows: [{ id: 'r-3', status: 'pending_nin_capture', reference_code: 'OSL-2026-PENDNG', user_id: null }],
+      });
+
+      await RegistrationStatusService.handleRequest({ identifier: 'pending@example.com', ...ctx });
+
+      expect(mockIssueToken.mock.calls[0][0].purpose).toBe('pending_nin_complete');
+      expect(mockBuildUrl).toHaveBeenCalledWith('PLAINTEXT', 'pending_nin_complete');
+      // A pending-NIN person needs no account to use their link — do not provision one.
+      expect(mockProvisionPublicUser).not.toHaveBeenCalled();
+    });
+
+    /**
+     * ── CODE REVIEW 2026-08-24 (C1) — THE SECOND DEAD-END ─────────────────────────────────
+     *
+     * `ensureSignInAccount` used to conclude "a link is redeemable" from "a users row exists".
+     * `loginByMagicLinkToken` disagrees on three counts, and each one produces a burnt token and
+     * an error screen instead of the person's record. The staff case was reproduced against real
+     * Postgres before this test was written: the link minted, `respondents.user_id` was stamped
+     * with the ENUMERATOR's id, and redemption returned "Please use the staff login for staff
+     * accounts" — rendered to the citizen as "Let's get you registered first" + Register CTA.
+     *
+     * These assert the BRANCH — that no token is minted at all — not merely that an email went
+     * out, because an email carrying an unusable link is the defect, not the fix.
+     */
+    it.each([
+      ['a STAFF account on the same address', { id: 'u-staff', status: 'active', lockedUntil: null, role: { name: 'enumerator' } }],
+      ['a SUSPENDED account', { id: 'u-s', status: 'suspended', lockedUntil: null, role: { name: 'public_user' } }],
+      ['a DEACTIVATED account', { id: 'u-d', status: 'deactivated', lockedUntil: null, role: { name: 'public_user' } }],
+      ['a LOCKED account', { id: 'u-l', status: 'active', lockedUntil: new Date(Date.now() + 60_000), role: { name: 'public_user' } }],
+    ])('%s gets a LINKLESS status email, never an unredeemable login link', async (_label, account) => {
+      mockExecute.mockResolvedValueOnce({
+        rows: [{ id: 'r-x', status: 'active', reference_code: 'OSL-2026-UNRDMB', user_id: null }],
+      });
+      mockFindUser.mockResolvedValue(account);
+
+      await RegistrationStatusService.handleRequest({ identifier: 'staffy@example.com', ...ctx });
+
+      expect(mockIssueToken).not.toHaveBeenCalled();
+      // ...and the durable link is NOT stamped onto the respondent either: only the
+      // resolveRespondent SELECT should have run, never the UPDATE.
+      expect(mockExecute).toHaveBeenCalledTimes(1);
+      // The person still gets their answer.
+      expect(mockSendEmail).toHaveBeenCalledTimes(1);
+      const [{ html }] = mockSendEmail.mock.calls[0];
+      expect(html).not.toContain('/auth/magic');
+    });
+
+    it('an account under a DIFFERENT address than the respondent link is resolved by EMAIL', async () => {
+      // respondent.user_id points at an old account; the address on file now resolves to a
+      // different, healthy public_user row. The link must be minted for the row the redeemer
+      // will read — and the stale user_id must NOT be re-stamped over.
+      mockExecute.mockResolvedValueOnce({
+        rows: [{ id: 'r-y', status: 'active', reference_code: 'OSL-2026-MOVEDD', user_id: 'u-old' }],
+      });
+      mockFindUser.mockResolvedValue({
+        id: 'u-current', status: 'active', lockedUntil: null, role: { name: 'public_user' },
+      });
+
+      await RegistrationStatusService.handleRequest({ identifier: 'moved@example.com', ...ctx });
+
+      expect(mockIssueToken.mock.calls[0][0].purpose).toBe('login');
+      expect(mockExecute).toHaveBeenCalledTimes(1); // no re-stamp
+    });
+
+    it('every mint from this surface names its trigger (AC2.2)', async () => {
+      mockExecute.mockResolvedValueOnce({
+        rows: [{ id: 'r-4', status: 'active', reference_code: null, user_id: 'u-4' }],
+      });
+
+      await RegistrationStatusService.handleRequest({ identifier: 'trig@example.com', ...ctx });
+
+      expect(mockIssueToken.mock.calls[0][0].trigger).toBe('check_registration_status');
     });
   });
 

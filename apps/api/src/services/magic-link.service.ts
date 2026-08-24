@@ -4,6 +4,7 @@ import { magicLinkTokens, type MagicLinkToken, type MagicLinkPurpose } from '../
 import { eq, and, sql } from 'drizzle-orm';
 import { AppError, sha256Hex } from '@oslsr/utils';
 import { EmailService } from './email.service.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'magic-link-service' });
@@ -36,13 +37,80 @@ const BRAND_COLOR = '#9C1E23'; // Oyo State Red — match EmailService.BRAND_COL
 
 const TOKEN_BYTES = 32;
 
+/**
+ * Story 13-50 AC2.2 — WHY a token was minted, not just what for.
+ *
+ * `purpose` says what the link DOES; `trigger` says what CAUSED it. Both are needed because they
+ * are not the same question: on 2026-08-05 the two biggest producers of `wizard_resume` were
+ * `/check-registration` (the dead-end this story fixes) and the draft-adoption invite (entirely
+ * correct). Counting by `purpose` alone gives "86 wizard_resume today" — a number with no
+ * denominator, which cannot tell a defect from normal traffic.
+ *
+ * ⚠️ CLOSED UNION ON PURPOSE. Adding a mint site means adding a member here, so a new producer is
+ * a reviewable diff rather than a silent entry in the count. The list IS the census.
+ */
+export const MAGIC_LINK_TRIGGERS = [
+  /** POST /api/v1/auth/public/magic-link — the public "email me a link" endpoint. */
+  'public_magic_link_request',
+  /** POST /api/v1/registration-status/request — the 9-58 status check (13-50 AC1). */
+  'check_registration_status',
+  /** Public wizard submit, pending-NIN branch. */
+  'public_wizard_submit_pending_nin',
+  /** BullMQ reminder worker re-issuing a link at each pending-NIN milestone. */
+  'reminder_worker',
+  /** scripts/nin-reconfirm.ts — NIN cleared and re-requested from the holder. */
+  'nin_reconfirm',
+  /** scripts/_reengagement-email-blast.ts */
+  'reengagement_blast',
+  /** scripts/_recover-abandoned-wizard-drafts.ts */
+  'recover_abandoned_wizard_drafts',
+  /** scripts/_draft-adoption-programme.ts — D4 invitations. */
+  'draft_adoption_invite',
+  /** scripts/_cohort-a-supplemental-survey-blast.ts */
+  'cohort_a_supplemental_survey',
+  /** scripts/_mint-wizard-resume-token.ts — an operator minting one by hand. */
+  'operator_manual_mint',
+] as const;
+export type MagicLinkTrigger = typeof MAGIC_LINK_TRIGGERS[number];
+
 interface IssueTokenArgs {
   email: string;
   purpose: MagicLinkPurpose;
+  /**
+   * REQUIRED (13-50 AC2). Every mint names its cause. `tsc` enforces this across `src/`;
+   * `scripts/` is outside tsconfig, so the source-scan census in
+   * `__tests__/magic-link.audit.test.ts` enforces it there.
+   */
+  trigger: MagicLinkTrigger;
   userId?: string;
   respondentId?: string;
   requestedIp?: string;
   userAgent?: string;
+  /**
+   * Extra, site-specific context merged into the audit row's `details`. Exists so collapsing the
+   * four per-caller audit writes into this one primitive did not throw away what those callers
+   * knew and this one cannot (the reminder milestone, the prior NIN value, and so on).
+   */
+  auditDetails?: Record<string, unknown>;
+  /**
+   * ⚠️ CODE REVIEW 2026-08-24 (H2) — WHERE THE AUDIT ROW IS ALLOWED TO BE BEST-EFFORT.
+   *
+   * `AuditService.logAction` dispatches a DETACHED hash-chain transaction and returns void. In a
+   * long-lived API process that is correct: an audit hiccup must not sink a token the registrant
+   * is waiting on, and the chain lock must not serialise mint throughput during a jingle burst.
+   *
+   * In a SCRIPT it is not correct, and this repo has already ruled on it twice (Story 9-26 Part
+   * H / M1, restated verbatim at `scripts/_recover-abandoned-wizard-drafts.ts`, and 13-46 F1):
+   * `process.exit()` fires while the detached write is still in flight, so the trailing rows are
+   * simply lost. 6 of the 10 mint sites are scripts that end in `process.exit()`, and
+   * `scripts/nin-reconfirm.ts` previously wrote this row with an AWAITED `logActionTx` — a
+   * guarantee 13-50 removed without noticing.
+   *
+   * `'awaited'` restores it: the row commits before `issueToken` resolves. Required at every
+   * `scripts/` mint site and PINNED there by the source-scan census, because `scripts/` is
+   * outside tsconfig and a type cannot reach it.
+   */
+  auditMode?: 'detached' | 'awaited';
 }
 
 interface IssueTokenResult {
@@ -64,7 +132,9 @@ export class MagicLinkService {
    * Story 9-12 AC#6 + Architecture Decision 2.5.
    */
   static async issueToken(args: IssueTokenArgs): Promise<IssueTokenResult> {
-    const { email, purpose, userId, respondentId, requestedIp, userAgent } = args;
+    const { email, purpose, trigger, userId, respondentId, requestedIp, userAgent, auditDetails } =
+      args;
+    const auditMode = args.auditMode ?? 'detached';
 
     if (!email) {
       throw new AppError('MAGIC_LINK_EMAIL_REQUIRED', 'Email is required to issue a magic link', 400);
@@ -92,9 +162,69 @@ export class MagicLinkService {
       event: 'magic_link.issued',
       tokenId: row.id,
       purpose,
+      trigger,
       email: row.email,
       expiresAt: expiresAt.toISOString(),
     });
+
+    /**
+     * Story 13-50 AC2 — THE AUDIT ROW IS WRITTEN HERE, at the mint, for every caller.
+     *
+     * It used to be each caller's job, and a census on 2026-08-23 found 10 mint sites and 4
+     * audit writes. `wizard_resume` — a whole token purpose — was invisible to the audit trail
+     * for as long as it existed. Per-caller auditing is exactly
+     * [[pattern-census-counts-sites-not-callers]]: a new caller writes no row and nothing goes
+     * red. Making the row a property of the primitive means "a mint that is not audited" is not
+     * a thing the code can express.
+     *
+     * PII note (9-58 AC8 boundary, stated so it is not silently crossed): `details.email` is the
+     * registrant's address. This adds no exposure — `magic_link_tokens.email` already persists
+     * exactly that value for exactly this mint, and it is what the four pre-existing audited
+     * sites already recorded. What 9-58 AC8 protects is different and is untouched: the
+     * `registration_status.requested` row still carries only the identifier CLASS, so an
+     * unauthenticated caller cannot write arbitrary probed identifiers into the trail. A mint
+     * only ever happens on a real match.
+     *
+     * Fire-and-forget, matching every other `logAction` call site: an audit hiccup must not sink
+     * a token the registrant is waiting on.
+     */
+    const auditRow = {
+      actorId: null,
+      action: AUDIT_ACTIONS.MAGIC_LINK_ISSUED,
+      targetResource: AUDIT_TARGETS.MAGIC_LINK_TOKEN,
+      targetId: row.id,
+      details: {
+        trigger,
+        purpose,
+        email: row.email,
+        respondentId: respondentId ?? null,
+        userId: userId ?? null,
+        expiresAt: expiresAt.toISOString(),
+        ...auditDetails,
+      },
+      ipAddress: requestedIp || 'unknown',
+      userAgent: userAgent || 'unknown',
+    };
+
+    if (auditMode === 'awaited') {
+      // Flush BEFORE returning, so a caller that exits the process cannot lose the row.
+      // A failure here is warned, never thrown: the token is already minted and the caller is
+      // about to mail it, so failing the mint over its own bookkeeping is the worse outcome.
+      try {
+        await db.transaction(async (tx) => {
+          await AuditService.logActionTx(tx, auditRow);
+        });
+      } catch (err) {
+        logger.warn({
+          event: 'magic_link.audit_flush_failed',
+          tokenId: row.id,
+          trigger,
+          err,
+        });
+      }
+    } else {
+      AuditService.logAction(auditRow);
+    }
 
     return {
       id: row.id,

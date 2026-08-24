@@ -110,6 +110,23 @@ export const AUDIT_ACTIONS = {
   // Public registration / magic-link (Story 9-12)
   MAGIC_LINK_ISSUED: 'magic_link.issued',
   MAGIC_LINK_REDEEMED: 'magic_link.redeemed',
+  /**
+   * Story 13-50 (AC3.2) — A REOPEN TRIGGER HAS TO BE QUERYABLE TO BE A TRIGGER.
+   *
+   * 13-50 AC3.2 reads: "REOPEN TRIGGER: any `NIN_DUPLICATE` in the audit log from an adopted
+   * person. Currently **0** — the exposure has never actually been realised."
+   *
+   * ⚠️ THAT ZERO WAS NOT EVIDENCE. `NIN_DUPLICATE` was thrown as a 409 from
+   * `registration.controller.ts` and written NOWHERE: no audit row, and no `submissions` row
+   * either (the throw happens before the insert). The trigger was querying a table that could
+   * not contain the thing it was watching for, so it would have read 0 on the day the dead-end
+   * link fired a thousand times. An empty result read as a negative result.
+   *
+   * This action is what makes AC3.2 falsifiable. It records the id of the EXISTING record that
+   * caused the collision — never the NIN — so an operator can join it to
+   * `respondents.metadata->>'adopted_by'` and answer the question the trigger actually asks.
+   */
+  REGISTRATION_NIN_DUPLICATE_BLOCKED: 'registration.nin_duplicate_blocked',
   PENDING_NIN_DEFERRED: 'pending_nin.deferred_again',
   PENDING_NIN_TRANSITIONED: 'pending_nin.transitioned_to_nin_unavailable',
   // Universal pending-NIN — Option 1 (Story 9-12 Task 3.8)
@@ -298,6 +315,24 @@ export const AUDIT_TARGETS = {
    * invalidated the chain either way — verified against `computeHash` above.)
    */
   USER: 'user',
+  /*
+   * Story 13-50 (AC2.4) — SINGULAR canonical, same rule as RESPONDENT / USER above.
+   *
+   * ⚠️ INLINE CUTOVER COMMENT, because live rows exist under BOTH spellings and always will.
+   * Before 13-50 the `magic_link.issued` audit row was written by each CALLER, and the callers
+   * disagreed: `magic-link.controller.ts` and `reminder.worker.ts` wrote 'magic_link_tokens'
+   * (plural), `registration.controller.ts` wrote 'magic_link_token' (singular), and
+   * `nin-reconfirm.ts` wrote AUDIT_TARGETS.RESPONDENT. 13-50 collapses all four into the single
+   * write inside `MagicLinkService.issueToken`, which uses this constant.
+   *
+   * ⛔ NO DATA BACKFILL, and that is the guarantee working rather than an obstacle: `audit_logs`
+   * is append-only (`trg_audit_logs_immutable` blocks UPDATE *and* DELETE — proven by execution
+   * on prod 2026-08-22, see the USER block above). Historical rows keep the spelling the code
+   * wrote them with. A READER grouping on `targetResource` must normalise on read.
+   *
+   * (`targetResource` is NOT in the hash payload, so none of this touches chain validity.)
+   */
+  MAGIC_LINK_TOKEN: 'magic_link_token',
 } as const;
 
 export type AuditTarget = (typeof AUDIT_TARGETS)[keyof typeof AUDIT_TARGETS];

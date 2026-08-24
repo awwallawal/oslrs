@@ -338,6 +338,17 @@ interface Counters {
    */
   duplicateEmailSkipped: number;
   /**
+   * Story 13-50 AC5 — the phantom sweep's two exclusions, counted SEPARATELY so the results block
+   * can say which kind of person was dropped.
+   *
+   * A phantom is not a duplicate: a duplicate is one inbox listed twice, a phantom is an inbox
+   * that does not exist. Folding them into `duplicateEmailSkipped` would have hidden exactly the
+   * four rows this story is about. AC5.2 — a silent filter reads as "everyone was contacted".
+   */
+  phantomPrefixSkipped: number;
+  /** D4 should never have invited a registered person at all; 3 of the 4 phantoms were. */
+  alreadyRegisteredSweptSkipped: number;
+  /**
    * ⚠️ ADDED BY CODE REVIEW 2026-08-02 — THE SILENT FAILURE. A row can be adopted and then not
    * contacted (no reference code came back). That branch incremented nothing and logged nothing,
    * so a run printed `adopted: 142` while N of those people held a registry record nobody had
@@ -504,6 +515,8 @@ async function main(): Promise<void> {
     suppressedSkipped: 0,
     recentlyContactedSkipped: 0,
     duplicateEmailSkipped: 0,
+    phantomPrefixSkipped: 0,
+    alreadyRegisteredSweptSkipped: 0,
     adoptedNotTold: 0,
     inviteRefusedConsent: 0,
     alreadyDoneSkipped: 0,
@@ -627,10 +640,34 @@ async function main(): Promise<void> {
   const invitePlans = plans.filter(
     (p) => p.decision === 'INVITE_TO_RESUME' || p.decision === 'EXCLUDE_EMPTY',
   );
-  const filtered = await filterMarketingCohort(invitePlans, (p) => p.draft.email);
+  const filtered = await filterMarketingCohort(invitePlans, (p) => p.draft.email, {
+    // 13-50 AC5 — D4 invites are a wizard_drafts cohort inviting people to REGISTER, so they
+    // inherit AC4's phantoms AND should never have included an already-registered person.
+    // Three of the four phantoms invited on 2026-08-06 were already in the register.
+    draftCohortSweep: true,
+  });
   counters.suppressedSkipped += filtered.suppressedSkipped;
   counters.recentlyContactedSkipped = filtered.recentlyContactedSkipped;
   counters.duplicateEmailSkipped = filtered.duplicatesSkipped;
+  // 13-50 AC5.2 — NAME WHAT WAS DROPPED, on stdout, where the operator running the dry-run is
+  // actually looking. The service also logs it structurally; neither is a substitute for the
+  // other, because the operator reads the console and the incident reader reads the log.
+  counters.phantomPrefixSkipped = filtered.phantomPrefixSkipped;
+  counters.alreadyRegisteredSweptSkipped = filtered.alreadyRegisteredSkipped;
+  if (filtered.droppedPhantomEmails.length > 0) {
+    console.log(
+      `   🫥 ${filtered.droppedPhantomEmails.length} phantom draft(s) excluded (a strict prefix of a\n` +
+        `      longer draft address = abandoned mid-typing):`,
+    );
+    for (const e of filtered.droppedPhantomEmails) console.log(`      - ${maskEmail(e)}`);
+  }
+  if (filtered.droppedRegisteredEmails.length > 0) {
+    console.log(
+      `   ✅ ${filtered.droppedRegisteredEmails.length} already-registered address(es) excluded ` +
+        `— an invitation to register is the wrong message for them:`,
+    );
+    for (const e of filtered.droppedRegisteredEmails) console.log(`      - ${maskEmail(e)}`);
+  }
 
   for (const p of filtered.cohort) {
     if (args.max !== null && acted >= args.max) break;
@@ -649,6 +686,13 @@ async function main(): Promise<void> {
       const issued = await MagicLinkService.issueToken({
         email: p.draft.email,
         purpose: 'wizard_resume',
+        // 13-50 AC2.2 — a D4 invitation to somebody who has NO respondent row, which is the
+        // case `wizard_resume` is genuinely for. AC1.3: this is why the purpose was not disabled.
+        trigger: 'draft_adoption_invite',
+        // CODE REVIEW 2026-08-24 (H2) — this script ends in process.exit(); a detached audit
+        // write would be lost mid-flight (Story 9-26 Part H / M1). Flush it.
+        auditMode: 'awaited',
+        auditDetails: { draftId: p.draft.id },
       });
       const resumeUrl = MagicLinkService.buildMagicLinkUrl(issued.tokenPlaintext, 'wizard_resume');
       const { firstName } = resolveDraftIdentity(p.draft);

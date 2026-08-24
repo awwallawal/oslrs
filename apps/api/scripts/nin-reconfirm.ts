@@ -43,7 +43,7 @@ import { db } from '../src/db/index.js';
 import { respondents } from '../src/db/schema/respondents.js';
 import { MagicLinkService } from '../src/services/magic-link.service.js';
 import { resolveRespondentContactEmail } from '../src/services/respondent-contact.service.js';
-import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from '../src/services/audit.service.js';
+// 13-50 AC2 — this script no longer writes its own MAGIC_LINK_ISSUED row; `issueToken` does.
 
 /** Hard-coded scope. A script that takes a cohort by flag is one that can clear 300 NINs. */
 const TARGETS = [
@@ -128,32 +128,35 @@ async function main(): Promise<void> {
       })
       .where(eq(respondents.id, r.id));
 
+    /**
+     * 13-50 AC2 — the MAGIC_LINK_ISSUED row is now written inside `issueToken`, so the
+     * `db.transaction` + `logActionTx` wrapper that stood below is gone. Nothing atomic was lost:
+     * the token INSERT had already committed by the time that transaction opened, so it wrapped
+     * the audit write alone. `priorNin` and the note ride along in `auditDetails`.
+     *
+     * ⚠️ ONE DELIBERATE CHANGE OF SHAPE: this row used to target the RESPONDENT; the canonical
+     * row targets the magic-link token. `respondentId` is in `details` on every mint, so a
+     * respondent-scoped query still resolves — it reads `details->>'respondentId'` rather than
+     * `target_id`.
+     */
     const issued = await MagicLinkService.issueToken({
       email,
       purpose: 'pending_nin_complete',
+      trigger: 'nin_reconfirm',
+      // CODE REVIEW 2026-08-24 (H2) — this script ends in process.exit(); a detached audit
+      // write would be lost mid-flight (Story 9-26 Part H / M1). Flush it.
+      auditMode: 'awaited',
       respondentId: r.id,
+      auditDetails: {
+        priorNin,
+        note: 'NIN cleared and re-requested — conflicting values across duplicate records',
+      },
     });
     await MagicLinkService.sendMagicLinkEmail({
       email,
       tokenPlaintext: issued.tokenPlaintext,
       purpose: 'pending_nin_complete',
       expiresAt: issued.expiresAt,
-    });
-
-    await db.transaction(async (tx) => {
-      await AuditService.logActionTx(tx, {
-        actorId: null,
-        action: AUDIT_ACTIONS.MAGIC_LINK_ISSUED,
-        targetResource: AUDIT_TARGETS.RESPONDENT,
-        targetId: r.id,
-        details: {
-          trigger: 'nin_reconfirm',
-          purpose: 'pending_nin_complete',
-          magicLinkTokenId: issued.id,
-          priorNin,
-          note: 'NIN cleared and re-requested — conflicting values across duplicate records',
-        },
-      });
     });
 
     console.log(`  ✅ ${r.referenceCode} — NIN ${mask(priorNin)} cleared, link sent to ${email.slice(0, 4)}***`);
