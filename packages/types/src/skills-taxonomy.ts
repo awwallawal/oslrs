@@ -277,14 +277,19 @@ export const SKILL_SLUGS: readonly SkillSlug[] = SKILL_TAXONOMY.map((s) => s.nam
 
 /**
  * Slugs that exist in the taxonomy but are NOT yet selectable in the shipped
- * XLSForm — a registrant cannot pick these until the form is re-uploaded and
- * `wizard.public_form_id` re-pinned. Imported records may already carry them.
- * `skill-taxonomy-canonical.test.ts` pins this list against the real fixture, so
- * it must be emptied by the same commit that ships the new form.
+ * XLSForms — a registrant cannot pick these until BOTH forms are re-uploaded
+ * (Public Core additionally needs `wizard.public_form_id` re-pinned, since an
+ * upload mints a NEW form row). Imported records may already carry them.
+ *
+ * ✅ EMPTY as of 2026-08-24: both `test-fixtures/*.xlsx` now carry all 192 slugs.
+ * `skill-taxonomy-canonical.test.ts` asserts this list equals the REAL gap in each
+ * shipped fixture, so it cannot drift — add a slug without adding it to the forms
+ * and that test goes red until this list names it.
+ *
+ * ⚠️ The prod upload of both forms is a SEPARATE, manual step and is NOT implied
+ * by this being empty. Until it happens, prod serves the 150-option forms.
  */
-export const SKILL_SLUGS_NOT_YET_IN_FORM: readonly SkillSlug[] = SKILL_TAXONOMY
-  .slice(BASELINE_SKILL_COUNT)
-  .map((s) => s.name);
+export const SKILL_SLUGS_NOT_YET_IN_FORM: readonly SkillSlug[] = [];
 
 /**
  * The single bucket for non-canonical values — custom_* free-text skills a

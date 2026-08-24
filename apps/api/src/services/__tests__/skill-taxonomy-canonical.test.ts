@@ -175,9 +175,14 @@ describe('Story 13-20 — parser canonical-value pin (AC1 guard)', () => {
 });
 
 describe('Story 13-20 — shipped Public Core carries the 150 (AC2/AC4)', () => {
-  it.each(SHIPPED_FORMS)('%s skill_list carries the baseline 150, all canonical', (_name, path) => {
+  it.each(SHIPPED_FORMS)('%s skill_list carries the FULL canonical set', (_name, path) => {
     const formSkills = skillListOf(path);
-    expect(formSkills).toHaveLength(BASELINE_SKILL_COUNT);
+    // 2026-08-24: both fixtures regenerated from 150 -> 192. The baseline 150 keep
+    // their original order and values; the 42 extensions are APPENDED, so no stored
+    // skills_possessed value is disturbed.
+    expect(formSkills).toHaveLength(SKILL_SLUGS.length);
+    expect(formSkills.slice(0, BASELINE_SKILL_COUNT))
+      .toEqual([...SKILL_SLUGS].slice(0, BASELINE_SKILL_COUNT));
     // STRICT, unchanged in force: the form may contain NOTHING outside the
     // canonical set. This is the property that protects stored skills_possessed.
     const canonical = new Set<string>(SKILL_SLUGS);
