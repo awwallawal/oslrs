@@ -37,6 +37,19 @@ const SHIPPED_FORMS: ReadonlyArray<readonly [string, string]> = [
   ['Public Core', PUBLIC_CORE],
   ['Master v3', MASTER],
 ];
+
+/**
+ * The OPERATOR-UPLOAD copies. `docs/launch-campaign/` is where an operator picks the
+ * file up from when re-uploading to prod, and each must stay byte-identical to the
+ * fixture the suite actually guards — otherwise the tests pass while the live form
+ * regresses. Story 13-19's M1 established this for Public Core; Master had no
+ * operator copy and no guard at all until 2026-08-24, so a re-upload depended on
+ * remembering that ONE of the two forms came from a different directory.
+ */
+const OPERATOR_COPIES: ReadonlyArray<readonly [string, string, string]> = [
+  ['Public Core', PUBLIC_CORE, resolve(REPO_ROOT, 'docs/launch-campaign/oslsr-public-core-v1.xlsx')],
+  ['Master v3', MASTER, resolve(REPO_ROOT, 'docs/launch-campaign/oslsr_master_v3.xlsx')],
+];
 const skillListOf = (path: string): string[] =>
   XlsformParserService.parseXlsxFile(readFileSync(path)).choices
     .filter((c) => c.list_name === 'skill_list')
@@ -202,6 +215,16 @@ describe('Story 13-20 — shipped Public Core carries the 150 (AC2/AC4)', () => 
     const [publicSkills, masterSkills] = SHIPPED_FORMS.map(([, p]) => skillListOf(p).sort());
     expect(masterSkills).toEqual(publicSkills);
   });
+
+  it.each(OPERATOR_COPIES)(
+    '%s: the operator-upload copy is byte-identical to the fixture',
+    (name, fixturePath, uploadPath) => {
+      expect(
+        Buffer.compare(readFileSync(fixturePath), readFileSync(uploadPath)),
+        `docs/launch-campaign copy of ${name} has drifted from its test fixture — re-sync before upload`,
+      ).toBe(0);
+    },
+  );
 
   it('validate() no longer emits the skill_list minimum/canonical warning (AC4)', () => {
     const parsed = XlsformParserService.parseXlsxFile(readFileSync(PUBLIC_CORE));
