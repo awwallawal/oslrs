@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { WizardNavigation } from '../components/WizardNavigation';
 import { EmailTypoDetection } from '../components/EmailTypoDetection';
 import { fetchPublicLgas, type WizardDraftData } from '../api/wizard.api';
+import { WIZARD_EMAIL_PATTERN } from '../lib/draft-email-gate';
 
 /**
  * Story 9-12 AC#1 — Step 2: Contact + LGA.
@@ -71,7 +72,11 @@ function isValidNigerianPhone(value: string | undefined): boolean {
   return /^\+234[0-9]{10}$/.test(n);
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * Story 13-50 AC4 — imported, not re-declared. The draft-persistence gate has to apply "the same
+ * validation Step 2 applies at Continue"; two copies of one regex is how that stops being true.
+ */
+const EMAIL_PATTERN = WIZARD_EMAIL_PATTERN;
 
 export function Step2ContactLga({ formData, mergeFields, onContinue, onBack }: StepProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});

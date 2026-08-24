@@ -2115,8 +2115,19 @@ phone **surname-first**, no NIN either time, **different email**, different brow
 3. **A cohort date a day off.** The D4 invitations went out **08-05 08:04**, not 08-04 — yesterday's
    165 rows were the adoption programme. The ladder check is the **08-05** cohort.
 4. **A denominator that included the wrong sends.** `campaign_sends` on 08-04 returned 165 because
-   it counts confirmations too. Scoped to `campaign_id='draft-invite-2026-08'`: **75 invited, 5
-   converted (6.7%)**.
+   it counts confirmations too. Scoped to `campaign_id='draft-invite-2026-08'`: ~~75 invited, 5
+   converted (6.7%)~~ — **corrected 2026-08-23 by 13-50 AC5.4 to 71 invited, 5 converted (7.0%).**
+
+   > ⚠️ **The 75 was corrected a second time, and for a different reason than the 165 was.** Four
+   > of those 75 were **phantom drafts** — `…@gmail.co` addresses autosaved mid-typing, which
+   > `wizard_drafts` turned into people because the table is KEYED on email. They cannot receive
+   > mail, and all four belonged to people already in the register. So the honest denominator is
+   > **71 real invitees**, and D4 conversion is **5/71 = 7.0%**.
+   >
+   > ⛔ **QUOTE 71, NOT 75, WHEN COMPARING FUTURE ROUNDS.** From 13-50 the blast scripts exclude
+   > phantoms at the shared cohort filter, so later rounds get a naturally smaller denominator. If
+   > this baseline stays at 75, that exclusion will read as a conversion lift that never happened
+   > — a metric improving because the measurement changed.
 
 ### A test can be green for months while encoding the bug
 The digest's test asserted `todayCount: 85 → red` — the exact defective behaviour, passing

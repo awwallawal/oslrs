@@ -430,6 +430,10 @@ async function main() {
       const issued = await MagicLinkService.issueToken({
         email: row.email,
         purpose: 'supplemental_survey',
+        trigger: 'cohort_a_supplemental_survey', // 13-50 AC2.2
+        // CODE REVIEW 2026-08-24 (H2) — this script ends in process.exit(); a detached audit
+        // write would be lost mid-flight (Story 9-26 Part H / M1). Flush it.
+        auditMode: 'awaited',
         respondentId: row.respondent_id,
       });
       // Story 13-9 (AC1) — NO utm tag here: the supplemental path attributes BY CONSTRUCTION

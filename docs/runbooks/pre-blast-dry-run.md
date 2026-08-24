@@ -153,6 +153,20 @@ COMMIT;
       observation to date (13-34's dry-run, 2026-07-23) recorded `main_occupation` alone, and that row was
       deleted. This closes the last 2 fields on a run you are doing anyway. Capture the output in the story
       before teardown — §5 deletes the evidence.
+- [ ] **Phantom sweep read, not assumed (13-50 AC5 — BLOCKING for any `wizard_drafts` cohort).**
+      The dry-run prints `🫥 N phantom draft(s) excluded` and `✅ N already-registered address(es)
+      excluded`, and `campaign_contact.phantom_sweep` carries the same counts structurally. Read
+      the lines. Then decide:
+      - **N > 0** — expected. Those addresses were half-typed and cannot receive mail, or belong to
+        someone already in the register. Confirm the dropped list looks like partial addresses.
+      - **N = 0** — fine *only if* the sweep RAN. `draftCohortSweep: true` must be set on the
+        cohort call; a script that never opted in prints nothing and reads exactly like a clean
+        sweep. **An empty result is not a negative result** — confirm the
+        `campaign_contact.phantom_sweep` log line exists before ticking this.
+
+      ⛔ **Do not "fix" a phantom by deleting the row and firing anyway.** The producer is closed
+      in the wizard (13-50 AC4), and the sweep is the belt; deleting stock while a producer runs is
+      the treadmill 13-49 R5 already ran once.
 - [ ] Capacity confirmed (Resend Pro / Termii sender-ID).
 - [ ] Monitoring in view (`registration_autosend.*`, Resend dashboard) for the live run.
 - [ ] Test artifacts (if any) cleaned + baseline restored.

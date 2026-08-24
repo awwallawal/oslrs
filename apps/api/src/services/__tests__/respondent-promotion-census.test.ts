@@ -203,6 +203,16 @@ describe('13-55 R2 — raw `UPDATE "respondents"` sites are inventoried, not mer
       count: 1,
       reason: 'Backfill linking wizard respondents to their public user accounts.',
     },
+    'src/services/registration-status.service.ts': {
+      count: 1,
+      reason:
+        'Story 13-50 AC1.3 — `ensureSignInAccount` stamps `respondents.user_id` after provisioning ' +
+        'a passwordless sign-in account for a COMPLETE registrant who had none (the adopted-174 ' +
+        'case), so the `login` magic link it is about to email can actually be redeemed. Writes ' +
+        '`user_id` + `updated_at` ONLY — never nin, never status, so it is not a promote. Guarded ' +
+        'on `user_id IS NULL` (same TOCTOU discipline as the 9-38 backfill, which is the sibling ' +
+        'entry above) and non-fatal: a failure here leaves a working account merely unlinked.',
+    },
     'scripts/_thankyou-referral-blast.ts': {
       count: 1,
       reason: 'Campaign send-once marker stamp; metadata only.',
@@ -228,12 +238,18 @@ describe('13-55 R2 — raw `UPDATE "respondents"` sites are inventoried, not mer
   });
 
   /**
-   * The figure 13-54 Known limit #1 was amended with, now measured rather than remembered: SIX files
-   * use the raw spelling, and TWO of them were promote paths before this story. An update-guard
+   * The figure 13-54 Known limit #1 was amended with, now measured rather than remembered. At
+   * 13-55 it was SIX files, TWO of which were promote paths before that story — an update-guard
    * written only against `.update(respondents)` would have been blind to exactly those two.
+   *
+   * **Now SEVEN (2026-08-23, Story 13-50).** 13-55 R2 closed with the words "a 7th site reds and
+   * someone reads it", and that is precisely what happened: `registration-status.service.ts` gained
+   * a `user_id` stamp and this assertion went red until the site was entered above with a reason.
+   * The tripwire worked, so the number moves — the point was never that six is correct forever,
+   * it is that the count cannot change without somebody writing down why.
    */
-  it('holds the six-file figure 13-54 limit #1 was amended with', () => {
-    expect(Object.keys(RAW_UPDATE_SITES)).toHaveLength(6);
+  it('holds the raw-SQL site figure — 6 at 13-55, 7 since 13-50', () => {
+    expect(Object.keys(RAW_UPDATE_SITES)).toHaveLength(7);
   });
 });
 

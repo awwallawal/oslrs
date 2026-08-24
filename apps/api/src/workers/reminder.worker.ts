@@ -113,30 +113,21 @@ interface DispatchResult {
  */
 async function dispatchEmailReminder(respondent: Respondent, email: string, milestone: Milestone): Promise<DispatchResult> {
   // Issue a fresh link for this milestone so the user always has a working URL.
+  // 13-50 AC2 — the MAGIC_LINK_ISSUED row is now written by `issueToken`. `milestone` is the one
+  // thing this site knows that the primitive cannot, so it rides along in `auditDetails` rather
+  // than being lost to the consolidation.
   const issued = await MagicLinkService.issueToken({
     email,
     purpose: 'pending_nin_complete',
+    trigger: 'reminder_worker',
     respondentId: respondent.id,
+    auditDetails: { milestone: `${milestone}d` },
   });
   await MagicLinkService.sendMagicLinkEmail({
     email,
     tokenPlaintext: issued.tokenPlaintext,
     purpose: 'pending_nin_complete',
     expiresAt: issued.expiresAt,
-  });
-
-  AuditService.logAction({
-    actorId: null,
-    action: AUDIT_ACTIONS.MAGIC_LINK_ISSUED,
-    targetResource: 'magic_link_tokens',
-    targetId: issued.id,
-    details: {
-      email,
-      purpose: 'pending_nin_complete',
-      trigger: 'reminder_worker',
-      milestone: `${milestone}d`,
-      respondentId: respondent.id,
-    },
   });
 
   logger.info({

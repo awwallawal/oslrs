@@ -4,6 +4,7 @@ import {
   fetchWizardDraft,
   type WizardDraftData,
 } from '../api/wizard.api';
+import { isDraftPersistableEmail } from '../lib/draft-email-gate';
 
 /**
  * Story 9-12 Task 4.4 — server-side wizard draft persistence.
@@ -133,7 +134,38 @@ export function useWizardDraft(options: UseWizardDraftOptions = {}): UseWizardDr
     (latestFormData: WizardDraftData, latestStepIndex: number) => {
       if (disableAutosave) return; // Story 9-61 — authenticated edit mode.
       const email = latestFormData.email?.trim();
-      if (!email) return; // Wait until Step 2 sets it.
+
+      /**
+       * Story 13-50 AC4 — WAIT FOR AN ADDRESS, NOT JUST FOR CHARACTERS.
+       *
+       * The gate here used to be `if (!email) return` — non-empty. `wizard_drafts` is KEYED on
+       * email, so a 2-second pause mid-address wrote a row under the partial, and that row is not
+       * a bad field value, it is a person who never existed. Four of them (`…@gmail.co` × 4) were
+       * invited in D4 on 2026-08-06 at addresses that cannot receive mail, and all four belonged
+       * to people already in the register.
+       *
+       * `emailCommitted` is "the registrant has advanced past Step 2" — index 2+ is only
+       * reachable through Step 2's `handleContinue`, which is where any typo suggestion has been
+       * shown and either taken or declined. Before that, a known-typo domain counts as unfinished.
+       */
+      const emailCommitted = latestStepIndex >= 2;
+      if (!email || !isDraftPersistableEmail(email, { emailCommitted })) {
+        /**
+         * ⚠️ CODE REVIEW 2026-08-24 (M4) — CANCEL, don't just decline.
+         *
+         * Returning without clearing the timer left an ALREADY-ARMED write in flight, and that
+         * write closes over the address it was scheduled with. Type `a@gmail.com`, then backspace
+         * inside the 2s debounce: the guard declines the new value and the old timer still fires,
+         * creating a draft row under an address the registrant has just abandoned. That is the
+         * same "a row exists for somebody who never used it" producer AC4 exists to close, and it
+         * is invisible to the AC5 prefix sweep because the abandoned address is the LONGER one.
+         */
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+        return;
+      }
 
       const serialized = JSON.stringify(latestFormData);
       const serverStep = latestStepIndex + 1;

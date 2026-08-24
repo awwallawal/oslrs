@@ -230,8 +230,14 @@ describe('AuditService', () => {
       //   Normalising a non-bare suppression KEY is not LIFTING a suppression — nobody is
       //   released, the key merely becomes matchable. Unlike the two above this value has never
       //   been written, so it could still be spelled correctly.
+      // Story 13-50 (AC3.2) added 1:
+      //   REGISTRATION_NIN_DUPLICATE_BLOCKED ('registration.nin_duplicate_blocked') → 64.
+      //   The story's reopen trigger was "any NIN_DUPLICATE in the audit log from an adopted
+      //   person. Currently 0" — but nothing wrote such a row, so that 0 was a zero from a table
+      //   that could not contain the thing it watched for. This action is what makes the trigger
+      //   falsifiable; it records the COLLIDING RECORD's id, never the NIN.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(63);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(64);
     });
 
     /**

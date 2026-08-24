@@ -323,7 +323,9 @@ async function main() {
    * printed, because a cohort that silently shrinks is worse than one that shrinks loudly — the
    * operator needs to see WHY, not just a smaller number.
    */
-  const filtered = await filterMarketingCohort(rawCohort, (r) => r.email);
+  const filtered = await filterMarketingCohort(rawCohort, (r) => r.email, {
+    draftCohortSweep: true, // 13-50 AC5 — wizard_drafts cohort inviting people to register.
+  });
   const cohort = filtered.cohort;
   logger.info({
     event: 'recover_drafts.cohort_selected',
@@ -412,6 +414,10 @@ async function main() {
       const issued = await MagicLinkService.issueToken({
         email: row.email,
         purpose: 'wizard_resume',
+        trigger: 'recover_abandoned_wizard_drafts', // 13-50 AC2.2
+        // CODE REVIEW 2026-08-24 (H2) — this script ends in process.exit(); a detached audit
+        // write would be lost mid-flight (Story 9-26 Part H / M1). Flush it.
+        auditMode: 'awaited',
       });
       const resumeUrl = MagicLinkService.buildMagicLinkUrl(issued.tokenPlaintext, 'wizard_resume');
       const emailContent = buildEmail(firstName, resumeUrl);

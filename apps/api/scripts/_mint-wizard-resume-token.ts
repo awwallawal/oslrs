@@ -66,6 +66,12 @@ async function main(): Promise<void> {
   const { tokenPlaintext, expiresAt, id } = await MagicLinkService.issueToken({
     email: args.email,
     purpose: args.purpose,
+    // 13-50 AC2.2 — an operator minting by hand. Distinguishing these from automated mints is
+    // the difference between "traffic rose" and "somebody ran a script".
+    trigger: 'operator_manual_mint',
+    // CODE REVIEW 2026-08-24 (H2) — this script ends in process.exit(); a detached audit
+    // write would be lost mid-flight (Story 9-26 Part H / M1). Flush it.
+    auditMode: 'awaited',
   });
 
   console.error(

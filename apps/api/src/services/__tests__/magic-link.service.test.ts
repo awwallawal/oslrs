@@ -98,6 +98,7 @@ describe('MagicLinkService', () => {
   describe('issueToken', () => {
     it('issues a base64url plaintext token of the expected length', async () => {
       const result = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'wizard_resume',
       });
@@ -110,6 +111,7 @@ describe('MagicLinkService', () => {
 
     it('persists SHA-256 hash, not plaintext', async () => {
       const result = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'login',
       });
@@ -129,6 +131,7 @@ describe('MagicLinkService', () => {
     it('sets per-purpose TTL: 72h for wizard_resume', async () => {
       const before = Date.now();
       const result = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'wizard_resume',
       });
@@ -141,6 +144,7 @@ describe('MagicLinkService', () => {
     it('sets per-purpose TTL: 72h for pending_nin_complete', async () => {
       const before = Date.now();
       const result = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'pending_nin_complete',
         respondentId: testRespondentId,
@@ -153,6 +157,7 @@ describe('MagicLinkService', () => {
     it('sets per-purpose TTL: 15min for login', async () => {
       const before = Date.now();
       const result = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'login',
         userId: testUserId,
@@ -164,20 +169,21 @@ describe('MagicLinkService', () => {
     });
 
     it('produces fresh plaintext on each call', async () => {
-      const a = await MagicLinkService.issueToken({ email: testEmail, purpose: 'login' });
-      const b = await MagicLinkService.issueToken({ email: testEmail, purpose: 'login' });
+      const a = await MagicLinkService.issueToken({ trigger: 'operator_manual_mint', email: testEmail, purpose: 'login' });
+      const b = await MagicLinkService.issueToken({ trigger: 'operator_manual_mint', email: testEmail, purpose: 'login' });
       createdTokenIds.push(a.id, b.id);
       expect(a.tokenPlaintext).not.toBe(b.tokenPlaintext);
     });
 
     it('throws actionable error when email is missing', async () => {
       await expect(
-        MagicLinkService.issueToken({ email: '', purpose: 'login' }),
+        MagicLinkService.issueToken({ trigger: 'operator_manual_mint', email: '', purpose: 'login' }),
       ).rejects.toThrow(/email is required/i);
     });
 
     it('lowercases the email at storage', async () => {
       const result = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: 'MIXED-Case@Example.COM',
         purpose: 'login',
       });
@@ -192,6 +198,7 @@ describe('MagicLinkService', () => {
   describe('redeemToken', () => {
     it('successfully redeems a fresh token and marks it used', async () => {
       const issued = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'wizard_resume',
       });
@@ -209,6 +216,7 @@ describe('MagicLinkService', () => {
 
     it('rejects on second redemption attempt (single-use)', async () => {
       const issued = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'wizard_resume',
       });
@@ -229,6 +237,7 @@ describe('MagicLinkService', () => {
 
     it('rejects on purpose mismatch', async () => {
       const issued = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'wizard_resume',
       });
@@ -253,6 +262,7 @@ describe('MagicLinkService', () => {
 
     it('rejects on expired token', async () => {
       const issued = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'login',
       });
@@ -282,6 +292,7 @@ describe('MagicLinkService', () => {
   describe('revokeToken', () => {
     it('marks an unused token as used (idempotent)', async () => {
       const issued = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'login',
       });
@@ -299,6 +310,7 @@ describe('MagicLinkService', () => {
 
     it('redemption fails after revoke', async () => {
       const issued = await MagicLinkService.issueToken({
+        trigger: 'operator_manual_mint',
         email: testEmail,
         purpose: 'wizard_resume',
       });
