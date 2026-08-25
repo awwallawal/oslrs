@@ -2342,6 +2342,64 @@ association-sheet order == the Epic 11 mapping, provenance columns appended afte
 `merged-pairs.csv` (374 absorbed, with basis) · `needs-eyes.csv` (1,494 with reasons) ·
 `consolidate.mjs`, re-runnable and re-reading the taxonomy at run time.
 
+## 11. 🧪 `a3-eslint-policy` — A FLAKE I COULD NOT REPRODUCE, AND WHAT THAT COST TO ESTABLISH
+
+*2026-08-25. Written because "known flaky" with no numbers behind it is how a real bug hides.*
+
+### 11a. The attempt
+
+Eight full web-suite runs on `story/13-50` in one afternoon. **2 failures, then 5 consecutive clean.**
+
+| run | free RAM at launch | result | what else was running |
+|---|---|---|---|
+| A | 1.77 GB (Firefox open) | **2 failed** — `a3-eslint-policy` + `route-resolution` | agent doing prod queries / git / file reads |
+| B | 3.35 GB (Firefox closed) | **1 failed** — `a3-eslint-policy` | agent doing prod queries / diff reads |
+| 1–5 | 3.34 / 3.03 / 3.35 / 3.21 / 3.07 GB | **275/275 passed, every time** | the loop, essentially alone |
+
+⚠️ **Free RAM at launch does NOT predict it.** 3.35 GB produced both a failure (run B) and a pass
+(run 3). Any rule of the form "> 3 GB is safe" is refuted by this table.
+
+⚠️ **Nor does the file count.** Run B collected all **275** files and still lost a test. § the
+existing guidance — *"compare the FILE COUNT, not the pass count"* — would have called run B clean.
+
+⭐ **The only variable that separates the two groups is CONCURRENT ACTIVITY BY THE AGENT.** Both
+failures happened while I was running prod SSH queries, git operations and file reads alongside the
+suite. The five clean runs had the machine largely to themselves. That is a correlation across 8
+points, not a proof — but it is the only surviving candidate, and it implies an operational rule
+rather than a code change:
+
+> **⛔ Do not do other work while a gating suite runs.** Start it, wait, read the result. The suite
+> is not "background" work on this machine.
+
+### 11b. The obvious fix is NOT a fix — checked, not assumed
+
+`a3-eslint-policy.test.ts` constructs `new ESLint({ overrideConfigFile: 'eslint.config.js' })` inside
+a helper called once per test — three instantiations. The tempting fix is to hoist it into a shared
+`beforeAll` instance. **Measured timings say that would save nothing:**
+
+```
+✓ rejects CSS class selectors in unit/integration test files   3051ms   ← pays the config load
+✓ rejects CSS string locators in e2e files                        24ms
+✓ allows role-based query patterns                                21ms
+```
+
+ESLint caches config resolution at module scope, so instances 2 and 3 are already ~free. Hoisting
+would move the 3 s from the first test into a hook, not remove it — and a hook has a timeout too.
+**Recorded so the next person does not spend an afternoon implementing it.**
+
+### 11c. Ruling
+
+**Do NOT ship a speculative fix.** A fix for an unreproduced flake is untestable by construction:
+green afterwards proves nothing, because green was already the common case (6 of 8). It would
+convert an honest known-unknown into a false "resolved".
+
+**CI is the authority.** It runs each package as its own job on a dedicated runner with no mutual
+contention — exactly the condition under which this passes 5/5 locally. It has never failed there.
+
+**Reopen with:** a captured failure message. The 5-run loop is `scratchpad/repro.sh`; re-run it
+*while deliberately loading the machine* if you want to chase it further. Until an error string
+exists, there is nothing to fix.
+
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
 Parked by Awwal while launch bandwidth is tight. **Each row carries a TRIGGER, because a deferred list
