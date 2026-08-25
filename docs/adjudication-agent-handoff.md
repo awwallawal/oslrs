@@ -2284,6 +2284,64 @@ anything.
 - **13-66 R1** — the 18 hold-list people need a disposition (different copy, not silence). Awwal's.
 - **13-51 R13** — CLOSED, script retired. R3 and R12 remain.
 
+## 10. 🌾 FARMING-GROUP IMPORT — DECISIONS ALREADY TAKEN (2026-08-23 → 25)
+
+**Read this before reopening anything below.** Each row was argued once and settled. If you find
+yourself re-deriving one, the answer is here — change it only with new evidence, and say what the
+evidence is.
+
+**Scope:** three association sheets (N-Cares 6,516 rows · L-PRES 3,535 · fish 39) consolidated to
+**9,563 people**. Working files live at `C:\Users\DELL\Downloads\farming-consolidation\` —
+**deliberately OUTSIDE the repo**, so ~9.5k NIN-bearing PII rows cannot enter git history or ride a
+deploy. Do not move them in.
+
+### 10a. Settled — do not relitigate
+
+| # | Decision | Why, and the measurement behind it |
+|---|---|---|
+| **D1** | **Dedup on name AND phone. Never phone alone.** | Of N-Cares' 367 shared phones, **259 carry genuinely different names** (`Popoola Muminu` + `Waheed Agbo` on one handset) — co-operative/household phones, not duplicates. L-PRES inverts it: 112 of 181 shared phones ARE identical names. Phone-only dedup would have merged ~259 pairs of real people. Name keys are ORDER-INSENSITIVE token sets — measured, because N-Cares' surname position is 68 first-token / 36 last / 13 mid, i.e. genuinely unrecoverable. |
+| **D2** | **No gender inference. It was never needed.** | Coverage is already **100%** with a two-value vocabulary (N-Cares 4,748 M / 1,768 F; L-PRES 2,424 / 1,111; fish carries M/F). The `gender_suggested` / `_confidence` / `_accepted` scaffolding has no rows to act on. Repurposed as a VALIDATOR (flag name-vs-stated mismatches), not a filler. |
+| **D3** | **Trades map to the canonical taxonomy — never a new vocabulary.** | `SKILL_SLUGS` pins `skill_list` and the XLSForm parser flags any non-canonical value, so a bespoke agriculture vocabulary would be rejected at ingest anyway. 9,465 / 9,563 mapped (**98.98%**), zero non-canonical. The 42-slug merge (150→192) came out of this work. |
+| **D4** | **Value-chain STAGE decides the occupation, not the commodity.** | "Sheep/Goat › Marketing › Wholesale" is a livestock TRADER (`trading`, ISCO 5221), not a farmer. Mapping on commodity alone would file **789 traders and 318 processors as farmers** — 32% of L-PRES. |
+| **D5** | **L-PRES conflict/crisis columns and GPS are NOT carried through.** | Dropped at load, not imported-then-hidden. They include *"effect of conflict/crisis on gender and vulnerable groups"* and `Location Coordinates` — far outside a skills register's scope. |
+| **D6** | **`source = imported_association`.** | ALREADY EXISTS — Story 13-2 added it foundationally *"so provenance is honest from the first import"*. Gives the four-route visibility Awwal asked for (Public / Enumerator / Clerk / **Association**) with **no schema change**. |
+| **D7** | ⛔ **REJECTED: excluding association rows from the public figures.** | Proposed by the adjudication agent 2026-08-25 and **overruled by Awwal, correctly**: these are real people vouched for by their association, not a data dump. Excluding them would understate the registry AND suppress them from the marketplace — the opposite of what the register is for. **Provenance belongs in a TAG, not a FILTER.** Recorded because it is the kind of "tidy" idea that comes back. |
+| **D8** | **Drip-import by ASSOCIATION, not by arbitrary slices.** | `import_batches` already gives **14-day batch-level rollback** (flips that batch's respondents to `rolled_back`). One 9,563-row import is one all-or-nothing decision; batching by real group (N-Cares / L-PRES / fish) makes each rollback map to people you can actually telephone. |
+| **D9** | **PREDICT the post-import figures BEFORE uploading** — and the control must reproduce TODAY'S live numbers first. | [[pattern-predict-then-compare]]. Live control as of 2026-08-25: `totalRegistered 337 · withAnswers 282 · lgasCovered 32 · male 159 (56.4%) / female 121 (42.9%) · allSkills livestock 63, teaching 60, tailoring 38`. ⚠️ **Watch the gender split**: the intake is ~72% male against the register's 56.4%, so that public number WILL move. Honest, but better predicted than discovered mid-campaign. |
+| **D10** | **Consent is emitted `UNKNOWN` on all 9,563 rows — never blank, never assumed `Yes`.** | No sheet carried a consent column. A blank would read as absence; `UNKNOWN` reads as unanswered. |
+
+### 10b. ⛔ BLOCKER — must be solved before ANY import runs
+
+**The app's importer would undo D1.** `ingest-plan.ts` line 16: *"Dedup is on **phone OR NIN only**."*
+First phone match in the batch → `matched` → **not inserted**. Feeding `consolidated.csv` straight in
+silently drops roughly **700 real farmers** — the 763 people the consolidation deliberately KEPT
+apart because they share a handset with someone of a different name. It will not error; they appear
+as `matched`.
+
+Plus **21 cases of one NIN across two phones**, which the same rule collapses.
+
+Options: split so shared-phone people enter in separate batches · extend the importer's key to
+phone+name · or knowingly accept the loss. **Do not accept it silently** — a dropped farmer is
+invisible afterwards. **The dry-run (`POST /admin/imports/dry-run`) sizes this without writing
+anything** and should be the next concrete step.
+
+### 10c. Open — Awwal's to rule, NOT the agent's
+
+| # | Question | What makes it a ruling |
+|---|---|---|
+| **O1** | **Which `status` do imported rows carry?** | `PIPELINE_EXCLUDED_STATUSES = ['imported_unverified','rolled_back']` is honoured by BOTH `marketplace-extraction.worker.ts` and `fraud-detection.worker.ts`. So `status`, **not** `source`, is what suppresses the marketplace — D6's honest tag does not by itself get anyone listed. ⭐ The schema already carries the counter-precedent: *"`pending_nin_capture` / `nin_unavailable` are NOT excluded — legitimate field respondents who merely lack a NIN and still earn marketplace profiles once consented."* An association member vouched for by their head is that same shape. |
+| **O2** | **How is consent resolved?** | The schema says marketplace profiles are earned *"once consented"*, and D10 leaves consent `UNKNOWN`. So consent — not verification — may be the real gate. The association sheet's own design answers it: rows enter Tier-2 and a **member-side confirmation** is the consent event. Needs an explicit ruling, not an inference. |
+| **O3** | **Fraud-detection volume.** | Whatever status admits these rows to the marketplace also admits ~9,500 rows to fraud detection at once. Worth knowing before, not during. |
+| **O4** | **1,494 `needs-eyes` rows.** | 786 shared-phone · 274 suspected column-shift · 153 no usable phone (cannot be imported at all — phone is required) · 110 skill-unmapped · 99 unmatched LGA (88 of them `Fashola`, which is NOT an LGA) · ~150 malformed NINs · 43 NIN-across-phones · 9 soft merges. |
+| **O5** | **6,516 N-Cares rows have no Surname/First-name split**, and D1 shows it is unrecoverable. Import on `full_name` only, or have the association re-key? | |
+
+### 10d. What is actually ready
+
+`consolidated.csv` (9,563 rows, 3.1 MB — **under the 10 MB import limit**), first 12 columns in
+association-sheet order == the Epic 11 mapping, provenance columns appended after ·
+`merged-pairs.csv` (374 absorbed, with basis) · `needs-eyes.csv` (1,494 with reasons) ·
+`consolidate.mjs`, re-runnable and re-reading the taxonomy at run time.
+
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
 
 Parked by Awwal while launch bandwidth is tight. **Each row carries a TRIGGER, because a deferred list
