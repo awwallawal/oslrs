@@ -2313,12 +2313,54 @@ deploy. Do not move them in.
 ### 10b. ⛔ BLOCKER — must be solved before ANY import runs
 
 **The app's importer would undo D1.** `ingest-plan.ts` line 16: *"Dedup is on **phone OR NIN only**."*
-First phone match in the batch → `matched` → **not inserted**. Feeding `consolidated.csv` straight in
-silently drops roughly **700 real farmers** — the 763 people the consolidation deliberately KEPT
-apart because they share a handset with someone of a different name. It will not error; they appear
-as `matched`.
+First phone match in the batch → `matched` → **not inserted**. It will not error; the dropped
+people simply appear as `matched`.
 
-Plus **21 cases of one NIN across two phones**, which the same rule collapses.
+### ⭐ MEASURED 2026-08-25 — the real planner, the real file, nothing written
+
+`ingest-plan.ts` declares itself *"PURE, no DB"*, so `planIngest()` was run locally against
+`consolidated.csv` with the registry's 337 phones / 303 NINs supplied as the existing-key maps. This
+is not a model of the importer's logic — it IS the importer's logic.
+
+```
+input rows            9,563
+WOULD INSERT          9,086
+NOT INSERTED            477
+  phone_match_in_batch   441   <- the shared-handset people
+  nin_match_in_batch      21
+  phone_match             14   <- genuine collisions with the existing register
+  nin_match                1
+```
+
+⚠️ ~~**roughly 700 real farmers**~~ — **STRUCK. The measured figure is 441.** The 700 came from
+extrapolating the 763 `unique-name-on-shared-phone` CLUSTERS without accounting for the planner
+dropping only the 2nd-and-later row per phone. Recorded rather than quietly corrected: it was
+asserted three times in conversation before anyone ran the planner, and it is exactly the class of
+number [[pattern-falsifiable-number-is-a-live-artefact]] warns about.
+
+**Awwal's ruling 2026-08-25: 441 is manageable** — proceed, but examine them for what can be
+salvaged rather than writing them off. Splitting the shared-phone rows into a SECOND BATCH loses
+nobody and is cheap at this size.
+
+### ✅ Also measured, on a real candidate row
+
+```json
+"consentMarketplace": true,          <- D10's ruling lands where the marketplace reads it
+"lgaId": "irepo",                    <- LGA resolves cleanly
+"firstName": "Haruna", "lastName": "Isola",
+"metadata": { "import_extra": { "profession": "Crop Farming", "gender": "M" } }
+```
+
+**Two of my own harness bugs, recorded because both first read as importer defects:** `lgaId` came
+back `null` only because I passed the canonical field as `lga` (it is `lgaId`), and the name split
+printed empty only because I read `c.firstName` instead of `c.respondent.firstName`. Neither was
+the importer's fault. → verify the harness before reporting the system.
+
+⇒ **10b.3 softens.** The split is not broken — it produces sensible-looking names
+(`Haruna Isola` → first `Haruna`, last `Isola`). It is *unverifiable*: D1 measured N-Cares' surname
+as the first token in 68 of 117 decidable cases, so a rule that always takes token 0 as the given
+name is wrong on roughly half, with no way to tell which half a row is in. **A data-quality caveat
+to record, not a blocker.**
 
 Options: split so shared-phone people enter in separate batches · extend the importer's key to
 phone+name · or knowingly accept the loss. **Do not accept it silently** — a dropped farmer is
