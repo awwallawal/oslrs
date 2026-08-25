@@ -649,8 +649,11 @@ not accept a single figure from the dev, and you should extend it the same court
 
 ### 0. Read this first
 
-- **Nothing is committed.** 31 working-tree entries, `git rev-list --count main..HEAD` = **0**. The
-  branch is `story/13-50-check-registration-dead-end`, worktree `C:\Users\DELL\wt-13-50`.
+- ~~**Nothing is committed.** 31 working-tree entries, `git rev-list --count main..HEAD` = **0**.~~
+  **SUPERSEDED 2026-08-25** — committed as `b4fc562`, then rebased onto `de41f5f` (clean, no
+  conflicts) as **`9f559cc`**. Branch `story/13-50-check-registration-dead-end`, worktree
+  `C:\Users\DELL\wt-13-50`. Struck rather than deleted: a handoff that quietly rewrites its own
+  starting state is worth less than one that shows the move.
 - **Status is `review` and must stay there** until a real deploy SHA exists (§2a0). R1–R3 and R8–R9
   discharge only on prod.
 - ⚠️ **The root `.env` `DATABASE_URL` points at `app_db`, not a test DB**, and `test/db-guard.ts`
@@ -791,6 +794,74 @@ AC1/AC2/AC4/AC5 do what the story says. What the review found was **three guards
 fail**: an account check testing the wrong predicate, an AC5 wiring branch with no test at all, and
 an audit write that was called but never committed in six of ten mint sites. All three are fixed and
 RED-verified. **Nothing is committed; the tree is ready for your read.**
+
+## 🧑‍⚖️ ADJUDICATION — 2026-08-25
+
+Gates re-run independently, not accepted from the review. Every figure below was observed.
+
+| Gate | Result |
+|---|---|
+| Rebase onto `de41f5f` | clean, no conflicts → **`9f559cc`** |
+| **API suite** (`NODE_ENV=test`, `app_test`, from `apps/api`) | **305 files · 4,323 passed · 0 failed** — file count matches the handoff's 305 exactly, so uncontended |
+| `tsc` api / web / types | **0 / 0 / 0** |
+| eslint + 3 drift guards | **0 errors** · 393 files · 321 stories |
+| Web suite (3.35 GB free, Firefox closed) | 275 files · 3,047 passed · **1 pre-existing flake** (see below) |
+
+### ⭐ Independent RED-verify — C1, the security-relevant fix
+
+Neutering the redeemability gate (`const unredeemable = … : null` → `null`) reds **exactly four
+tests — 4 failed / 28 passed**, reproducing the reviewer's figure precisely:
+
+```
+× a STAFF account on the same address gets a LINKLESS status email, never an unredeemable login link
+× a SUSPENDED account …
+× a DEACTIVATED account …
+× a LOCKED account …
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+```
+
+Each asserts **no token is minted**; with the gate gone, one is. That is the property itself, not a
+proxy for it. Restored via `git checkout --` (not by memory), re-run **32/32**.
+
+### The web flake is NOT this story's — and it breaks two of our own heuristics
+
+`a3-eslint-policy > rejects CSS class selectors` failed in two full-suite runs and passes in
+isolation. **It lints a SYNTHETIC STRING** (`"document.querySelector('.foo')"`) and never scans real
+files — so this story's two new web test files cannot reach it. It is the documented pre-existing
+flake on this machine.
+
+⚠️ **But it failed at 3.35 GB free and with the full 275-file count.** Both of our stated tells
+therefore FAILED to fire:
+- *"free RAM > 3 GB"* — it was 3.35 GB.
+- *"compare the file count, not the pass count — a contended run collects fewer files"* — all 275
+  were collected and a test still failed.
+
+→ **A healthy file count no longer clears a run of contention**, and 3 GB is not a sufficient
+threshold. Tracked as its own debt item, not carried by this story.
+
+### The five rulings
+
+| # | Ruling | Evidence (measured on prod 2026-08-25) |
+|---|---|---|
+| **R4** | ✅ **LEAVE the 4 phantom drafts.** No prod deletion. | All four expire **2026-12-28** (125 days out), created 2026-05-19–23, all still at `current_step` 2. Deleting rows against a keep-forever retention ruling, to remove something that removes itself, is not a trade worth making. They are inert (producer closed by AC4, sweep excludes them by AC5) and are the only real specimens of the pattern — useful for validating the sweep at the next dry-run. |
+| **R8** | ✅ **KEEP C1. Close as MEASURED-ZERO.** Not 9-40 work today. | `r8_non_public_user` = **0**. The only intersecting accounts are **127 `public_user` / `active`**. C1 stays regardless of population: it asks the only correct question — *will `loginByMagicLinkToken` accept this account for this address* — and costs nothing at zero volume. **Reopen** on any `registration_status.account_not_redeemable` with `reason=not_public_user`. |
+| **R9** | ✅ **NO TLD refinement needed.** Close as ACCEPTED-and-measured. | The TLD-aware query returns **0 rows** across **284 live drafts**. The 4 it does catch are all genuine mid-typing (`…@gmail.co` → `…@gmail.com`). Re-run before each blast; the sweep prints every exclusion. |
+| **H2 default** | ✅ **KEEP `auditMode: 'detached'` on the request path.** | The loss mode is process-exit mid-flight. The API is long-lived under PM2; `scripts/` — which *do* exit — are pinned to `'awaited'` and held there by the source-scan census. The audit chain lock is **global**, so awaiting every mint would serialise the request path behind it during exactly the burst 13-65 moved sends off that path to survive. The downside is bounded and detectable: a missing audit row, never a failed mint or a security bypass. **Reopen trigger:** post-deploy, compare tokens minted in `magic_link_tokens` against `magic_link.issued` audit rows over the same window — a material undercount reverses this ruling. |
+| **L4** | ✅ **ACCEPT the note. Do NOT edit the dev's Debug Log.** | The load-bearing half (4 failures) is exact; only the denominator moved, and the reviewer already recorded it as a note. Rewriting someone's own measurement record after the fact is worse than annotating it. |
+
+### ⭐ Both zeros are REAL negatives — checked on purpose
+
+R8 and R9 each returned 0, and this story is the one that caught *"an empty result read as a
+negative result"* (AC3.2). So each query was run in an unfiltered form first to prove it **can**
+return rows: the R9 join returns **4**, the R8 join returns **127**. Neither zero is the
+unfalsifiable kind. → [[pattern-numeric-gate-fails-open-on-undefined]]
+
+### Verdict
+
+**NOT CLOSED — status stays `review`. Deploy SHA: ⏳ PENDING.**
+R1–R3 and R8–R9 discharge only on prod (§2a0). The dev's work and the review's fixes both hold up
+under independent re-measurement: all gates green, the one load-bearing RED-verify reproduces
+exactly, and the three prod residuals I could size came back **0 / 0 / inert**.
 
 ## Notes for whoever picks this up
 
