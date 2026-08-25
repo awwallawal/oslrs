@@ -2308,7 +2308,7 @@ deploy. Do not move them in.
 | **D7** | ⛔ **REJECTED: excluding association rows from the public figures.** | Proposed by the adjudication agent 2026-08-25 and **overruled by Awwal, correctly**: these are real people vouched for by their association, not a data dump. Excluding them would understate the registry AND suppress them from the marketplace — the opposite of what the register is for. **Provenance belongs in a TAG, not a FILTER.** Recorded because it is the kind of "tidy" idea that comes back. |
 | **D8** | **Drip-import by ASSOCIATION, not by arbitrary slices.** | `import_batches` already gives **14-day batch-level rollback** (flips that batch's respondents to `rolled_back`). One 9,563-row import is one all-or-nothing decision; batching by real group (N-Cares / L-PRES / fish) makes each rollback map to people you can actually telephone. |
 | **D9** | **PREDICT the post-import figures BEFORE uploading** — and the control must reproduce TODAY'S live numbers first. | [[pattern-predict-then-compare]]. Live control as of 2026-08-25: `totalRegistered 337 · withAnswers 282 · lgasCovered 32 · male 159 (56.4%) / female 121 (42.9%) · allSkills livestock 63, teaching 60, tailoring 38`. ⚠️ **Watch the gender split**: the intake is ~72% male against the register's 56.4%, so that public number WILL move. Honest, but better predicted than discovered mid-campaign. |
-| **D10** | **Consent is emitted `UNKNOWN` on all 9,563 rows — never blank, never assumed `Yes`.** | No sheet carried a consent column. A blank would read as absence; `UNKNOWN` reads as unanswered. |
+| **D10** | ✅ **Consent is ACCEPTED — ruled by Awwal 2026-08-25.** Emitted as `Yes`, not `UNKNOWN`. | ~~Earlier position: emit `UNKNOWN` because no sheet carried a consent column.~~ **Overruled, and rightly.** This is not scraped data: it was **sourced directly from the associations, who know it is for the Registry**. Recording it as `UNKNOWN` would understate a consent that was actually given, and would then be used downstream as a reason to withhold these people from the marketplace — the same suppression D7 rejects, arriving by a different door. The association head is the consenting party of record, exactly as the association data sheet's own declaration provides for. |
 
 ### 10b. ⛔ BLOCKER — must be solved before ANY import runs
 
@@ -2322,8 +2322,43 @@ Plus **21 cases of one NIN across two phones**, which the same rule collapses.
 
 Options: split so shared-phone people enter in separate batches · extend the importer's key to
 phone+name · or knowingly accept the loss. **Do not accept it silently** — a dropped farmer is
-invisible afterwards. **The dry-run (`POST /admin/imports/dry-run`) sizes this without writing
-anything** and should be the next concrete step.
+invisible afterwards.
+
+### 10b.2 ⛔ THE SLUG NEVER REACHES `skills_possessed` (found 2026-08-25)
+
+`ingest-plan.ts` `EXTRA_FIELDS` carries **`profession` as free text**, and every extra lands in
+`respondents.metadata.import_extra` — a JSONB bag. **Nothing in the import path writes
+`skills_possessed`**, which is where `SKILL_SLUGS`, the skills analytics, the combobox and
+marketplace-extraction all read.
+
+⇒ The canonical-slug mapping (98.98%, zero non-canonical) **does not arrive** through this
+importer. It would sit as a string in `metadata.import_extra.profession`, invisible to every skills
+surface.
+
+⭐ This reframes the granularity question. Awwal's instinct — that lumping everyone into `farming`
+loses real distinction — is right, but the immediate defect is that **neither the coarse nor the
+fine value reaches a skills field at all**. Settle that before choosing a resolution. For the
+record the detail was never lost: `trade_detail` holds `Crop — Cassava` 2,387 · `Crop — Maize`
+1,923 · `Crop — Tomato` 365 · `Crop — Rice` 37 beside the `farming` slug. The canonical taxonomy
+deliberately does NOT split by crop (ISCO 6111 = "Field Crop and Vegetable Growers"; the v1.0 doc
+folded maize/cassava/yam/rice into one entry). Keeping crop detail in a companion field matches the
+standard; adding crop-level slugs matches the instinct. **Both defensible — Awwal's ruling, made
+knowing the slug does not currently arrive.**
+
+### 10b.3 ⛔ THE IMPORTER'S NAME SPLIT INVERTS N-CARES (found 2026-08-25)
+
+```ts
+const parts = full.split(/\s+/);
+return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+```
+
+First token → **first name**. D1 measured N-Cares' surname as the FIRST token **68 of 117 decidable
+cases**, so this rule inverts roughly 58% of 6,516 names. `Haruna Isola` stores as first name
+*Haruna* / surname *Isola* when the evidence says the reverse is likelier. Silent, and
+cosmetic-looking right up until someone searches the register by surname.
+
+**The dry-run (`POST /admin/imports/dry-run`) sizes 10b, 10b.2 and 10b.3 together without writing
+anything** — run it against the file we would actually import, i.e. after the D10 consent change.
 
 ### 10c. Open — Awwal's to rule, NOT the agent's
 
@@ -2401,6 +2436,21 @@ contention — exactly the condition under which this passes 5/5 locally. It has
 exists, there is nothing to fix.
 
 ## 8. Deferred improvements (NONE launch-gating — deliberately parked 2026-07-30)
+
+### 8z. 🧪 KNOWN INTERMITTENT — `a3-eslint-policy` (web), logged 2026-08-25
+
+**Status: KNOWN, NOT FIXED, deliberately.** Failed 2 of 8 full web-suite runs in one afternoon, then
+passed 5 consecutively. Never seen to fail in CI. **Full evidence and the ruling: §11.**
+
+- ⛔ **Do not "fix" it speculatively.** The obvious change (hoist `new ESLint()` into `beforeAll`)
+  was measured and does NOT help — ESLint already caches config resolution at module scope
+  (3051ms / 24ms / 21ms across the three tests). §11b.
+- ⚠️ It **refutes two heuristics we were relying on**: free RAM >3 GB (3.35 GB gave both a pass and
+  a failure) and the file-count tell (the failing run collected all 275). Anyone quoting either as
+  proof of a clean run is quoting something this table disproves.
+- **Reopen with a captured error string.** `apps/api/scripts/_repro-web-flake.sh` hunts for one and
+  stops on the first reproduction so the text survives.
+
 
 Parked by Awwal while launch bandwidth is tight. **Each row carries a TRIGGER, because a deferred list
 without triggers becomes exactly the invisible debt §2a0 exists to catch** — that is the whole lesson of
