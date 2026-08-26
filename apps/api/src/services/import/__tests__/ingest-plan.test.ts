@@ -99,16 +99,53 @@ describe('planIngest — dedup on phone/NIN', () => {
     expect(plan.dispositions[0]).toMatchObject({ category: 'matched', reason: 'nin_match' });
   });
 
-  it('de-dupes duplicate phones WITHIN the same batch (real ASNAT fixture case)', () => {
+  /*
+   * Taxonomy R2 (LOCKED 2026-07-04) — REPLACES the previous "de-dupes duplicate
+   * phones WITHIN the same batch" test, which asserted that the second row was
+   * DROPPED. Measured against the real association intake, that rule silently
+   * discarded 441 people: co-operative and household handsets where two DIFFERENT
+   * names share one number. R2 forbids the silent merge; the rows are kept and
+   * flagged instead. `respondents.phone_number` is deliberately NOT unique.
+   */
+  it('R2 — two DIFFERENT people on one handset are both KEPT and flagged, never merged', () => {
     const plan = planIngest(
       basePlan([
         row(0, { phoneNumber: VALID_PHONE, firstName: 'First' }),
         row(1, { phoneNumber: VALID_PHONE, firstName: 'Dup' }),
       ]),
     );
-    expect(plan.toInsert).toHaveLength(1);
-    expect(plan.toInsert[0].rowIndex).toBe(0);
-    expect(plan.dispositions).toContainEqual({ rowIndex: 1, category: 'matched', reason: 'phone_match_in_batch' });
+    expect(plan.toInsert).toHaveLength(2);
+    expect(plan.dispositions).toHaveLength(0);
+    // BOTH are flagged — 12-4 counts every member of a shared-`tel:` group, so
+    // flagging only the later arrival could never reconcile with the dashboard.
+    expect(plan.identityAmbiguousCount).toBe(2);
+    expect(plan.toInsert.every((c) => c.identityAmbiguous)).toBe(true);
+    for (const c of plan.toInsert) {
+      expect(c.respondent.metadata.normalisation_warnings)
+        .toContain('identity:ambiguous_shared_phone_no_nin');
+    }
+  });
+
+  it('R2 — a NIN outranks a shared phone: distinct NINs are NOT ambiguous', () => {
+    const plan = planIngest(
+      basePlan([
+        row(0, { phoneNumber: VALID_PHONE, nin: '12345678901' }),
+        row(1, { phoneNumber: VALID_PHONE, nin: '99999999999' }),
+      ]),
+    );
+    expect(plan.toInsert).toHaveLength(2);
+    expect(plan.identityAmbiguousCount).toBe(0);
+  });
+
+  it('R2 — a REGISTRY phone match still drops (13-2: do not double-count self-registered members)', () => {
+    const plan = planIngest(
+      basePlan([row(0, { phoneNumber: VALID_PHONE })], {
+        existingIdByPhone: new Map([[VALID_PHONE, 'already-registered']]),
+      }),
+    );
+    expect(plan.toInsert).toHaveLength(0);
+    expect(plan.identityAmbiguousCount).toBe(0);
+    expect(plan.dispositions[0]).toMatchObject({ category: 'matched', reason: 'phone_match' });
   });
 });
 

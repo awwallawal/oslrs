@@ -130,10 +130,21 @@ describe('ImportService — real-DB dry-run → confirm → rollback', () => {
     });
     batchIds.push(res.batchId);
 
+    /*
+     * Taxonomy R2 (LOCKED 2026-07-04) — counts CHANGED 2026-08-25.
+     * `Dupe Ada` shares Ada's phone and carries no NIN. The fixture NAMES it a dupe,
+     * but the importer cannot know that: two different name strings on one handset is
+     * equally a household. R2 forbids the silent merge, so the row is now INSERTED and
+     * flagged instead of dropped. Measured on the real association intake, the old rule
+     * discarded 441 people this way.
+     *   rowsInserted        2 → 3  (Ada, Dupe Ada, Eve)
+     *   rowsMatchedExisting 2 → 1  (only the pre-inserted Existing Person)
+     * A REGISTRY match still drops — that is 13-2's anti-double-count, untouched.
+     */
     expect(res).toMatchObject({
       rowsParsed: 6,
-      rowsInserted: 2, // Ada, Eve
-      rowsMatchedExisting: 2, // in-batch dup + existing person
+      rowsInserted: 3, // Ada, Dupe Ada (kept + flagged), Eve
+      rowsMatchedExisting: 1, // existing person only
       rowsSkipped: 1, // consent No
       rowsFailed: 1, // no phone
     });
@@ -142,7 +153,18 @@ describe('ImportService — real-DB dry-run → confirm → rollback', () => {
       .select()
       .from(respondents)
       .where(eq(respondents.importBatchId, res.batchId));
-    expect(inserted).toHaveLength(2);
+    expect(inserted).toHaveLength(3);
+
+    // Both handset-sharers carry the R2 flag, so the count reconciles with 12-4's
+    // `identityAmbiguous` (which counts EVERY member of a shared-`tel:` group).
+    const flagged = inserted.filter((r) =>
+      (r.metadata?.normalisation_warnings ?? []).includes('identity:ambiguous_shared_phone_no_nin'),
+    );
+    expect(flagged).toHaveLength(2);
+    expect(flagged.map((r) => r.phoneNumber)).toEqual(['+2348010000001', '+2348010000001']);
+    // Eve has a NIN, so nothing about her is ambiguous.
+    expect(inserted.find((r) => r.nin === '12345678901')?.metadata?.normalisation_warnings ?? [])
+      .not.toContain('identity:ambiguous_shared_phone_no_nin');
     for (const r of inserted) {
       expect(r.source).toBe('imported_other');
       expect(r.status).toBe('imported_unverified');
@@ -225,7 +247,9 @@ describe('ImportService — real-DB dry-run → confirm → rollback', () => {
       reason: 'Wrong source file uploaded — rolling back per operator review.',
       actorId,
     });
-    expect(res.rowsAffected).toBe(2);
+    // 2 → 3 with R2: the shared-handset row is now inserted (and flagged), so the
+    // batch it belongs to has one more respondent for a rollback to flip.
+    expect(res.rowsAffected).toBe(3);
 
     const rows = await db.select({ status: respondents.status }).from(respondents).where(eq(respondents.importBatchId, targetBatch));
     expect(rows.every((r) => r.status === 'rolled_back')).toBe(true);
