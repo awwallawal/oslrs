@@ -60,6 +60,8 @@ const SettingsLandingPage = lazy(() => import('./features/settings/pages/Setting
 
 // Story 9-19 — Super Admin Operations Dashboard
 const OperationsDashboardPage = lazy(() => import('./features/dashboard/pages/OperationsDashboardPage'));
+// Campaign Watch — radio-vs-register attribution (super_admin only)
+const CampaignWatchPage = lazy(() => import('./features/dashboard/pages/CampaignWatchPage'));
 
 // Lazy load HomePage for code splitting
 const HomePage = lazy(() => import('./features/home'));
@@ -966,6 +968,15 @@ export function AppRoutes() {
                   element={
                     <Suspense fallback={<DashboardLoadingFallback />}>
                       <OperationsDashboardPage />
+                    </Suspense>
+                  }
+                />
+                {/* Campaign Watch — radio attribution (super_admin only) */}
+                <Route
+                  path="campaign-watch"
+                  element={
+                    <Suspense fallback={<DashboardLoadingFallback />}>
+                      <CampaignWatchPage />
                     </Suspense>
                   }
                 />

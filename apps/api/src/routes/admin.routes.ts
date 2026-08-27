@@ -11,6 +11,7 @@ import { db } from '../db/index.js';
 import auditLogViewerRoutes from './audit-log-viewer.routes.js';
 import settingsRoutes from './settings.routes.js';
 import operationsRoutes from './operations.routes.js';
+import campaignWatchRoutes from './campaign-watch.routes.js';
 import importsRoutes from './imports.routes.js';
 import suppressedContactsRoutes from './suppressed-contacts.routes.js';
 import pino from 'pino';
@@ -31,6 +32,9 @@ router.use('/settings', settingsRoutes);
 // Story 9-19 — sub-router for the Operations Dashboard at /admin/operations/*.
 // Super-admin-gated inside the sub-router.
 router.use('/operations', operationsRoutes);
+// Campaign Watch — radio-vs-register attribution, super-admin only (the composition
+// the public /insights page deliberately does not publish).
+router.use('/campaign-watch', campaignWatchRoutes);
 
 // Story 11-2 — sub-router for secondary-data import at /admin/imports/*.
 // Super-admin-gated inside the sub-router (auth + SUPER_ADMIN authorize).

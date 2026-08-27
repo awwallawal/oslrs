@@ -12,6 +12,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 import {
+  Radio,
   Home,
   FileText,
   Save,
@@ -179,6 +180,9 @@ export const sidebarConfig: Record<UserRole, NavItem[]> = {
     // Story 9-19 — Operations Dashboard (peer of Settings, not nested under it).
     // end:true so it doesn't stay highlighted on future nested ops routes.
     { label: 'Operations', href: '/dashboard/super-admin/operations', icon: Gauge, end: true, testId: 'sidebar-operations' },
+    // Campaign Watch — did the radio spend move the register? Sits beside Operations
+    // because it is the same kind of thing: a number an operator checks, not a citizen.
+    { label: 'Campaign Watch', href: '/dashboard/super-admin/campaign-watch', icon: Radio, end: true, testId: 'sidebar-campaign-watch' },
     // Story 9-11 — Super Admin audit log viewer (between System Health and MFA Settings;
     // when prep-settings-landing-and-feature-flags lands, Settings inserts after Audit Log)
     // R3-F1: end:true prevents accidental highlight on nested routes

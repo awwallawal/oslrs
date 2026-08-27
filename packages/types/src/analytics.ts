@@ -743,3 +743,46 @@ export interface DataHealthData {
   fields: DataHealthField[];
   recoveryCohort: DataHealthRecoveryCohort;
 }
+
+/**
+ * Campaign Watch — the radio-vs-register snapshot (super-admin only).
+ *
+ * ⚠️ NOT a public shape, deliberately. This is the channel composition the public
+ * /insights page does not publish (ruling 2026-08-26): attribution, unattributed
+ * counts, per-LGA radio reach. Useful in a room, dangerous on a screenshot.
+ */
+export interface CampaignChannelCount {
+  /** `campaign_source.channel` verbatim; null = the registrant did not answer. */
+  channel: string | null;
+  count: number;
+}
+
+export interface CampaignWatchDay {
+  day: string;
+  registrations: number;
+  attributed: number;
+  radio: number;
+}
+
+export interface CampaignWatchSnapshot {
+  /** Registrations created BEFORE `campaignStart` — the control. */
+  baseline: number;
+  /** What the baseline evaluated to when the service was written. A drift tell. */
+  baselineAtAuthoring: number;
+  baselineDrifted: boolean;
+  campaignStart: string;
+  totalNow: number;
+  sinceCampaignStart: number;
+  byChannel: CampaignChannelCount[];
+  byDay: CampaignWatchDay[];
+  radioByLga: Array<{ lgaId: string | null; count: number }>;
+  /**
+   * attributed / total in the campaign window (0–100), or null when the window is
+   * empty. ⭐ THE caveat on every other figure here: an unattributed row is NOT a
+   * non-radio row, so `radio` is a FLOOR, never an estimate. Surface this, never bury it.
+   */
+  attributionCoveragePct: number | null;
+  attributedCount: number;
+  unattributedCount: number;
+  generatedAt: string;
+}
