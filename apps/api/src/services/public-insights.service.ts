@@ -121,11 +121,8 @@ export class PublicInsightsService {
       countCore,
       summaryRows,
       genderRows,
-      ageRows,
       skillRows,
       desiredSkillRows,
-      empRows,
-      formalInformalRows,
       lgaRows,
     ] = await Promise.all([
       // Respondent-scoped registry count-core (headline + funnel). Seed of 12-4.
@@ -179,25 +176,6 @@ export class PublicInsightsService {
         GROUP BY label ORDER BY count DESC
       `),
 
-      // Age distribution
-      db.execute(sql`
-        SELECT
-          CASE
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 15 AND 24 THEN '15-24'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 25 AND 34 THEN '25-34'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 35 AND 44 THEN '35-44'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 45 AND 54 THEN '45-54'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) BETWEEN 55 AND 64 THEN '55-64'
-            WHEN EXTRACT(YEAR FROM AGE(NOW(), (ru.raw_data->>'dob')::date)) >= 65 THEN '65+'
-            ELSE 'unknown'
-          END AS label,
-          COUNT(*) AS count
-        FROM ${registryUnifiedSource('ru')}
-        WHERE ${answersWhere} AND ru.raw_data->>'dob' IS NOT NULL
-        GROUP BY label ORDER BY label
-      `),
-
-      // All skills (no LIMIT — frontend slices for display)
       db.execute(sql`
         SELECT skill, COUNT(*) AS count
         FROM ${registryUnifiedSource('ru')},
@@ -222,41 +200,6 @@ export class PublicInsightsService {
       `),
 
       // Employment breakdown
-      db.execute(sql`
-        SELECT
-          CASE
-            WHEN ru.raw_data->>'employment_status' = 'yes' THEN 'employed'
-            WHEN ru.raw_data->>'temp_absent' = 'yes' THEN 'temporarily_absent'
-            WHEN ru.raw_data->>'looking_for_work' = 'yes' THEN 'unemployed_seeking'
-            ELSE 'other'
-          END AS label,
-          COUNT(*) AS count
-        FROM ${registryUnifiedSource('ru')}
-        WHERE ${answersWhere}
-        GROUP BY label ORDER BY count DESC
-      `),
-
-      // Formal vs informal ratio
-      db.execute(sql`
-        SELECT
-          CASE
-            WHEN ru.raw_data->>'employment_type' IN ('wage_public', 'wage_private', 'contractor') THEN 'formal'
-            WHEN ru.raw_data->>'employment_type' IN ('self_employed', 'family_unpaid', 'apprentice') THEN 'informal'
-            ELSE 'unknown'
-          END AS label,
-          COUNT(*) AS count
-        FROM ${registryUnifiedSource('ru')}
-        WHERE ${answersWhere} AND ru.raw_data->>'employment_type' IS NOT NULL
-        GROUP BY label ORDER BY count DESC
-      `),
-
-      // LGA density — ALL respondents per LGA (NOT the answer-bearing subset), so
-      // the map counts every registered person (incl. submission-less imports)
-      // and equals COUNT(DISTINCT r.id) per LGA over the unified read (AC2/AC3).
-      // Null-`lga_id` respondents are EXCLUDED (13-33 review L2): they're already
-      // in the headline (`totalRespondents`), but they can't be placed on a
-      // geographic map — emitting them as an `'Unknown'` bucket would surface an
-      // unplaceable row on the public table and a bucket the map silently drops.
       db.execute(sql`
         SELECT COALESCE(l.name, ru.lga_id) AS label, COUNT(*) AS count
         FROM ${registryUnifiedSource('ru')}

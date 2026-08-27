@@ -1,16 +1,14 @@
-import { Users, MapPin, Scale, Briefcase, Lightbulb } from 'lucide-react';
+import { Users, MapPin, Scale, Lightbulb } from 'lucide-react';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { usePublicInsights } from '../hooks/usePublicInsights';
 import { StatCard } from '../components/StatCard';
 import { PublicDemographicsSection } from '../components/PublicDemographicsSection';
-import { PublicEmploymentSection } from '../components/PublicEmploymentSection';
 import { PublicSkillsChart } from '../components/PublicSkillsChart';
 import { PublicLgaTable } from '../components/PublicLgaTable';
 import { LgaChoroplethMap } from '../../dashboard/components/charts/LgaChoroplethMap';
 import { lgaDistributionToMapData } from '../../dashboard/utils/analytics-transforms';
 import { MethodologyNote } from '../components/MethodologyNote';
-import { basedOnCaptionIfKnown } from '../../dashboard/utils/registry-copy';
 
 function HeroSkeleton() {
   return (

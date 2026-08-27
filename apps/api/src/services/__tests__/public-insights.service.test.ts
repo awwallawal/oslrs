@@ -42,23 +42,26 @@ describe('PublicInsightsService', () => {
   it('returns pre-computed public insights (cache miss)', async () => {
     // 520 registered people, 500 of them with complete survey responses.
     mockCountCore.mockResolvedValue({ totalRespondents: 520, withAnswers: 500 });
-    // 8 parallel queries: summary, gender, age, skills, desiredSkills, emp, formal, lga
+    /*
+     * 5 parallel queries: summary, gender, skills, desiredSkills, lga.
+     * ⚠️ POSITIONAL. These mocks are consumed IN ORDER by one `Promise.all`, so a
+     * query removed from the service without removing its mock here silently shifts
+     * every later result onto the wrong name — and the types are identical, so `tsc`
+     * cannot see it. That is exactly how a first cut of this change made `summaryRows`
+     * read the GENDER query. Keep this list and the service's array in lockstep.
+     *
+     * The age / employment / formal-informal queries were REMOVED 2026-08-26 with the
+     * metrics they fed (see the service header).
+     */
     mockExecute
       .mockResolvedValueOnce(mockRows([{
         total: '500',
         lgas_covered: '15',
-        biz_rate: '12.5',
-        unemployment_est: '8.3',
-        youth_emp_rate: '65.2',
         gpi: '0.85',
       }]))
       .mockResolvedValueOnce(mockRows([
         { label: 'male', count: '280' },
         { label: 'female', count: '220' },
-      ]))
-      .mockResolvedValueOnce(mockRows([
-        { label: '15-24', count: '150' },
-        { label: '25-34', count: '200' },
       ]))
       .mockResolvedValueOnce(mockRows([
         { skill: 'welding', count: '50' },
@@ -67,14 +70,6 @@ describe('PublicInsightsService', () => {
       .mockResolvedValueOnce(mockRows([
         { skill: 'plumbing', count: '30' },
         { skill: 'driving', count: '20' },
-      ]))
-      .mockResolvedValueOnce(mockRows([
-        { label: 'employed', count: '350' },
-        { label: 'unemployed_seeking', count: '100' },
-      ]))
-      .mockResolvedValueOnce(mockRows([
-        { label: 'formal', count: '200' },
-        { label: 'informal', count: '150' },
       ]))
       .mockResolvedValueOnce(mockRows([
         { label: 'Ibadan North', count: '100' },
@@ -167,7 +162,6 @@ describe('PublicInsightsService', () => {
         youth_emp_rate: null, gpi: null,
       }]))
       .mockResolvedValueOnce(mockRows([])) // gender
-      .mockResolvedValueOnce(mockRows([])) // age
       .mockResolvedValueOnce(mockRows([
         { skill: 'welding', count: '30' },
         { skill: 'carpentry', count: '20' },
@@ -226,7 +220,6 @@ describe('PublicInsightsService', () => {
         youth_emp_rate: null, gpi: null,
       }]))
       .mockResolvedValueOnce(mockRows([])) // gender
-      .mockResolvedValueOnce(mockRows([])) // age
       .mockResolvedValueOnce(mockRows([
         { skill: 'welding', count: '50' },
         { skill: 'rare_skill', count: '9' }, // below PUBLIC_MIN_N=10
@@ -250,7 +243,6 @@ describe('PublicInsightsService', () => {
         youth_emp_rate: null, gpi: null,
       }]))
       .mockResolvedValueOnce(mockRows([])) // gender
-      .mockResolvedValueOnce(mockRows([])) // age
       .mockResolvedValueOnce(mockRows(manySkills)) // allSkills — 15 skills returned
       .mockResolvedValue(mockRows([]));
 
@@ -268,7 +260,6 @@ describe('PublicInsightsService', () => {
         youth_emp_rate: null, gpi: null,
       }]))
       .mockResolvedValueOnce(mockRows([])) // gender
-      .mockResolvedValueOnce(mockRows([])) // age
       .mockResolvedValueOnce(mockRows([])) // allSkills
       .mockResolvedValueOnce(mockRows([ // desiredSkills
         { skill: 'coding', count: '40' },
@@ -292,7 +283,6 @@ describe('PublicInsightsService', () => {
         youth_emp_rate: null, gpi: null,
       }]))
       .mockResolvedValueOnce(mockRows([])) // gender
-      .mockResolvedValueOnce(mockRows([])) // age
       .mockResolvedValueOnce(mockRows([ // allSkills
         { skill: 'welding', count: '50' },
         { skill: 'niche_skill', count: '5' }, // below PUBLIC_MIN_N=10
