@@ -85,23 +85,12 @@ const fullData: PublicInsightsData = {
   totalRegistered: 5000,
   withAnswers: 4200,
   // Story 13-46 (AC5) — the Axis-3 split is REQUIRED on the payload.
-  byVerification: { nin_on_file: 40, self_declared: 50, pending_nin: 8, unverified_import: 2 },
   lgasCovered: 33,
   // Story 12-4 / R-E: each rate carries the n it was computed from, and they
   // legitimately differ from each other and from withAnswers.
-  rateDenominators: {
-    businessOwnership: 3900,
-    unemployment: 3600,
-    youthEmployment: 2100,
-    gpi: 4100,
-  },
   genderSplit: [
     { label: 'male', count: 2800, percentage: 56, suppressed: false },
     { label: 'female', count: 2200, percentage: 44, suppressed: false },
-  ],
-  ageDistribution: [
-    { label: '15-24', count: 1500, percentage: 30, suppressed: false },
-    { label: '25-34', count: 2000, percentage: 40, suppressed: false },
   ],
   allSkills: [
     { skill: 'welding', count: 500, percentage: 25 },
@@ -110,17 +99,6 @@ const fullData: PublicInsightsData = {
   desiredSkills: [
     { skill: 'coding', count: 300, percentage: 30 },
   ],
-  employmentBreakdown: [
-    { label: 'employed', count: 3500, percentage: 70, suppressed: false },
-    { label: 'unemployed_seeking', count: 1000, percentage: 20, suppressed: false },
-  ],
-  formalInformalRatio: [
-    { label: 'formal', count: 2000, percentage: 57.1, suppressed: false },
-    { label: 'informal', count: 1500, percentage: 42.9, suppressed: false },
-  ],
-  businessOwnershipRate: 12.5,
-  unemploymentEstimate: 8.3,
-  youthEmploymentRate: 65.2,
   gpi: 0.85,
   lgaDensity: [
     { label: 'Ibadan North', count: 500, percentage: 10, suppressed: false },
@@ -156,23 +134,21 @@ describe('PublicInsightsPage', () => {
     expect(screen.getByText('LGAs Covered')).toBeInTheDocument();
   });
 
-  it('renders demographics section', () => {
+  it('renders demographics section — gender only', () => {
     mockInsights.isLoading = false;
     mockInsights.data = fullData;
     mockInsights.error = null;
     renderPage();
     expect(screen.getByText('Demographics')).toBeInTheDocument();
     expect(screen.getByText('Gender Distribution')).toBeInTheDocument();
-    expect(screen.getByText('Age Distribution')).toBeInTheDocument();
+    // Age removed 2026-08-26: ~35% populated across the intake routes.
+    expect(screen.queryByText('Age Distribution')).not.toBeInTheDocument();
   });
 
-  it('renders employment section', () => {
-    mockInsights.isLoading = false;
-    mockInsights.data = fullData;
-    mockInsights.error = null;
-    renderPage();
-    expect(screen.getByText('Employment Landscape')).toBeInTheDocument();
-  });
+  /* 'renders employment section' REMOVED — the section is gone. Employment,
+     formal/informal and unemployment are collected by no intake route but the
+     enumerator instrument (~2% of the registry post-import), and the unemployment
+     figure had already published wrong once (12-6 ruling R-E). */
 
   it('renders skills section', () => {
     mockInsights.isLoading = false;
@@ -189,99 +165,83 @@ describe('PublicInsightsPage', () => {
     renderPage();
     expect(screen.getByText(/methodology/i)).toBeInTheDocument();
     expect(screen.getByText('Registered People')).toBeInTheDocument();
-    expect(screen.getByText('Complete Survey Responses')).toBeInTheDocument();
     expect(screen.getByText(/data refreshed hourly/i)).toBeInTheDocument();
+    // The "Complete Survey Responses" tile is gone — post-intake it would read 282
+    // beside a headline of ~9,500: a 3% ratio, unexplained, on a public page.
+    expect(screen.queryByText('Complete Survey Responses')).not.toBeInTheDocument();
   });
 
-  it('methodology note states the breakdown base and does NOT narrate the answer-less remainder', () => {
+  it('⭐ the methodology note describes the METHOD, not a limitation', () => {
     mockInsights.isLoading = false;
-    mockInsights.data = fullData; // 5,000 registered · 4,200 with complete responses
+    mockInsights.data = fullData; // 5,000 registered
     mockInsights.error = null;
     renderPage();
     const note = screen.getByRole('region', { name: /methodology/i });
 
-    // The base the breakdowns are computed on is still published — that is the
-    // 13-25 funnel intent and 12-4's "publish the n you divided by".
-    expect(note.textContent).toMatch(
-      /breakdowns above are based on the\s*4,200\s*registrants with complete survey responses/i,
-    );
+    // It now says every figure counts EVERYONE, and names all four intake routes.
+    expect(note.textContent).toMatch(/all\s*5,000\s*registered people/i);
+    expect(note.textContent).toMatch(/enumerator/i);
+    expect(note.textContent).toMatch(/associations/i);
 
-    // ⛔ REGRESSION GUARD (2026-08-18, operator ruling). The prose narrating the
-    // 800 answer-less registrants was removed from the PUBLIC page. It named the
-    // soft-launch window and framed the gap as answers "not on file", which reads
-    // as an admission of data loss to a general audience. The two counts remain
-    // published side by side in the tiles above, so the base is still legible.
-    // Do NOT reintroduce this copy without an operator ruling.
+    // ⛔ REGRESSION GUARDS. The 2026-08-18 ruling removed prose narrating the
+    // answer-less remainder — it named the soft-launch window and read as an
+    // admission of data loss. The 2026-08-26 ruling removed the qualification
+    // itself: the page publishes only axis-universal figures, so it needs none.
     expect(note.textContent).not.toMatch(/soft-launch/i);
     expect(note.textContent).not.toMatch(/not on file/i);
-    expect(note.textContent).not.toMatch(/counted in the total/i);
-    expect(note.textContent).not.toMatch(/\b800\b/);
-  });
-
-  it('hero "Total Registered" shows the completed-survey funnel subtitle (13-25)', () => {
-    mockInsights.isLoading = false;
-    mockInsights.data = fullData;
-    mockInsights.error = null;
-    renderPage();
-    expect(screen.getByText(/4,200 with complete survey responses/i)).toBeInTheDocument();
-  });
-
-  it('renders (does not crash) when a stale pre-13-25 cache omits withAnswers (H1)', () => {
-    // Redis serves the public payload with a 1h TTL; a blob computed by the
-    // pre-13-25 API has no `withAnswers`. The reads must default to 0, not throw
-    // `undefined.toLocaleString()` and white-screen the launch-traffic page.
-    mockInsights.isLoading = false;
-    const staleData = { ...fullData };
-    delete (staleData as { withAnswers?: number }).withAnswers;
-    mockInsights.data = staleData as PublicInsightsData;
-    mockInsights.error = null;
-    renderPage();
-    expect(screen.getByText(/0 with complete survey responses/i)).toBeInTheDocument();
-    expect(screen.getByText('Complete Survey Responses')).toBeInTheDocument();
+    expect(note.textContent).not.toMatch(/complete survey responses/i);
+    // And it must not claim only two collection routes when there are four.
+    expect(note.textContent).not.toMatch(/field enumeration & self-registration/i);
   });
 
   // ── Review R3/R4 — every published rate ships the n it came from ──
 
-  it('publishes each rate denominator beside its rate', () => {
+  /*
+   * ⛔ THREE `rateDenominators` TESTS REMOVED HERE — 2026-08-26 (Awwal's ruling).
+   * They asserted that each published rate shipped with the n it was computed from
+   * (ruling R-E). Correct for a page that publishes deep-field rates; this page no
+   * longer does. The rates they guarded — unemployment, youth employment, business
+   * ownership — were REMOVED rather than caveated, because none is collected on more
+   * than ~2% of the registry once the association intake lands.
+   *
+   * Replaced by the guard below, which is the property that now matters.
+   */
+  it('⭐ publishes ONLY axis-universal metrics — no deep-field figure, no caveat', () => {
     mockInsights.isLoading = false;
     mockInsights.data = fullData;
     mockInsights.error = null;
     renderPage();
-    // Three DIFFERENT bases — that difference is the information, and until now
-    // `rateDenominators` was required on the payload and read by nobody.
-    expect(screen.getByText(/GPI: 0\.85 · based on 4,100 responses/)).toBeInTheDocument();
-    expect(screen.getByText('based on 2,100 responses')).toBeInTheDocument();
-    expect(screen.getByTestId('unemployment-n')).toHaveTextContent('based on 3,600 responses');
-  });
 
-  it('prints no denominator at all rather than "based on 0 responses"', () => {
-    // The service defaults an absent denominator to 0. A rate that clears the
-    // threshold while its own n is missing must stay bare — publishing "based
-    // on 0 responses" under a live percentage is worse than publishing nothing.
-    mockInsights.isLoading = false;
-    mockInsights.error = null;
-    mockInsights.data = {
-      ...fullData,
-      rateDenominators: { businessOwnership: 0, unemployment: 0, youthEmployment: 0, gpi: 0 },
-    };
-    renderPage();
-    expect(screen.queryByText(/based on 0 responses/)).not.toBeInTheDocument();
-    expect(screen.queryByTestId('unemployment-n')).not.toBeInTheDocument();
-    // The rates themselves still render — only their absent bases are withheld.
-    expect(screen.getByText(/GPI: 0\.85/)).toBeInTheDocument();
-  });
+    // Present: measurable on EVERY intake route (~99% populated).
+    expect(screen.getByText('Total Registered')).toBeInTheDocument();
+    expect(screen.getByText('LGAs Covered')).toBeInTheDocument();
+    expect(screen.getByText('Gender Parity Index')).toBeInTheDocument();
 
-  it('renders when a payload omits rateDenominators entirely', () => {
-    // Defensive: a cached payload predating the field must not blank the page.
-    const { rateDenominators: _omitted, ...withoutDenominators } = fullData;
-    mockInsights.isLoading = false;
-    mockInsights.error = null;
-    mockInsights.data = withoutDenominators as PublicInsightsData;
-    expect(() => renderPage()).not.toThrow();
-    // Scoped to the RATE caption's shape. A bare /based on/ also matches the
-    // methodology note ("based on the 4,200 registrants..."), which is separate
-    // prose and stays put.
+    // Absent: deep-field, and each would have needed a denominator caveat.
+    // A caveat a reader cannot interrogate is a headline somebody else gets to write.
+    expect(screen.queryByText(/Youth Employment/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Employment Status/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Unemployment/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Age Distribution/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Formal.*Informal/i)).not.toBeInTheDocument();
+
+    // And NO denominator captions anywhere — the page needs none.
     expect(screen.queryByText(/based on [\d,]+ responses/)).not.toBeInTheDocument();
+  });
+
+  it('⭐ never prints the verification composition on the PUBLIC page', () => {
+    // 13-46 AC5 rendered "N imported, unverified" under the headline. Post-intake that
+    // reads "9,505 imported, unverified" — the word against ~96% of the registry, in
+    // the most screenshot-able place on the site. The composition is NOT hidden: 12-6
+    // renders all three axes on the INTERNAL data-health view.
+    mockInsights.isLoading = false;
+    mockInsights.data = fullData;
+    mockInsights.error = null;
+    renderPage();
+    expect(screen.queryByText(/unverified/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/self-declared/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/awaiting NIN/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/complete survey responses/i)).not.toBeInTheDocument();
   });
 
   it('renders last-updated badge in methodology section', () => {
@@ -292,13 +252,13 @@ describe('PublicInsightsPage', () => {
     expect(screen.getByText(/last updated/i)).toBeInTheDocument();
   });
 
-  it('shows N/A for null GPI and youth employment rate', () => {
+  it('shows N/A for a null GPI', () => {
     mockInsights.isLoading = false;
-    mockInsights.data = { ...fullData, gpi: null, youthEmploymentRate: null };
+    mockInsights.data = { ...fullData, gpi: null };
     mockInsights.error = null;
     renderPage();
     const naElements = screen.getAllByLabelText('Not available');
-    expect(naElements.length).toBeGreaterThanOrEqual(2);
+    expect(naElements.length).toBeGreaterThanOrEqual(1);
   });
 
   it('expands LGA table when "Show all" is clicked (M-2)', async () => {
@@ -405,25 +365,23 @@ describe('PublicInsightsPage', () => {
   });
 });
 
-describe('Story 13-46 (AC5 / review A10) — the verification split is RENDERED, not just published', () => {
-  /* The 12-5 defect was a required payload field no component read. A split that ships in the type
-   * and never reaches the page is that defect wearing this story's name — and without an assertion
-   * on the text, deleting the render leaves the suite green. */
-
-  it('renders every Axis-3 tier the payload carries', async () => {
-    renderPage();
-
-    expect(await screen.findByText(/40 with NIN on file/)).toBeInTheDocument();
-    expect(screen.getByText(/50 self-declared/)).toBeInTheDocument();
-    expect(screen.getByText(/8 awaiting NIN/)).toBeInTheDocument();
-    expect(screen.getByText(/2 imported, unverified/)).toBeInTheDocument();
-  });
-
-  it('NEVER labels a tier "Verified" — a NIN is captured, never validated (12-4 ruling R1)', async () => {
-    renderPage();
-    await screen.findByText(/with NIN on file/);
-
-    expect(screen.queryByText(/verified/i)).not.toBeNull(); // "imported, unverified" contains it
-    expect(screen.queryByText(/\bVerified\b(?!,)/)).toBeNull();
-  });
-});
+/*
+ * ⛔ describe('Story 13-46 (AC5 / review A10) — the verification split is RENDERED')
+ *    REMOVED IN FULL — 2026-08-26 (Awwal's ruling).
+ *
+ * It held two tests guarding the `byVerification` subtitle on the PUBLIC page:
+ * 'renders every Axis-3 tier the payload carries' and 'NEVER labels a tier "Verified"'.
+ *
+ * 13-46 AC5's intent was right — a split that ships in the type and never reaches the
+ * page is the 12-5 defect wearing a new name. But the ruling is that this composition
+ * does not belong on the PUBLIC surface at all: post-intake the subtitle would read
+ * "9,505 imported, unverified" beneath the headline, i.e. the word *unverified* against
+ * ~96% of the registry, in the most screenshot-able place on the site, during a campaign
+ * season. It is not hidden — 12-6 renders all three axes on the internal data-health
+ * view, and the strata belong in the final report where a reader can ask about them.
+ *
+ * R1 ("a NIN is captured, never validated — never label it Verified") is UNCHANGED and
+ * still guarded where the tiers are rendered. On this page the stronger property now
+ * lives in '⭐ never prints the verification composition on the PUBLIC page', which
+ * asserts that none of it renders at all.
+ */

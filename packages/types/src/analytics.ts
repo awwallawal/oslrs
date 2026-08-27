@@ -386,47 +386,58 @@ export interface PublicInsightsData {
    */
   withAnswers: number;
   /**
-   * Story 13-46 (AC5) — the VERIFICATION / TRUST split of `totalRegistered`, so the public headline
-   * stops being a single unqualified count.
+   * ⛔ `byVerification` REMOVED from the PUBLIC payload — 2026-08-26, Awwal's ruling.
    *
-   * ⚠️ WHY THIS MATTERS THE DAY A JINGLE AIRS: a registration burst (or a bot flood) moves
-   * `totalRegistered` immediately — an unverified row is a government-facing number within one
-   * cache TTL — while leaving the trustworthy tiers untouched. Publishing both means the page tells
-   * the truth under inflation instead of quietly absorbing it. Honest-display RULE 5: verified and
-   * pending are never blended in a registry-size claim.
+   * 13-46 AC5 added it so the public headline "stops being a single unqualified count",
+   * and honest-display RULE 5 (never blend verified with pending) argued for publishing
+   * it. That reasoning is sound for an INTERNAL surface and it is kept there — 12-6
+   * renders all three axes on the data-health view, unchanged.
    *
-   * ⚠️ THERE IS NO `verified` MEMBER, DELIBERATELY (12-4 AC9 / ruling R1). A NIN is CAPTURED, never
-   * validated — there is no NIMC check and NINs carry no check digit. The top tier is
-   * `nin_on_file` and the UI must never label it "Verified".
+   * It is wrong for THIS surface. Once the association intake lands, this subtitle would
+   * read "9,505 imported, unverified" beneath the headline — the word *unverified*
+   * attached to ~96% of the registry, in the most screenshot-able place on the site,
+   * during a campaign season. A caveat a reader cannot ask a question about is not a
+   * caveat; it is a headline someone else gets to write.
+   *
+   * ⭐ THE RULE THIS PAGE NOW FOLLOWS: publish only what is measurable across ALL THREE
+   * axes (source × completeness × verification), so no figure needs qualifying. LGA,
+   * gender and skills are ~99% populated across every intake route; age (35%),
+   * employment (2%) and household (2%) are not, and have been removed rather than
+   * caveated. The composition, the strata and the limitations belong in the final
+   * report, where there is room to explain them.
    */
-  byVerification: Record<RegistryVerification, number>;
   lgasCovered: number;
   genderSplit: FrequencyBucket[];
-  ageDistribution: FrequencyBucket[];
   allSkills: SkillsFrequency[];
   desiredSkills: SkillsFrequency[];
-  employmentBreakdown: FrequencyBucket[];
-  formalInformalRatio: FrequencyBucket[];
-  businessOwnershipRate: number | null;
-  unemploymentEstimate: number | null;
-  youthEmploymentRate: number | null;
   gpi: number | null;
-  /**
-   * Story 12-4 (ruling R-E) — the n EACH rate was actually computed from.
+  /*
+   * ⛔ REMOVED 2026-08-26 (Awwal's ruling) — NOT universal across the intake routes,
+   * so every one of them would have needed a denominator caveat on a public page:
    *
-   * These are NOT all the same number and must never be collapsed into one.
-   * Every rate above divides by the people who answered ITS OWN question, so a
-   * question fewer people were asked has a smaller n. Publishing the n beside
-   * the rate is what stops the next reader having to work out which denominator
-   * produced it — and what stops a rate over 40 people being read with the
-   * authority of one over 300.
+   *   ageDistribution      35% populated  (only L-PRES carries DOB; N-Cares/fish none)
+   *   employmentBreakdown   2%            (no intake route collects it)
+   *   formalInformalRatio   2%
+   *   unemploymentEstimate  2%            — and this one ALREADY published wrong once:
+   *                                         12-6 ruling R-E found "not asked" silently
+   *                                         became "not employed", 18.4% vs 23.9%
+   *   youthEmploymentRate   needs age AND employment — neither is universal
+   *   businessOwnershipRate deep-field
+   *
+   * They are NOT deleted from the registry, the internal dashboards, or the analytics
+   * services — only from what this page publishes. The deep-field sample is the
+   * enumerator instrument's job (taxonomy R3: `full` stratum ≥330 and ≥10/LGA), and
+   * that is where these belong: in the final report, with the method beside them.
    */
-  rateDenominators: {
-    businessOwnership: number;
-    unemployment: number;
-    youthEmployment: number;
-    gpi: number;
-  };
+  /*
+   * ⛔ `rateDenominators` REMOVED from the PUBLIC payload — 2026-08-26.
+   * It existed to publish the n beside each rate (ruling R-E). With the deep-field
+   * rates gone from this page, an n for a rate nobody publishes is precisely the
+   * computed-but-required-but-unread field review M3 flagged. `gpi` is the only
+   * surviving rate and it derives from gender, ~99% populated on every intake
+   * route — so it needs no denominator caption to be read correctly.
+   * The internal dashboards keep theirs.
+   */
   lgaDensity: FrequencyBucket[];
   lastUpdated: string;
   keyFindings?: string[];

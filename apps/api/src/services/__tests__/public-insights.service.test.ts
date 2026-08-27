@@ -91,9 +91,6 @@ describe('PublicInsightsService', () => {
     expect(result.allSkills[0].skill).toBe('welding');
     expect(result.desiredSkills).toHaveLength(2);
     expect(result.desiredSkills[0].skill).toBe('plumbing');
-    expect(result.businessOwnershipRate).toBe(12.5);
-    expect(result.unemploymentEstimate).toBe(8.3);
-    expect(result.youthEmploymentRate).toBe(65.2);
     expect(result.gpi).toBe(0.85);
     expect(result.lastUpdated).toBeDefined();
     expect(new Date(result.lastUpdated).getTime()).not.toBeNaN();
@@ -142,7 +139,6 @@ describe('PublicInsightsService', () => {
     expect(result.lgasCovered).toBe(0);
     expect(result.genderSplit).toEqual([]);
     expect(result.allSkills).toEqual([]);
-    expect(result.businessOwnershipRate).toBeNull();
     expect(result.gpi).toBeNull();
   });
 
@@ -160,9 +156,6 @@ describe('PublicInsightsService', () => {
 
     const result = await PublicInsightsService.getPublicInsights();
 
-    expect(result.businessOwnershipRate).toBeNull();
-    expect(result.unemploymentEstimate).toBeNull();
-    expect(result.youthEmploymentRate).toBeNull();
     expect(result.gpi).toBeNull();
   });
 
@@ -204,9 +197,6 @@ describe('PublicInsightsService', () => {
     const result = await PublicInsightsService.getPublicInsights();
     expect(result.totalRegistered).toBe(12); // headline = registered people, always returned
     expect(result.withAnswers).toBe(8);
-    expect(result.businessOwnershipRate).toBeNull(); // suppressed: with-answers 8 < 10
-    expect(result.unemploymentEstimate).toBeNull();
-    expect(result.youthEmploymentRate).toBeNull();
     expect(result.gpi).toBeNull();
   });
 
@@ -406,111 +396,17 @@ describe('PublicInsightsService.getTrends', () => {
    * These assert the BINDING, not the helper — 13-55's lesson: a census that
    * counts sites while production calls something else stays green forever.
    */
-  describe('R-E — every rate divides by the people who answered ITS question', () => {
-    /**
-     * Whitespace-stripped so the assertion binds the STRUCTURE of the
-     * denominator, not the formatting. `toContain('employment_status')` would
-     * NOT do — the unemployment NUMERATOR names that field too, so a coarse
-     * denominator passes it. (Established by RED-verify: the first version of
-     * these tests stayed green with the fix reverted.)
-     */
-    async function captureSummarySql(): Promise<string> {
-      mockCountCore.mockResolvedValue({ totalRespondents: 300, withAnswers: 271 });
-      for (let i = 0; i < 8; i++) mockExecute.mockResolvedValueOnce(mockRows([]));
-      await PublicInsightsService.getPublicInsights();
-      return sqlShape(mockExecute.mock.calls[0]?.[0]);
-    }
-
-    /**
-     * Serialised from the REAL shared helper, not hand-typed. A hand-typed
-     * expected string is a second definition of the denominator: change the
-     * helper and the test goes red for a formatting reason, or worse, keeps
-     * passing against a shape production no longer emits.
-     */
-    const perField = (field: string) => sqlShape(answeredFieldDenominator(field));
-    const dividedBy = (field: string) => `NULLIF(${perField(field)},0)`;
-
-    /** The retired coarse denominator: "has ANY answers". */
-    const COARSE = `NULLIF(COUNT(*)FILTER(WHEREru.raw_dataISNOTNULL),0)`;
-
-    it('divides the unemployment estimate by the people who answered employment_status', async () => {
-      expect(await captureSummarySql()).toContain(dividedBy('employment_status'));
-    });
-
-    it('divides business ownership by the people who answered has_business', async () => {
-      expect(await captureSummarySql()).toContain(dividedBy('has_business'));
-    });
-
-    it('no longer divides ANY rate by the bare has-any-answers filter', async () => {
-      // Absence of the retired shape is what proves the fix reached PRODUCTION
-      // code rather than sitting in an unused helper — the 13-55 lesson.
-      expect(await captureSummarySql()).not.toContain(COARSE);
-    });
-
-    /**
-     * ⭐ THE RATE AND ITS PUBLISHED `n` MUST COME FROM THE SAME EXPRESSION.
-     *
-     * This is the guard that was missing. Story 12-4 shipped
-     * `unemployment_est` still dividing by the coarse filter while
-     * `unemployment_n` published the per-field count — a wrong rate carrying a
-     * correct-looking sample size, which is worse than a wrong rate alone,
-     * because the `n` is what tells a reader the figure was audited.
-     * [[pattern-monitor-measuring-something-else]]
-     */
-    it.each([
-      ['has_business', 'biz_n'],
-      ['employment_status', 'unemployment_n'],
-    ])('publishes for %s the same denominator it divides by (as %s)', async (field, alias) => {
-      const text = await captureSummarySql();
-      expect(text).toContain(dividedBy(field));
-      expect(text).toContain(`${perField(field)}AS${alias}`);
-    });
-
-    it('publishes the youth n from the SAME dob band the youth rate divides by', async () => {
-      const text = await captureSummarySql();
-      const band = `EXTRACT(YEARFROMAGE(NOW(),(ru.raw_data->>'dob')::date))BETWEEN15AND35`;
-      expect(text).toContain(`NULLIF(COUNT(*)FILTER(WHERE${band}),0)`);
-      expect(text).toContain(`COUNT(*)FILTER(WHERE${band})ASyouth_emp_n`);
-    });
-
-    it('publishes the n each rate was computed from (they are not all the same number)', async () => {
-      mockCountCore.mockResolvedValue({ totalRespondents: 300, withAnswers: 271 });
-      mockExecute.mockResolvedValueOnce(mockRows([{
-        lgas_covered: '15',
-        biz_rate: '32.1', biz_n: '215',
-        unemployment_est: '23.9', unemployment_n: '188',
-        youth_emp_rate: '65.2', youth_emp_n: '140',
-        gpi: '0.85', gpi_n: '265',
-      }]));
-      for (let i = 0; i < 7; i++) mockExecute.mockResolvedValueOnce(mockRows([]));
-
-      const result = await PublicInsightsService.getPublicInsights();
-
-      expect(result.rateDenominators).toEqual({
-        businessOwnership: 215,
-        unemployment: 188,
-        youthEmployment: 140,
-        gpi: 265,
-      });
-      // The whole point: these differ from each other AND from withAnswers.
-      expect(result.rateDenominators.unemployment).not.toBe(result.withAnswers);
-    });
-
-    it('reports a zero denominator rather than omitting it when nobody answered', async () => {
-      mockCountCore.mockResolvedValue({ totalRespondents: 300, withAnswers: 271 });
-      mockExecute.mockResolvedValueOnce(mockRows([{
-        lgas_covered: '15',
-        biz_rate: null, biz_n: '0',
-        unemployment_est: null, unemployment_n: '0',
-        youth_emp_rate: null, youth_emp_n: '0',
-        gpi: null, gpi_n: '0',
-      }]));
-      for (let i = 0; i < 7; i++) mockExecute.mockResolvedValueOnce(mockRows([]));
-
-      const result = await PublicInsightsService.getPublicInsights();
-
-      expect(result.unemploymentEstimate).toBeNull();
-      expect(result.rateDenominators.unemployment).toBe(0);
-    });
-  });
+  /*
+   * ⛔ THE `rateDenominators` DESCRIBE BLOCK REMOVED — 2026-08-26 (Awwal's ruling).
+   *
+   * It asserted ruling R-E's contract: every published rate ships the n it was computed
+   * from, and those n's legitimately differ. Right for a page that publishes deep-field
+   * rates; this page no longer does. Unemployment, youth employment and business
+   * ownership were REMOVED rather than caveated — post-intake each is collected on ~2%
+   * of the registry, and the unemployment figure had already published WRONG once
+   * (12-6 ruling R-E: "not asked" silently became "not employed", 18.4% vs 23.9%).
+   *
+   * R-E itself is UNCHANGED for the internal dashboards, which still publish n beside
+   * every rate. What changed is which rates this public surface publishes at all.
+   */
 });

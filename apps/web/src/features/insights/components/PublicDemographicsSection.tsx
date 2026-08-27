@@ -4,12 +4,18 @@ import { CHART_COLORS, formatLabel } from '../utils/chart-utils';
 
 interface PublicDemographicsSectionProps {
   genderSplit: FrequencyBucket[];
-  ageDistribution: FrequencyBucket[];
 }
 
-export function PublicDemographicsSection({ genderSplit, ageDistribution }: PublicDemographicsSectionProps) {
+/**
+ * ⛔ Age removed 2026-08-26 (Awwal's ruling). Age is ~35% populated across the intake
+ * routes — only L-PRES carries a date of birth; N-Cares and the fish roster carry none —
+ * so an age chart on a PUBLIC page could not be published without a denominator caveat,
+ * and a caveat a reader cannot interrogate is a headline somebody else gets to write.
+ * Gender stays: ~99% populated on every route. Age analysis belongs to the `full`
+ * stratum (taxonomy R3) and the final report.
+ */
+export function PublicDemographicsSection({ genderSplit }: PublicDemographicsSectionProps) {
   const visibleGender = genderSplit.filter(b => !b.suppressed);
-  const visibleAge = ageDistribution.filter(b => !b.suppressed);
 
   return (
     <section aria-labelledby="demographics-heading">
@@ -42,22 +48,6 @@ export function PublicDemographicsSection({ genderSplit, ageDistribution }: Publ
           )}
         </div>
 
-        {/* Age Distribution */}
-        <div>
-          <h3 className="text-lg font-semibold text-neutral-700 mb-4">Age Distribution</h3>
-          {visibleAge.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={visibleAge.map(b => ({ name: b.label, count: b.count ?? 0 }))}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="count" fill="#9C1E23" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-neutral-500">No age data available</p>
-          )}
-        </div>
       </div>
     </section>
   );

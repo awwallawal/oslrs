@@ -103,17 +103,24 @@ export default function PublicInsightsPage() {
               12-5 defect this story's notes claimed to have avoided, and because no test asserted
               the subtitle, deleting the one rendered tier would have left the web suite green.
             */}
+            {/*
+              ⛔ 2026-08-26 — the `byVerification` subtitle was REMOVED (Awwal's ruling).
+              It read "N with NIN on file · N self-declared · N awaiting NIN · N imported,
+              unverified". 13-46 AC5 added it so the headline "stops being a single
+              unqualified count", and honest-display RULE 5 backed that. Sound reasoning,
+              wrong surface: once the association intake lands it would print
+              "9,505 imported, unverified" under the headline — the word *unverified*
+              against ~96% of the registry, in the most screenshot-able place on the site,
+              during a campaign season. A caveat the reader cannot interrogate is not a
+              caveat; it is a headline somebody else gets to write.
+              The composition is NOT hidden — 12-6 renders all three axes on the internal
+              data-health view, and the strata belong in the final report with the method
+              beside them.
+            */}
             <StatCard
               icon={Users}
               label="Total Registered"
               value={data.totalRegistered}
-              subtitle={[
-                `${(data.byVerification?.nin_on_file ?? 0).toLocaleString()} with NIN on file`,
-                `${(data.byVerification?.self_declared ?? 0).toLocaleString()} self-declared`,
-                `${(data.byVerification?.pending_nin ?? 0).toLocaleString()} awaiting NIN`,
-                `${(data.byVerification?.unverified_import ?? 0).toLocaleString()} imported, unverified`,
-                `${(data.withAnswers ?? 0).toLocaleString()} with complete survey responses`,
-              ].join(' · ')}
             />
             <StatCard
               icon={MapPin}
@@ -139,19 +146,9 @@ export default function PublicInsightsPage() {
               label="Gender Parity Index"
               value={data.gpi != null ? Math.round(data.gpi * 100) : null}
               suffix="%"
-              subtitle={data.gpi != null
-                ? [`GPI: ${data.gpi.toFixed(2)}`, basedOnCaptionIfKnown(data.rateDenominators?.gpi)]
-                    .filter(Boolean).join(' · ')
-                : undefined}
-            />
-            <StatCard
-              icon={Briefcase}
-              label="Youth Employment Rate"
-              value={data.youthEmploymentRate != null ? Math.round(data.youthEmploymentRate) : null}
-              suffix="%"
-              subtitle={data.youthEmploymentRate != null
-                ? basedOnCaptionIfKnown(data.rateDenominators?.youthEmployment) ?? undefined
-                : undefined}
+              /* No "based on n" caption: GPI derives from gender alone, which is
+                 ~99% populated on every intake route, so its n IS the headline total. */
+              subtitle={data.gpi != null ? `GPI: ${data.gpi.toFixed(2)}` : undefined}
             />
           </div>
         </div>
@@ -159,18 +156,16 @@ export default function PublicInsightsPage() {
 
       {/* Content Sections */}
       <div className="container mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-12 space-y-16">
-        <PublicDemographicsSection
-          genderSplit={data.genderSplit}
-          ageDistribution={data.ageDistribution}
-        />
+        {/* Age removed 2026-08-26: ~35% populated across the intake routes (only
+            L-PRES carries DOB), so it could not be published without a caveat. */}
+        <PublicDemographicsSection genderSplit={data.genderSplit} />
 
-        <PublicEmploymentSection
-          employmentBreakdown={data.employmentBreakdown}
-          formalInformalRatio={data.formalInformalRatio}
-          unemploymentEstimate={data.unemploymentEstimate}
-          unemploymentN={data.rateDenominators?.unemployment}
-        />
-
+        {/* PublicEmploymentSection removed 2026-08-26 — employment (~2%),
+            formal/informal (~2%) and the unemployment estimate (~2%) are collected by
+            no intake route but the enumerator instrument. The unemployment figure had
+            already published WRONG once (12-6 ruling R-E: "not asked" silently became
+            "not employed", 18.4% vs 23.9%). Deep-field analysis is the `full` stratum's
+            job (taxonomy R3) and belongs in the final report. */}
         <PublicSkillsChart allSkills={data.allSkills} />
 
         {/* Story 8.8 AC#3: Geographic choropleth for public insights.
@@ -193,7 +188,6 @@ export default function PublicInsightsPage() {
 
         <MethodologyNote
           totalRegistered={data.totalRegistered}
-          withAnswers={data.withAnswers ?? 0}
           lastUpdated={data.lastUpdated}
         />
 

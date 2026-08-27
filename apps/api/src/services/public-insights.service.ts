@@ -331,28 +331,30 @@ export class PublicInsightsService {
       // Funnel subset: registered people with complete survey responses (~79).
       // Breakdowns below are computed over this subset (13-25 AC2).
       withAnswers: countCore.withAnswers,
-      // Story 13-46 (AC5) — from the SAME count-core call above, not a second query. A registration
-      // burst moves `totalRegistered` and leaves these tiers untouched, which is the truth.
-      byVerification: countCore.byVerification,
+      /*
+       * ⛔ 2026-08-26 — the PUBLIC page now publishes ONLY what is measurable across all
+       * three taxonomy axes, so no figure on it needs a denominator caveat.
+       *
+       * Removed here (still computed for, and rendered by, the INTERNAL dashboards):
+       *   byVerification        would read "9,505 imported, unverified" post-intake
+       *   ageDistribution       ~35% populated across the intake routes
+       *   employmentBreakdown   ~2%   · formalInformalRatio ~2%
+       *   unemploymentEstimate  ~2%   — already published WRONG once (12-6 ruling R-E:
+       *                                 "not asked" silently became "not employed",
+       *                                 18.4% published vs 23.9% actual)
+       *   youthEmploymentRate   needs age AND employment; neither is universal
+       *   businessOwnershipRate deep-field
+       *
+       * What remains is ~99% populated on every route: LGA, gender, skills.
+       * `gpi` survives because it derives from gender alone. `rateDenominators` goes
+       * with the rates it described — an n for a rate nobody publishes is the
+       * computed-but-unread field review M3 flagged.
+       */
       lgasCovered: Number(summary?.lgas_covered ?? 0),
       genderSplit: suppressSmallBuckets(toBuckets(genderRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
-      ageDistribution: suppressSmallBuckets(toBuckets(ageRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
       allSkills,
       desiredSkills,
-      employmentBreakdown: suppressSmallBuckets(toBuckets(empRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
-      formalInformalRatio: suppressSmallBuckets(toBuckets(formalInformalRows.rows as unknown as LabelCountRow[], total), PUBLIC_MIN_N),
-      businessOwnershipRate: meetsThreshold && summary?.biz_rate != null ? Number(summary.biz_rate) : null,
-      unemploymentEstimate: meetsThreshold && summary?.unemployment_est != null ? Number(summary.unemployment_est) : null,
-      youthEmploymentRate: meetsThreshold && summary?.youth_emp_rate != null ? Number(summary.youth_emp_rate) : null,
       gpi: meetsThreshold && summary?.gpi != null ? Number(summary.gpi) : null,
-      // R-E: each rate ships with the n it was computed from. These differ from
-      // each other and from `withAnswers` — that difference IS the information.
-      rateDenominators: {
-        businessOwnership: Number(summary?.biz_n ?? 0),
-        unemployment: Number(summary?.unemployment_n ?? 0),
-        youthEmployment: Number(summary?.youth_emp_n ?? 0),
-        gpi: Number(summary?.gpi_n ?? 0),
-      },
       // Density is respondent-scoped over ALL registered people (share of the
       // headline total, not the with-answers subset) and BANDED, not blank-
       // suppressed (13-33 AC3): ≥10 → exact graduated count; 1–9 → present-but-
