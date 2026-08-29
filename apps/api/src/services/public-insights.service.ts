@@ -14,7 +14,7 @@ import { suppressSmallBuckets, bandSmallBuckets, toBuckets } from '../utils/anal
 import { selectMultipleUnnest } from '../lib/skills-extraction.js';
 import { getRegistryCountCore, answeredFieldDenominator } from './registry-totals.service.js';
 import { registryUnifiedSource } from './registry-unified.js';
-import { PUBLIC_KEY_FINDINGS_CACHE_KEY } from './analytics-cache-keys.js';
+import { PUBLIC_KEY_FINDINGS_CACHE_KEY, analyticsCacheKey } from './analytics-cache-keys.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'public-insights' });
@@ -35,8 +35,15 @@ const logger = pino({ name: 'public-insights' });
  * payload has no such key, and the page renders it unconditionally — exactly the
  * `undefined is not an object` this suffix exists to prevent.
  */
-const CACHE_KEY = 'analytics:public:insights:v3';
-const TRENDS_CACHE_KEY = 'analytics:public:trends';
+/*
+ * ⚠️ COMPOSED, never a literal. This key was hardcoded until 2026-08-29, which is how a
+ * payload shape change shipped with a stale cache: prod ran the new code and served a
+ * pre-deploy blob missing `skillsByLga`/`growth` for an hour. The irony is that Story
+ * 12-6 built `analytics-cache-keys.ts` to stop exactly this — and the one key its
+ * founding comment was written about was the one key never wired to it.
+ */
+const CACHE_KEY = analyticsCacheKey('public', 'insights');
+const TRENDS_CACHE_KEY = analyticsCacheKey('public', 'trends');
 const CACHE_TTL = 3600; // 1 hour
 const PUBLIC_MIN_N = 10; // Stricter suppression for public data
 

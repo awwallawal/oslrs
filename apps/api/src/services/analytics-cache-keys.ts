@@ -39,10 +39,29 @@
  *      it, and `getActivationStatus` would return a cached object whose
  *      `totalRespondents` is `undefined` — which the policy-brief gate then
  *      (correctly) refuses, 400ing a Ministry document on a register of 272.
+ * v3 — 2026-08-29. The public /insights payload changed SHAPE twice in two days:
+ *      `byVerification` / `ageDistribution` / `employmentBreakdown` /
+ *      `formalInformalRatio` / `unemploymentEstimate` / `youthEmploymentRate` /
+ *      `businessOwnershipRate` / `rateDenominators` REMOVED, then `skillsByLga`
+ *      and `growth` ADDED.
+ *
+ *      ⛔ AND THIS IS THE SECOND TIME THE SAME DEFECT LANDED. `public-insights`
+ *      composed its key from a HARDCODED literal (`analytics:public:insights:v3`)
+ *      instead of this module's symbol, so the deploy shipped, prod ran the new
+ *      code, and the endpoint served a pre-deploy blob with the new fields
+ *      MISSING — verified live on prod at 863e358. The page degraded gracefully
+ *      only because both new components were written to tolerate `undefined`;
+ *      the sections were simply absent for an hour.
+ *
+ *      Story 12-6 created this module because "the discipline lived in a comment
+ *      beside a literal rather than in a shared constant" — and then the one key
+ *      the original comment was written for was itself never wired to it. Fixed:
+ *      `public-insights` now composes `analyticsCacheKey('public','insights')`,
+ *      so its version can no longer diverge from every other analytics cache.
  */
 
 /** Bump on ANY cached-analytics shape or value change. See the header. */
-export const ANALYTICS_CACHE_VERSION = 'v2';
+export const ANALYTICS_CACHE_VERSION = 'v3';
 
 /**
  * Compose a versioned analytics cache key.
