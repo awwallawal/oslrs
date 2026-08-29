@@ -49,6 +49,11 @@ vi.mock('recharts', () => ({
   YAxis: () => <div />,
   Tooltip: () => <div />,
   Legend: () => <div />,
+  // Added 2026-08-29 with RegistrationGrowthChart. An UNMOCKED recharts export arrives
+  // as `undefined` and React throws on render — the component itself is fine.
+  AreaChart: ({ children }: any) => <div>{children}</div>,
+  Area: () => <div />,
+  CartesianGrid: () => <div />,
 }));
 
 // Reset LgaChoroplethMap module cache and mock fetch for GeoJSON
@@ -103,6 +108,13 @@ const fullData: PublicInsightsData = {
   lgaDensity: [
     { label: 'Ibadan North', count: 500, percentage: 10, suppressed: false },
   ],
+  skillsByLga: [
+    { lgaId: 'ibadan_north', skills: [{ skill: 'welding', count: 30 }, { skill: 'tailoring', count: 12 }] },
+  ],
+  growth: [
+    { day: '2026-08-24', count: 6, cumulative: 4994 },
+    { day: '2026-08-25', count: 6, cumulative: 5000 },
+  ],
   lastUpdated: '2026-03-13T10:00:00.000Z',
 };
 
@@ -149,6 +161,52 @@ describe('PublicInsightsPage', () => {
      formal/informal and unemployment are collected by no intake route but the
      enumerator instrument (~2% of the registry post-import), and the unemployment
      figure had already published wrong once (12-6 ruling R-E). */
+
+  it('⭐ renders Trades by Local Government from skillsByLga', () => {
+    mockInsights.isLoading = false;
+    mockInsights.data = fullData;
+    mockInsights.error = null;
+    renderPage();
+    expect(screen.getByText('Trades by Local Government')).toBeInTheDocument();
+    const grid = screen.getByTestId('skills-lga-grid');
+    expect(grid.textContent).toMatch(/Ibadan North/);
+    // Slugs render as canonical LABELS, not raw slugs.
+    expect(grid.textContent).toMatch(/Welding & Fabrication/);
+    // Raw slugs must never reach a public page — the canonical label is rendered.
+    expect(grid.textContent).not.toContain('welding');
+  });
+
+  /*
+   * ⭐ THE EMPTY STATE IS A REAL READING, NOT A BUG — and this test exists so nobody
+   * "fixes" it by lowering the floor. Cells are emitted by the API only at or above the
+   * public k-anonymity threshold (10): a rare trade in a thinly-registered LGA can
+   * identify one person, and "present but fewer than 10" still discloses that, which is
+   * why this is FLOORED rather than banded like the density map. At today's volume
+   * almost nothing clears it.
+   */
+  it('⭐ says so plainly when no LGA clears the k-anonymity floor', () => {
+    mockInsights.isLoading = false;
+    mockInsights.data = { ...fullData, skillsByLga: [] };
+    mockInsights.error = null;
+    renderPage();
+    const empty = screen.getByTestId('skills-lga-empty');
+    expect(empty.textContent).toMatch(/10 or more people registered in a single trade/i);
+    expect(screen.queryByTestId('skills-lga-grid')).not.toBeInTheDocument();
+  });
+
+  it('renders the growth chart, and hides it below two points', () => {
+    mockInsights.isLoading = false;
+    mockInsights.error = null;
+    mockInsights.data = fullData;
+    renderPage();
+    expect(screen.getByText('Registrations Over Time')).toBeInTheDocument();
+
+    cleanup();
+    mockInsights.data = { ...fullData, growth: [{ day: '2026-08-24', count: 6, cumulative: 6 }] };
+    renderPage();
+    // One point is not a trend — render nothing rather than a misleading flat line.
+    expect(screen.queryByText('Registrations Over Time')).not.toBeInTheDocument();
+  });
 
   it('renders skills section', () => {
     mockInsights.isLoading = false;

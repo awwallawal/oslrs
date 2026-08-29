@@ -20,7 +20,9 @@ export function PublicDemographicsSection({ genderSplit }: PublicDemographicsSec
   return (
     <section aria-labelledby="demographics-heading">
       <h2 id="demographics-heading" className="text-2xl font-bold text-neutral-900 mb-6">Demographics</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {/* One chart since age was removed — a 2-col grid left it hugging the left
+          edge with dead space beside it. Centre it at a readable width. */}
+      <div className="mx-auto max-w-2xl">
         {/* Gender Split */}
         <div>
           <h3 className="text-lg font-semibold text-neutral-700 mb-4">Gender Distribution</h3>

@@ -9,13 +9,15 @@ import { PublicLgaTable } from '../components/PublicLgaTable';
 import { LgaChoroplethMap } from '../../dashboard/components/charts/LgaChoroplethMap';
 import { lgaDistributionToMapData } from '../../dashboard/utils/analytics-transforms';
 import { MethodologyNote } from '../components/MethodologyNote';
+import { RegistrationGrowthChart } from '../components/RegistrationGrowthChart';
+import { SkillsByLgaSection } from '../components/SkillsByLgaSection';
 
 function HeroSkeleton() {
   return (
     <div className="bg-gradient-to-r from-[#9C1E23] to-[#7A171B] py-16 px-4">
       <div className="container mx-auto max-w-6xl">
         <Skeleton className="h-10 w-96 bg-white/20 mb-8 mx-auto" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="mx-auto grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
           {[1, 2, 3, 4].map(i => (
             <Skeleton key={i} className="h-28 bg-white/10 rounded-lg" />
           ))}
@@ -76,7 +78,9 @@ export default function PublicInsightsPage() {
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">
             Oyo State Labour Force at a Glance
           </h1>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 3 cards since 2026-08-26 (Youth Employment removed). A 4-col grid left-aligned
+              them and left a visible hole on the right — centre a 3-col row instead. */}
+          <div className="mx-auto grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
             {/*
               Story 13-46 (AC5) — REGISTERED vs the TRUST TIERS, so the headline survives inflation.
               Until now this was a single unqualified count with no verification filter anywhere
@@ -182,7 +186,13 @@ export default function PublicInsightsPage() {
           </p>
         </section>
 
+        {/* Skills x LGA — the Registry's purpose as a chart. Both axes universal. */}
+        <SkillsByLgaSection skillsByLga={data.skillsByLga} />
+
         <PublicLgaTable lgaDensity={data.lgaDensity} />
+
+        {/* created_at is universal by construction — the one series needing no caveat. */}
+        <RegistrationGrowthChart growth={data.growth} />
 
         <MethodologyNote
           totalRegistered={data.totalRegistered}

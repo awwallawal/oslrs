@@ -124,6 +124,8 @@ export class PublicInsightsService {
       skillRows,
       desiredSkillRows,
       lgaRows,
+      skillsByLgaRows,
+      growthRows,
     ] = await Promise.all([
       // Respondent-scoped registry count-core (headline + funnel). Seed of 12-4.
       getRegistryCountCore(),
@@ -206,6 +208,43 @@ export class PublicInsightsService {
         LEFT JOIN lgas l ON l.code = ru.lga_id
         WHERE ru.lga_id IS NOT NULL
         GROUP BY label ORDER BY count DESC
+      `),
+
+      /*
+       * SKILLS x LGA — "who can do what, where". Both axes are ~99% populated on every
+       * intake route, so this needs no caveat.
+       *
+       * ⚠️ THE FINEST-GRAINED THING THIS PAGE PUBLISHES, so it carries a HARD k-anonymity
+       * floor rather than the map's banding: a cell is emitted ONLY at >= PUBLIC_MIN_N.
+       * A rare trade in a thinly-registered LGA can identify one person, and "present but
+       * fewer than 10" still discloses that. Below the floor the cell is ABSENT, not banded.
+       *
+       * Consequence, stated rather than hidden: at today's ~370 registrants across 33 LGAs
+       * almost nothing clears 10, so this renders nearly empty — which is the honest
+       * picture. It fills in as the register grows.
+       */
+      db.execute(sql`
+        SELECT ru.lga_id AS lga_id, skill, COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')},
+             ${selectMultipleUnnest(sql`ru.raw_data`, 'skills_possessed')} AS skill
+        WHERE ${answersWhere}
+          AND ru.lga_id IS NOT NULL
+          AND ru.raw_data->>'skills_possessed' IS NOT NULL
+        GROUP BY 1, 2
+        HAVING COUNT(*) >= ${PUBLIC_MIN_N}
+        ORDER BY 1, count DESC
+      `),
+
+      /*
+       * REGISTRATION GROWTH — `created_at` is universal BY CONSTRUCTION (every respondent
+       * has one), so this is the one series that can never need a denominator caveat.
+       * Respondent-scoped and aggregate-only, so no suppression applies.
+       */
+      db.execute(sql`
+        SELECT to_char(ru.created_at AT TIME ZONE 'Africa/Lagos', 'YYYY-MM-DD') AS day,
+               COUNT(*) AS count
+        FROM ${registryUnifiedSource('ru')}
+        GROUP BY 1 ORDER BY 1
       `),
     ]);
 
@@ -305,6 +344,34 @@ export class PublicInsightsService {
       // `bandSmallBuckets` is the SINGLE suppression authority — the frontend map
       // no longer re-suppresses.
       lgaDensity: bandSmallBuckets(toBuckets(lgaRows.rows as unknown as LabelCountRow[], countCore.totalRespondents), PUBLIC_MIN_N),
+
+      /*
+       * Skills x LGA, already floored at PUBLIC_MIN_N by the query's HAVING clause —
+       * so nothing below the k-anonymity threshold ever leaves the database.
+       */
+      skillsByLga: Object.values(
+        (skillsByLgaRows.rows as unknown as Array<{ lga_id: string; skill: string; count: string }>)
+          .reduce<Record<string, { lgaId: string; skills: Array<{ skill: string; count: number }> }>>(
+            (acc, r) => {
+              acc[r.lga_id] ??= { lgaId: r.lga_id, skills: [] };
+              acc[r.lga_id].skills.push({ skill: r.skill, count: Number(r.count) });
+              return acc;
+            }, {}),
+      ),
+
+      /*
+       * Cumulative registrations. The running total is computed HERE rather than in SQL
+       * so the daily figure and the cumulative one can never disagree — one pass, one
+       * source. `created_at` is universal, so no suppression and no caveat.
+       */
+      growth: (() => {
+        let running = 0;
+        return (growthRows.rows as unknown as Array<{ day: string; count: string }>)
+          .map((r) => {
+            running += Number(r.count);
+            return { day: r.day, count: Number(r.count), cumulative: running };
+          });
+      })(),
       lastUpdated: new Date().toISOString(),
       // Story 8.7: Key findings from inferential engine (Redis cache bridge)
       ...(await PublicInsightsService.getKeyFindings(total)),

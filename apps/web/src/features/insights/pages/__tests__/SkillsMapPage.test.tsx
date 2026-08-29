@@ -68,6 +68,8 @@ const fullData: PublicInsightsData = {
   ],
   gpi: null,
   lgaDensity: [],
+  skillsByLga: [],
+  growth: [],
   lastUpdated: '2026-03-13T10:00:00.000Z',
 };
 

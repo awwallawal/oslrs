@@ -439,6 +439,19 @@ export interface PublicInsightsData {
    * The internal dashboards keep theirs.
    */
   lgaDensity: FrequencyBucket[];
+  /**
+   * ⭐ Skills x LGA — "who can do what, where". Both axes are ~99% populated on every
+   * intake route, so it needs no caveat. Cells below the public k-anonymity floor are
+   * ABSENT, not banded: a rare trade in a thin LGA can identify one person, and
+   * "present but fewer than 10" still discloses that.
+   */
+  skillsByLga: SkillsByLga[];
+  /**
+   * Registrations per day plus the running total. `created_at` is universal BY
+   * CONSTRUCTION — every respondent has one — so this is the one series on the page
+   * that can never need a denominator caveat.
+   */
+  growth: RegistrationGrowthPoint[];
   lastUpdated: string;
   keyFindings?: string[];
 }
@@ -785,4 +798,17 @@ export interface CampaignWatchSnapshot {
   attributedCount: number;
   unattributedCount: number;
   generatedAt: string;
+}
+
+/** One LGA's trades, already floored at the public k-anonymity threshold. */
+export interface SkillsByLga {
+  lgaId: string;
+  skills: Array<{ skill: string; count: number }>;
+}
+
+/** One day of registrations plus the running total. */
+export interface RegistrationGrowthPoint {
+  day: string;
+  count: number;
+  cumulative: number;
 }

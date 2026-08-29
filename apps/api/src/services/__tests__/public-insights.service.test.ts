@@ -32,6 +32,41 @@ function mockRows(rows: Record<string, unknown>[]) {
   return { rows };
 }
 
+/*
+ * ⛔ THE K-ANONYMITY FLOOR IS ENFORCED IN SQL, WHERE A MOCKED-DB TEST CANNOT SEE IT.
+ *
+ * Found by RED-verify 2026-08-29: dropping the skills-by-LGA floor from 10 to 1 left
+ * ALL 15 tests green. The suite mocks `db.execute`, so the HAVING clause is never
+ * executed and the guard that stops the page identifying an individual was itself
+ * unguarded — [[pattern-test-that-passes-over-a-hole]].
+ *
+ * This asserts the SOURCE, the same way `nginx-header-hygiene.test.ts` asserts a
+ * directive it cannot execute. It is a weaker check than running the query, and it is
+ * enormously better than none: it fails the moment someone lowers or deletes the floor.
+ */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { resolve, dirname } from 'node:path';
+
+describe('public insights — privacy floors are present in the SQL', () => {
+  const src = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '../public-insights.service.ts'),
+    'utf-8',
+  );
+
+  it('⭐ skills x LGA is floored at PUBLIC_MIN_N, not banded and not ungated', () => {
+    // Finest-grained cell the page publishes: a rare trade in a thin LGA identifies a
+    // person, and "present but fewer than 10" still discloses that — so it is ABSENT
+    // below the floor, unlike the density map which bands.
+    expect(src).toMatch(/HAVING COUNT\(\*\) >= \$\{PUBLIC_MIN_N\}/);
+    expect(src).not.toMatch(/HAVING COUNT\(\*\) >= \d/);
+  });
+
+  it('PUBLIC_MIN_N is 10 — the public threshold, stricter than the internal one', () => {
+    expect(src).toMatch(/const PUBLIC_MIN_N = 10;/);
+  });
+});
+
 describe('PublicInsightsService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -73,6 +108,18 @@ describe('PublicInsightsService', () => {
       ]))
       .mockResolvedValueOnce(mockRows([
         { label: 'Ibadan North', count: '100' },
+      ]))
+      // skillsByLga — already floored at PUBLIC_MIN_N by the query's HAVING clause
+      .mockResolvedValueOnce(mockRows([
+        { lga_id: 'ibadan_north', skill: 'welding', count: '30' },
+        { lga_id: 'ibadan_north', skill: 'tailoring', count: '12' },
+        { lga_id: 'egbeda', skill: 'carpentry', count: '15' },
+      ]))
+      // growth — daily counts; the service computes the running total
+      .mockResolvedValueOnce(mockRows([
+        { day: '2026-08-24', count: '6' },
+        { day: '2026-08-25', count: '4' },
+        { day: '2026-08-26', count: '19' },
       ]));
 
     const result = await PublicInsightsService.getPublicInsights();
@@ -87,6 +134,22 @@ describe('PublicInsightsService', () => {
     expect(result.desiredSkills).toHaveLength(2);
     expect(result.desiredSkills[0].skill).toBe('plumbing');
     expect(result.gpi).toBe(0.85);
+
+    // ⭐ Skills x LGA — grouped per LGA, counts preserved. The k-anonymity floor is
+    // enforced by the QUERY (HAVING >= PUBLIC_MIN_N), so anything that arrives here is
+    // already publishable; the service must not silently re-filter or re-band it.
+    expect(result.skillsByLga).toEqual([
+      { lgaId: 'ibadan_north', skills: [{ skill: 'welding', count: 30 }, { skill: 'tailoring', count: 12 }] },
+      { lgaId: 'egbeda', skills: [{ skill: 'carpentry', count: 15 }] },
+    ]);
+
+    // ⭐ Growth — the RUNNING TOTAL is computed in one pass beside the daily figure, so
+    // the two can never disagree. 6 → 10 → 29.
+    expect(result.growth).toEqual([
+      { day: '2026-08-24', count: 6, cumulative: 6 },
+      { day: '2026-08-25', count: 4, cumulative: 10 },
+      { day: '2026-08-26', count: 19, cumulative: 29 },
+    ]);
     expect(result.lastUpdated).toBeDefined();
     expect(new Date(result.lastUpdated).getTime()).not.toBeNaN();
   });
