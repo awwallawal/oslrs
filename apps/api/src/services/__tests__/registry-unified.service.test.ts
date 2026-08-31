@@ -1,3 +1,4 @@
+import { REGISTRY_UNIFIED_SQL_TEXT } from '../registry-unified.sql.js';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockExecute = vi.hoisted(() => vi.fn());
@@ -74,5 +75,31 @@ describe('registry-unified — composition + reads', () => {
 
     mockExecute.mockResolvedValueOnce({ rows: [{ oid: null }] });
     expect(await registryUnifiedViewExists()).toBe(false);
+  });
+});
+
+describe('canonical read — rolled_back is excluded (2026-08-31)', () => {
+  /*
+   * ⭐ THE PROPERTY: a 14-day rollback must undo the PUBLIC figures, not only the
+   * private pipelines. `rolled_back` was already in PIPELINE_EXCLUDED_STATUSES, so a
+   * rollback removed rows from marketplace/fraud — but this read had no status filter,
+   * so they stayed in totalRegistered, genderSplit, lgasCovered, skillsByLga and the
+   * density map. Import 8,000, roll back, and the public page still says 8,000 while
+   * those people are invisible to the marketplace: the worst of both.
+   *
+   * Asserted on the SQL TEXT because this constant feeds BOTH the inline read and the
+   * `CREATE OR REPLACE VIEW` DDL — one edit, two consumers, and a source assertion
+   * catches a deletion that a mocked-DB test never would.
+   */
+  it('the canonical SQL filters rolled_back out', () => {
+    expect(REGISTRY_UNIFIED_SQL_TEXT).toMatch(/WHERE\s+r\.status\s*<>\s*'rolled_back'/);
+  });
+
+  it('and still starts FROM respondents — the exclusion must not change the grain', () => {
+    // One row per respondent is the whole contract; a status filter narrows the set,
+    // it must never turn this into a submission-grained read.
+    expect(REGISTRY_UNIFIED_SQL_TEXT).toMatch(/FROM respondents r/);
+    expect(REGISTRY_UNIFIED_SQL_TEXT).toMatch(/LEFT JOIN LATERAL/);
+    expect(REGISTRY_UNIFIED_SQL_TEXT).not.toMatch(/DISTINCT ON/);
   });
 });

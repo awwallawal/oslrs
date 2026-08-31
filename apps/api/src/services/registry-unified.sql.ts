@@ -88,6 +88,28 @@ export const REGISTRY_UNIFIED_VIEW_NAME = 'registry_unified';
  * NOTE: parameter-free by design — safe to embed via `sql.raw(...)` (no user
  * input flows through it) and to interpolate into the `CREATE OR REPLACE VIEW`
  * DDL. Any filtering/scoping is applied by consumers in an outer query.
+ *
+ * ── THE ONE EXCEPTION: `WHERE r.status <> 'rolled_back'` (added 2026-08-31) ───
+ *
+ * ⭐ A SOFT DELETE IS NOT A SCOPE CHOICE. The rule above is right for scoping —
+ * "active only", "this LGA", "answer-bearing" — because different consumers want
+ * different slices. `rolled_back` is not a slice: Story 11-2 flips a whole import
+ * batch to it as a 14-day UNDO, and a retracted row is not a respondent for ANY
+ * consumer. Leaving it to each caller means every caller must remember, and a new
+ * one silently counts deleted people.
+ *
+ * ⛔ WHY IT WAS FOUND. `rolled_back` was already in `PIPELINE_EXCLUDED_STATUSES`,
+ * so a rollback correctly removed rows from the marketplace and fraud pipelines —
+ * but this read had no status filter, so the rows stayed in `totalRegistered`,
+ * `genderSplit`, `lgasCovered`, `skillsByLga` and the density map. The 14-day
+ * rollback therefore undid the PRIVATE half and none of the PUBLIC half: import
+ * 8,000, roll back, and the public page still reads 8,000 while those people are
+ * invisible to the marketplace. The worst of both. Found before the association
+ * import rather than after it, which is the only reason it is cheap.
+ *
+ * ⚠️ An auditor wanting to SEE retracted rows queries `respondents` directly —
+ * nothing is hidden, and `import_batches` still holds the batch. This read answers
+ * "who is in the registry", and a rolled-back row is not.
  */
 export const REGISTRY_UNIFIED_SQL_TEXT = `
   SELECT
@@ -113,4 +135,5 @@ export const REGISTRY_UNIFIED_SQL_TEXT = `
     ORDER BY sx.submitted_at DESC NULLS LAST
     LIMIT 1
   ) answers ON true
+  WHERE r.status <> 'rolled_back'
 `;
