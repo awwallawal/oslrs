@@ -114,12 +114,6 @@ describe('PublicInsightsService', () => {
         { lga_id: 'ibadan_north', skill: 'welding', count: '30' },
         { lga_id: 'ibadan_north', skill: 'tailoring', count: '12' },
         { lga_id: 'egbeda', skill: 'carpentry', count: '15' },
-      ]))
-      // growth — daily counts; the service computes the running total
-      .mockResolvedValueOnce(mockRows([
-        { day: '2026-08-24', count: '6' },
-        { day: '2026-08-25', count: '4' },
-        { day: '2026-08-26', count: '19' },
       ]));
 
     const result = await PublicInsightsService.getPublicInsights();
@@ -143,13 +137,17 @@ describe('PublicInsightsService', () => {
       { lgaId: 'egbeda', skills: [{ skill: 'carpentry', count: 15 }] },
     ]);
 
-    // ⭐ Growth — the RUNNING TOTAL is computed in one pass beside the daily figure, so
-    // the two can never disagree. 6 → 10 → 29.
-    expect(result.growth).toEqual([
-      { day: '2026-08-24', count: 6, cumulative: 6 },
-      { day: '2026-08-25', count: 4, cumulative: 10 },
-      { day: '2026-08-26', count: 19, cumulative: 29 },
-    ]);
+    /*
+     * ⛔ NO TIME SERIES ON THE PUBLIC PAYLOAD (2026-08-31, Awwal's ruling). This
+     * replaces an assertion that `growth` was PRESENT and cumulated correctly. The
+     * series was honest — `created_at` is universal, so it needed no caveat — but the
+     * association intake lands ~8,000 people in ONE confirm, and a cumulative line
+     * would render a vertical cliff that reads as a dump. Growth lives on Campaign
+     * Watch (`byDay`), behind auth. This guard fails if any time series is re-added.
+     */
+    expect(result).not.toHaveProperty('growth');
+    expect(Object.keys(result).filter((k) => /growth|trend|daily|cumulative|overTime/i.test(k))).toEqual([]);
+
     expect(result.lastUpdated).toBeDefined();
     expect(new Date(result.lastUpdated).getTime()).not.toBeNaN();
   });

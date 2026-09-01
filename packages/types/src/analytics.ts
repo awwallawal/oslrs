@@ -446,12 +446,19 @@ export interface PublicInsightsData {
    * "present but fewer than 10" still discloses that.
    */
   skillsByLga: SkillsByLga[];
-  /**
-   * Registrations per day plus the running total. `created_at` is universal BY
-   * CONSTRUCTION — every respondent has one — so this is the one series on the page
-   * that can never need a denominator caveat.
+  /*
+   * ⛔ `growth` REMOVED from the PUBLIC payload 2026-08-31 (Awwal's ruling), two days
+   * after it was added. The reasoning it was added on still holds — `created_at` IS
+   * universal by construction, so the series needed no denominator caveat. That was
+   * never the risk. The association intake lands ~8,000 people in ONE confirm, so a
+   * cumulative line renders a vertical cliff, and a reader does not see "a registry
+   * that grew"; they see a dump. Honest rows, honest number, misleading picture — on
+   * a public page, in a campaign season, where the reader cannot ask a question.
+   *
+   * ⚠️ Growth is NOT suppressed. It lives on Campaign Watch (`byDay`), behind auth,
+   * where a spike sits next to the import batch that caused it. Do not re-add a time
+   * series here; `PublicInsightsPage.test.tsx` guards against it.
    */
-  growth: RegistrationGrowthPoint[];
   lastUpdated: string;
   keyFindings?: string[];
 }
@@ -804,11 +811,4 @@ export interface CampaignWatchSnapshot {
 export interface SkillsByLga {
   lgaId: string;
   skills: Array<{ skill: string; count: number }>;
-}
-
-/** One day of registrations plus the running total. */
-export interface RegistrationGrowthPoint {
-  day: string;
-  count: number;
-  cumulative: number;
 }

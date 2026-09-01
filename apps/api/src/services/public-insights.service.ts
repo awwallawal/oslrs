@@ -132,7 +132,6 @@ export class PublicInsightsService {
       desiredSkillRows,
       lgaRows,
       skillsByLgaRows,
-      growthRows,
     ] = await Promise.all([
       // Respondent-scoped registry count-core (headline + funnel). Seed of 12-4.
       getRegistryCountCore(),
@@ -242,17 +241,6 @@ export class PublicInsightsService {
         ORDER BY 1, count DESC
       `),
 
-      /*
-       * REGISTRATION GROWTH — `created_at` is universal BY CONSTRUCTION (every respondent
-       * has one), so this is the one series that can never need a denominator caveat.
-       * Respondent-scoped and aggregate-only, so no suppression applies.
-       */
-      db.execute(sql`
-        SELECT to_char(ru.created_at AT TIME ZONE 'Africa/Lagos', 'YYYY-MM-DD') AS day,
-               COUNT(*) AS count
-        FROM ${registryUnifiedSource('ru')}
-        GROUP BY 1 ORDER BY 1
-      `),
     ]);
 
     interface SummaryRow {
@@ -367,18 +355,14 @@ export class PublicInsightsService {
       ),
 
       /*
-       * Cumulative registrations. The running total is computed HERE rather than in SQL
-       * so the daily figure and the cumulative one can never disagree — one pass, one
-       * source. `created_at` is universal, so no suppression and no caveat.
+       * ⛔ NO TIME SERIES ON THIS PAYLOAD (2026-08-31, Awwal's ruling). A `growth`
+       * field lived here for two days and was removed BEFORE it met real volume.
+       * `created_at` is universal by construction, so the series never needed a
+       * denominator caveat — that was not the risk. The association intake lands
+       * ~8,000 people in ONE confirm, so a cumulative line renders a vertical cliff
+       * and a public reader sees a dump, not a registry growing. Growth lives on
+       * Campaign Watch (`byDay`), behind auth, beside the batch that explains it.
        */
-      growth: (() => {
-        let running = 0;
-        return (growthRows.rows as unknown as Array<{ day: string; count: string }>)
-          .map((r) => {
-            running += Number(r.count);
-            return { day: r.day, count: Number(r.count), cumulative: running };
-          });
-      })(),
       lastUpdated: new Date().toISOString(),
       // Story 8.7: Key findings from inferential engine (Redis cache bridge)
       ...(await PublicInsightsService.getKeyFindings(total)),

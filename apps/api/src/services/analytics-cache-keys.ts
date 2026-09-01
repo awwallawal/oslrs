@@ -60,8 +60,15 @@
  *      so its version can no longer diverge from every other analytics cache.
  */
 
-/** Bump on ANY cached-analytics shape or value change. See the header. */
-export const ANALYTICS_CACHE_VERSION = 'v3';
+/**
+ * Bump on ANY cached-analytics shape or value change. See the header.
+ *
+ * v4 (2026-08-31) — `growth` removed from the public insights payload. A cached v3
+ * blob still carries the series, so without this bump the page would keep serving a
+ * time series for up to an hour after the deploy that deleted it — the precise
+ * failure this module exists to prevent, and one already paid for once on 2026-08-29.
+ */
+export const ANALYTICS_CACHE_VERSION = 'v4';
 
 /**
  * Compose a versioned analytics cache key.

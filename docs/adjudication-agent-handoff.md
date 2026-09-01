@@ -847,7 +847,68 @@ them answered the question.
 
 ---
 
-## 3. Current state (2026-08-18) — READ THIS ONE
+## 3. Current state (2026-08-31) — READ THIS ONE
+
+**Register 375** (was a five-day flat **327** before the radio campaign), health 200. **No prod SHA
+here — D6.** Run the two header commands in §0.
+
+- ✅ **The blast gate is fully discharged: 12-4 → 12-5 → 12-6 all CLOSED on prod**, plus 13-38, 13-51
+  and 13-59. Detail in §7r below.
+- ⭐ **The public `/insights` page was REBUILT around one rule of Awwal's: publish only what cuts
+  across all three taxonomy axes, and carry NO caveats.** This is not a data-quality decision, it is a
+  *threat-model* decision, and it inverts the instinct. A caveat protects the writer in a room; on a
+  public page in a campaign season it is a screenshot that reads as an admission. Removed:
+  `byVerification`, `ageDistribution`, `employmentBreakdown`, `formalInformalRatio`,
+  `unemploymentEstimate`, `youthEmploymentRate`, `businessOwnershipRate`, `rateDenominators`. Kept /
+  added: headcount, LGA density map, GPI, skills, **Trades by LGA** (`skillsByLga`, floored at
+  `PUBLIC_MIN_N` in the QUERY via `HAVING`). ⚠️ Note the tension worth holding: 12-4 and 12-5 existed
+  to put the `n` beside every rate, and this removes most of those rates from the public surface. The
+  rates are not gone — they moved to the internal dashboards, where a denominator can be explained.
+- 🆕 **`Registrations Over Time` was built on 2026-08-29 and REMOVED on 2026-08-31, before it ever met
+  real volume** — Awwal's call, and the reasoning is worth keeping because it beat mine. The series
+  was *honest*: `created_at` is universal by construction, so it needed no denominator caveat, which
+  is exactly why I added it. That was never the risk. The association intake lands **~8,000 people in
+  one confirm**, so a cumulative line renders a **vertical cliff** and a reader sees a dump, not a
+  registry growing. Honest rows, honest number, misleading picture. Growth lives on **Campaign Watch**
+  (`byDay`), behind auth, beside the batch that explains it. Guarded on **both** sides now: the API
+  test asserts no `growth`-ish key exists on the payload, the web test asserts no time series renders
+  (RED-verified by re-injecting a heading).
+- 📻 **Campaign Watch shipped** (`campaign-watch.service.ts` + super-admin page) to measure radio
+  impact against the pre-campaign flat baseline of **327**. `CAMPAIGN_START = 2026-08-24`. It reports
+  attribution as a **floor, not a rate** — 13 attributed / 8 unattributed at last read — and carries a
+  `baselineDrifted` tell so a moved baseline is visible rather than silently absorbed. **The caveat
+  LEADS that page** — the exact inverse of the `/insights` rule, and deliberately so: the audience is
+  one authenticated operator, not a screenshot.
+- ✅ **Rollback now restores the PUBLIC figures** (`fbc8c79`). `registry_unified` gained the one
+  documented exception to "consumers do the filtering": `WHERE r.status <> 'rolled_back'`. **A soft
+  delete is not a scope choice.** Before this, `rolled_back` was in `PIPELINE_EXCLUDED_STATUSES` — so a
+  rollback correctly emptied the marketplace and fraud pipelines but left every retracted row in
+  `totalRegistered`, `genderSplit`, `lgasCovered`, `skillsByLga` and the density map. Import 8,000,
+  roll back, and the public page still reads 8,000 while those people are invisible to the
+  marketplace: the worst of both. **Found before the association import rather than after it, which is
+  the only reason it was cheap.**
+- 🆕 **`imported_association` config LANDED + 13-2's AC3.3 and AC4.3 CORRECTED** (2026-08-31). AC3.3
+  **contradicted the ruling printed at the top of its own story** — Awwal's 2026-07-19 "marketplace =
+  INCLUDE with a badge" versus AC3.3's "excluded from marketplace-extraction". Written pre-ruling,
+  never revised when the ruling landed. A dev reading top-to-bottom meets the ruling at line 7 and the
+  instruction to violate it at line 75, **and the AC wins, because the AC is the checkable artefact.**
+- ⛔ **THE OPEN QUESTION BLOCKING THE 8,000-ROW IMPORT — measured, not guessed.** See §7r. Short form:
+  the importer writes a `respondents` row and **no `submissions` row**, and the trade normaliser maps
+  against a **45-key legacy vocabulary with 13 targets**, not the canonical **192-slug
+  `SKILL_TAXONOMY`**. Measured against the real farming file: **0 of 9,563 rows map.** So an import
+  today lands 8,000 people who **count in the headline and the LGA map but are invisible in skills and
+  gender**, and it moves the public headline **375 → ~9,880 in one step** while `withAnswers` stays
+  ~375. Awaiting Awwal's ruling on ordering (see the three options in §7r).
+
+### Residual watch (things that will bite if unread)
+| What | State |
+|---|---|
+| **R-A1** — the sheet's `Date of birth (or Age)` is one column for two facts; ages are dropped | **MEASURED, and it is not immaterial: 36 of 56 clean tiler rows (64%) fail to parse as a date.** The residual asked "count it before choosing a fix" — it has now been counted. |
+| **R-A2** — `imported_unverified` gates marketplace + fraud | Deliberate sequencing, **not** a bug to flip. Opening the marketplace before 13-38's badge renders would breach ruling §3 (an unbadged card reads as verified). The **fraud half is independent** and should move sooner. |
+| **R-A3** — `/insights` has no gate for imported rows | Working as ruled, logged as a standing hazard: **every association confirm is a public publish.** There is no staging step between dry-run and confirm. |
+| **12-4 R4** — `registry_unified` view dropped on every deploy | Unchanged, impact still nil (nothing runtime reads the view). Reopen if anything does. |
+
+## 3-old4. Current state (2026-08-18) — superseded by §3 above
 
 **Register 327** (`withAnswers` 272), health 200. **No prod SHA here — that is D6's whole point, and I
 wrote one into this line minutes after deleting it from the header.** Prod moves on every docs push;
@@ -1714,6 +1775,86 @@ Registry **clean** — 0 duplicate NIN/phone/name/reference-code, including **no
 check that actually finds duplicates). **Pending-NIN cohort 20 → 36**: 13-53's reopen condition has
 fired. Re-engagement conversion **≥15 of 75 (~20%)**, stated as a floor because it uses the method
 §11.2 disproved. **`clicked = 0` across all 987 sends** — there is no engagement funnel at all (13-44).
+
+## 7r. Session 2026-08-24 → 08-31 — the page got smaller on purpose, and a measurement stopped an import
+
+### The threat model changed what "honest" means
+The instinct all session was to **caveat** the public figures: mark the imported rows, band the thin
+cells, footnote the denominators. Awwal overruled it, and the reasoning holds: *"where a journalist
+can just pick figures and put the government in a bad light we have to be really careful... anybody
+who screenshots the /insights page with all the caveats can push a negative narrative and it will turn
+to a storm needing multiple PR to stem the tide especially in a campaign season."*
+
+The resolution was not to publish less honestly — it was to **publish only the figures that need no
+caveat**, i.e. those that cut across all three axes of the data-status taxonomy. A figure requiring a
+footnote to be read correctly is a figure that will be read incorrectly once it leaves the page. The
+caveats did not disappear; they moved to the final reports, where the reader can ask a question.
+
+⭐ **Transferable:** "add a caveat" and "publish an uncaveated subset" are both honest. Which one is
+*safe* depends on whether the reader can ask a follow-up question. On a public page, they cannot.
+
+### Two production failures that every green gate missed
+1. **A stale browser bundle** — `/insights` showed "Page Error" after a shape change. CI green, health
+   200, full suite green. A hard refresh fixed it. Shipped an nginx `Cache-Control: no-cache` on the
+   SPA shell so the shell revalidates.
+2. **A stale Redis payload** — the deploy corrected a number and the cache kept serving the old one.
+   The module built in 12-6 to prevent exactly this existed, and the public-insights key **had been
+   hardcoded past it** (`'analytics:public:insights:v3'`).
+
+⭐ **Transferable:** neither was visible to CI, health checks, or the test suite. **Only reading the
+live endpoint found either.** Verify the deploy's *output*, not its SHA. And a guard nobody is forced
+to use is a convention — both now have tests with teeth.
+
+### The measurement that stopped an import
+Awwal's instruction was unambiguous: *"the more than 8000 rows are going in regardless."* The work
+was to make that safe, not to argue with it. Two prerequisites were built (rollback honesty, the
+`imported_association` config), and then the **56-row tiler pilot was verified by running the real
+xlsx parser and the real mapping** rather than a re-implementation — and it surfaced what a
+self-consistent check never would:
+
+- `profession:[unmapped]` on **all 56** rows. Cause: `normaliseTrade` maps against `TRADE_VOCABULARY`
+  — **45 keys, 13 canonical targets**, a Story-11-2-era artefact — while the canonical vocabulary is
+  the **192-slug `SKILL_TAXONOMY`**. Extended to the real farming file: **0 of 9,563 rows map.**
+- The import service writes **`respondents` only — no `submissions` row.** 13-2's AC3.4 requires both,
+  and lists the Trade→taxonomy reconciliation as still-open. It is genuinely unbuilt.
+
+**Consequence, stated plainly:** importing today lands ~8,000 people who are counted in
+`totalRegistered` and the LGA map but **contribute nothing to skills or gender**, because those live
+in `raw_data`. The public headline goes **375 → ~9,880 in one step** while `withAnswers` stays ~375.
+The consolidation work already resolved canonical `skill_slug` values for every row — that is the
+asset the current import path would throw away.
+
+⭐ **Transferable, and it is [[pattern-a-fix-that-never-fires]] wearing a new hat:** I twice nearly
+validated the pilot with logic I had written myself. The splitter agreed with itself both times. The
+finding only appeared when the **actual deployed parser** ran over the **actual file**. A verification
+that shares an author with the thing it verifies is a restatement.
+
+⚠️ **Also caught, in my own harness:** the first split returned `clean: 0 / 70` because the slug regex
+matched `slug:` when the taxonomy's key is `name:`. It failed **closed** — every row held. Had it
+failed *open*, 70 unvalidated rows would have been declared clean. Worth noticing which way a broken
+check fails; a guard added since throws if the parsed taxonomy has fewer than 150 entries.
+
+### The three options put to Awwal (undecided at session end)
+1. **Import now, accept answerless rows.** Headline moves; skills and gender do not. Reversible for 14
+   days, and rollback now genuinely restores the public figures. Re-import later means a rollback
+   first, or duplicate-key pain.
+2. **Build AC3.4 first** (write the `submissions` row with `raw_data.skills_possessed` from the
+   already-resolved canonical slugs; re-point `normaliseTrade` at `SKILL_TAXONOMY`), then import once,
+   completely. Costs a story; the 8,000 rows then land with their full analytic value.
+3. **Import now for the auditor's headcount, then backfill submissions.** Gets the number in front of
+   the auditor immediately, but a backfill over 8,000 live rows is the [[pattern-batch-job-races-live-users]]
+   shape, which has already cost this project once.
+
+**Recommendation on file: option 2.** The rows are going in regardless — that is settled and correct.
+The question is whether they go in *once, whole*, or twice. The gap is one story, and it is the
+difference between 8,000 people in the registry and 8,000 people in the skills map.
+
+### Deliverables produced this session (outside the repo — PII)
+`Downloads/farming-consolidation/`: `tilers-asnat-CLEAN.xlsx` (**56 rows**, uploadable as-is, exactly
+the twelve frozen sheet headers so the pilot tests the *canonical* mapping rather than a
+transcription-variant fallback) and `tilers-asnat-HELD.xlsx` (**14 rows**, each carrying **every**
+rule it failed rather than just the first, plus the original WhatsApp `raw_message`). **`S/N` is the
+stable join key across both books**, so Awwal's manual corrections reconcile without matching on names.
 
 ## 7m. Session 2026-08-10 — the fix that was "shipped" and wasn't, and a command that ate the repo
 

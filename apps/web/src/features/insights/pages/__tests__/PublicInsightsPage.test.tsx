@@ -111,10 +111,6 @@ const fullData: PublicInsightsData = {
   skillsByLga: [
     { lgaId: 'ibadan_north', skills: [{ skill: 'welding', count: 30 }, { skill: 'tailoring', count: 12 }] },
   ],
-  growth: [
-    { day: '2026-08-24', count: 6, cumulative: 4994 },
-    { day: '2026-08-25', count: 6, cumulative: 5000 },
-  ],
   lastUpdated: '2026-03-13T10:00:00.000Z',
 };
 
@@ -194,18 +190,23 @@ describe('PublicInsightsPage', () => {
     expect(screen.queryByTestId('skills-lga-grid')).not.toBeInTheDocument();
   });
 
-  it('renders the growth chart, and hides it below two points', () => {
+  /*
+   * ⛔ INVERTED GUARD (2026-08-31). This replaces a test that asserted the growth
+   * chart RENDERS. The chart is gone — not because the data was wrong (`created_at`
+   * is universal and needed no caveat) but because the association intake lands
+   * ~8,000 people in ONE confirm, so a cumulative line shows a vertical cliff and a
+   * reader sees a dump. Honest number, misleading picture, public page, campaign
+   * season. This test now fails if anyone re-adds a time series to the PUBLIC page.
+   * Growth is not suppressed — it lives on Campaign Watch (`byDay`), behind auth,
+   * where the shape can be explained to the person reading it.
+   */
+  it('never renders a time series on the public page', () => {
     mockInsights.isLoading = false;
     mockInsights.error = null;
     mockInsights.data = fullData;
     renderPage();
-    expect(screen.getByText('Registrations Over Time')).toBeInTheDocument();
-
-    cleanup();
-    mockInsights.data = { ...fullData, growth: [{ day: '2026-08-24', count: 6, cumulative: 6 }] };
-    renderPage();
-    // One point is not a trend — render nothing rather than a misleading flat line.
-    expect(screen.queryByText('Registrations Over Time')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Registrations Over Time/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('registration-growth-chart')).not.toBeInTheDocument();
   });
 
   it('renders skills section', () => {

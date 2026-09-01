@@ -9,7 +9,6 @@ import { PublicLgaTable } from '../components/PublicLgaTable';
 import { LgaChoroplethMap } from '../../dashboard/components/charts/LgaChoroplethMap';
 import { lgaDistributionToMapData } from '../../dashboard/utils/analytics-transforms';
 import { MethodologyNote } from '../components/MethodologyNote';
-import { RegistrationGrowthChart } from '../components/RegistrationGrowthChart';
 import { SkillsByLgaSection } from '../components/SkillsByLgaSection';
 
 function HeroSkeleton() {
@@ -191,8 +190,16 @@ export default function PublicInsightsPage() {
 
         <PublicLgaTable lgaDensity={data.lgaDensity} />
 
-        {/* created_at is universal by construction — the one series needing no caveat. */}
-        <RegistrationGrowthChart growth={data.growth} />
+        {/*
+          ⛔ RegistrationGrowthChart REMOVED 2026-08-31, before it ever met real volume.
+          Added hours earlier because `created_at` is universal and needs no caveat — which
+          is still true, and is not the point. The association intake lands ~8,000 people in
+          one confirm, so the cumulative line would show a VERTICAL CLIFF. A reader does not
+          see "a registry that grew"; they see a dump. The rows are legitimate and the number
+          is honest, but a chart that invites the wrong reading on a public page during a
+          campaign season is a liability the page does not need. Growth belongs in Campaign
+          Watch, behind auth, where the shape can be explained.
+        */}
 
         <MethodologyNote
           totalRegistered={data.totalRegistered}

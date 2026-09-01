@@ -66,6 +66,80 @@ const ITF_SUPA_CONFIG: ImportSourceConfig = {
   defaultLawfulBasis: 'ndpa_6_1_e',
 };
 
+/**
+ * Association intake (Story 13-2) — the WhatsApp/coordinator route.
+ *
+ * ── Where these headers come from (do not invent them) ───────────────────────
+ * The keys below are the twelve columns of the FROZEN Association Data Sheet,
+ * `docs/launch-campaign/association-data-sheet-PRINT.html`, which is the paper
+ * artefact coordinators actually fill and then transcribe. That sheet is the
+ * contract; this mapping is its machine-readable half. If the sheet changes, this
+ * changes in the SAME commit — a mapping that has drifted from the form silently
+ * drops whole columns, because `buildParsedRow` matches headers EXACTLY (after a
+ * trim) and an unmatched header is preserved in `raw` but never becomes canonical.
+ *
+ * ⚠️ `S/N` is deliberately unmapped — it is a sheet-local row counter, not an
+ * external identifier, and mapping it to `externalReferenceId` would mint a fake
+ * cross-batch key that collides on every new sheet (every sheet has a row 1).
+ *
+ * ⚠️ TRANSCRIPTION VARIANTS. The print sheet renders `Gender (M/F)` across two
+ * lines; a coordinator typing it into Excel may produce the flat header, the
+ * parenthetical, or neither. Header matching is exact, so the realistic spellings
+ * are listed explicitly rather than hoped for. Many-to-one is legal here
+ * (`ColumnMapping` is `Record<string, CanonicalField>`) and is the honest way to
+ * absorb human transcription without loosening the matcher for every source.
+ *
+ * ⚠️ KNOWN LOSS — `Date of birth (or Age)` is ONE column offering TWO different
+ * facts, and a mapping is one header to one canonical field. It maps to
+ * `dateOfBirth`; a respondent who wrote a bare age (`34`) fails `normaliseDate`,
+ * earns a `dateOfBirth:` warning, and their age is DROPPED rather than landing in
+ * `ageYears`. This is a defect in the sheet's design, not the parser's — and it is
+ * live for the association intake, where ages are commoner than birth dates. See
+ * residual R-A1 on 13-2. It is NOT silently swallowed: the row still imports and
+ * the warning is attributed, so the loss is countable in the batch preview.
+ *
+ * Consent: Awwal's ruling (2026-08-24) — association submissions are consented by
+ * construction. The data was volunteered to the association FOR the registry, and
+ * the association is aware of the use; there is no "unknown" tier to hide behind.
+ * The column is still mapped, so an explicit `No` on the sheet is honoured.
+ */
+const ASSOCIATION_CONFIG: ImportSourceConfig = {
+  source: 'imported_association',
+  label: 'Trade Association Intake (coordinator sheet)',
+  defaultParser: 'xlsx',
+  columnMapping: {
+    // Canonical spellings — exactly as the frozen print sheet renders them.
+    'Surname': 'lastName',
+    'First name': 'firstName',
+    'Phone number': 'phoneNumber',
+    'Gender (M/F)': 'gender',
+    'Date of birth (or Age)': 'dateOfBirth',
+    'LGA (work/live)': 'lgaId',
+    'Town / Ward': 'town',
+    'Trade / primary skill': 'profession',
+    'Years exp.': 'experienceLevel',
+    'NIN (if to hand)': 'nin',
+    'Consent (Yes/No)': 'consent',
+    // Transcription variants — the parenthetical dropped, or spacing normalised.
+    'First Name': 'firstName',
+    'Phone Number': 'phoneNumber',
+    'Gender': 'gender',
+    'Date of birth': 'dateOfBirth',
+    'LGA': 'lgaId',
+    'Town': 'town',
+    'Town / ward': 'town',
+    'Trade / Primary skill': 'profession',
+    'Trade': 'profession',
+    'Years exp': 'experienceLevel',
+    'Years experience': 'experienceLevel',
+    'NIN': 'nin',
+    'Consent': 'consent',
+  },
+  allowAdminMapping: false,
+  // Public labour registry — public-task basis (NDPA Art. 6(1)(e)), as ITF-SUPA.
+  defaultLawfulBasis: 'ndpa_6_1_e',
+};
+
 const OTHER_CONFIG: ImportSourceConfig = {
   source: 'imported_other',
   label: 'Other MDA / Secondary Source',
@@ -77,8 +151,8 @@ const OTHER_CONFIG: ImportSourceConfig = {
 
 const REGISTRY: Partial<Record<ImportableSource, ImportSourceConfig>> = {
   imported_itf_supa: ITF_SUPA_CONFIG,
+  imported_association: ASSOCIATION_CONFIG,
   imported_other: OTHER_CONFIG,
-  // imported_association is registered by Story 13-2 (association importer).
 };
 
 /** Returns the config for an importable source, or undefined if unknown. */
