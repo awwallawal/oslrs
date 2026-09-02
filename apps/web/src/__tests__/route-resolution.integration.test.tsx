@@ -152,6 +152,34 @@ describe('[integration] App.tsx route registration', () => {
        * 15s, inside a 20s per-test timeout set below, leaves headroom without
        * hiding a real hang.
        *
+       * ── RAISED AGAIN 2026-09-02: 15s -> 30s, for the SAME reason as last time ──
+       * The suite has grown from 59 files to 274 since the 15s budget was set, and
+       * `/login` blew it twice more (2026-09-01, 2026-09-02), costing two pushes.
+       *
+       * ⚠️ MEASURED BEFORE CHANGING ANYTHING, because "raise the timeout" is the
+       * reflex that hides real bugs:
+       *   - `/login` ALONE, warm machine ......................... 2.65s  (green)
+       *   - `/login` in the full suite, 2 workers, 1.86 GB free .. >15s   (RED)
+       *   - `/login` in the full suite, 1 worker,  2.58 GB free .. 18.85s (RED)
+       * The cost is ~7x higher in-suite than isolated, and it does not converge:
+       * halving the worker count made it SLOWER, not faster (1290s vs 604s total).
+       * So this is not contention between workers — it is the module-graph cost of
+       * a worker that has already run 200+ files, and it scales with the app.
+       *
+       * ⚠️ A RUNNER FIX WAS TRIED FIRST AND FAILED — do not re-run that experiment.
+       * A RAM-adaptive worker cap (1 worker below 3 GB free) was implemented and
+       * measured on the full suite: it DOUBLED the runtime and still failed, plus
+       * dragged a second test over its budget. Reverted. The profile explains why —
+       * `environment` (jsdom instantiation, 274x) is 570s of the 1290s run, and
+       * worker count does not touch it. The only lever that would is a lighter DOM
+       * (happy-dom), which changes what the suite proves and belongs in its own
+       * story, not in a timeout comment.
+       *
+       * So the budget is raised, again, on the same principle: a slow environment
+       * is not a routing defect, and this test must fail for ROUTING reasons only.
+       * The per-test timeout below moves with it (40s) so a genuine hang still
+       * reports as a named assertion rather than an opaque timeout.
+       *
        * ⚠️ A SEMANTIC PREDICATE WAS TRIED FIRST AND REJECTED ON EVIDENCE — do not
        * "improve" this back into one without repeating the probe. Waiting for the
        * Suspense fallback to disappear reads better and is WRONG here: under
@@ -181,7 +209,7 @@ describe('[integration] App.tsx route registration', () => {
             );
           }
         },
-        { timeout: 15000 },
+        { timeout: 30000 },
       );
 
       // The route resolved to a real component, NOT the catch-all 404. If a
@@ -196,7 +224,7 @@ describe('[integration] App.tsx route registration', () => {
     // reports as a FAILED ASSERTION naming the skeleton, never as an opaque
     // "Test timed out in 10000ms" — which is how this first presented on
     // 2026-08-11 and cost a push before anyone knew what it was.
-    20_000,
+    40_000,
   );
 
   it('resolves an unknown path to the NotFound component (404 fallback works)', async () => {
