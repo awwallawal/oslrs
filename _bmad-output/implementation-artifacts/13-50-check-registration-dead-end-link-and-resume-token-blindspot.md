@@ -234,7 +234,51 @@ excluding phantoms will look like a conversion lift that never happened.
 - [x] **Task 6 — gates**
   - [x] 6.1 `tsc` clean (api + web), `eslint` clean.
   - [x] 6.2 Full suite green, uncached, quoted as the SUITE total.
-  - [x] 6.3 `## Residuals` ledger written; Status left at `review` (§2a0 — NOT `done`).
+  - [x] 6.3 `## Post-deploy readings — 2026-09-02 (deploy `f881577`, CI/CD 33639312052 success, PM2 uptime 55m, health 200)
+
+**Status stays `review`.** Deployed and first-reading clean, but R1's own trigger is *"0 and STAYS 0
+across a day of jingle traffic"*, and one reading is not a trend — the runbook says so in its own
+words. Flipping to `done` on a single post-deploy sample would be closing on the zero.
+
+### R1 — dead-end stock: 0, and the zeros are REAL NEGATIVES
+| query | result |
+|---|---|
+| strict (joined on `respondent_id`) | **0** |
+| wider (by email — the form the runbook says not to skip) | **0** |
+
+⭐ **The controls matter more than the zeros** (§2t — an empty result is not a negative result). A
+zero proves nothing if the predicate could never match. It could:
+
+| control | value |
+|---|---|
+| adopted respondents (`adopted_by = 13-49`) | **172** |
+| `wizard_resume` tokens ever minted | **163** |
+| adopted people with an email (the wider query's IN-list) | **159** |
+| **live `wizard_resume` tokens, any owner** | **0** |
+
+So the population exists, the producer exists, and the IN-list is non-empty. The stock is genuinely 0.
+
+⚠️ **Read the last row honestly.** There are zero live `wizard_resume` tokens *for anyone*, so this
+reading cannot yet separate "13-50 stopped the minting" from "the pre-existing stock expired". Both
+produce 0. **The second reading, after a day of jingle traffic, is the one that discriminates** —
+because only then has `/check-registration` been exercised enough to mint a new one if the branch is
+still wrong. R1 remains OPEN by design, not by oversight.
+
+### R4 — `wizard_resume` still alive where it should be: CANNOT RUN YET
+`magic_link.issued` + `purpose=wizard_resume` returns **4 rows, all with a NULL `trigger`**, and
+**0** with `trigger = check_registration_status`.
+
+The 0 is the wanted answer. But the 4 nulls are the informative part: 163 tokens were minted against
+only 4 audit rows, which is the attribution blind spot R2 exists to close — those 4 predate this
+deploy. **No new mint has happened since deploy**, so R4's real question ("do the legitimate triggers
+still fire?") has had no opportunity to answer. It needs a blast or a recovery run.
+→ [[pattern-verification-that-cannot-run-yet]]. Do not read its 0 as a pass.
+
+**Next reading due:** after a full day of jingle traffic, or immediately after the next blast —
+whichever comes first. Run R1 (both forms) **and** R4 together; R4 alone cannot detect over-correction
+without traffic, and R1 alone cannot detect under-correction without it either.
+
+## Residuals` ledger written; Status left at `review` (§2a0 — NOT `done`).
 
 ## Review Follow-ups (AI)
 
