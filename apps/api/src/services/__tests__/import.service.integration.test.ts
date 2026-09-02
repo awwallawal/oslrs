@@ -5,6 +5,7 @@ import { db } from '../../db/index.js';
 import { users } from '../../db/schema/users.js';
 import { roles } from '../../db/schema/roles.js';
 import { respondents } from '../../db/schema/respondents.js';
+import { submissions } from '../../db/schema/submissions.js';
 import { importBatches } from '../../db/schema/import-batches.js';
 import { importBatchDrafts } from '../../db/schema/import-batch-drafts.js';
 import { marketplaceProfiles } from '../../db/schema/marketplace.js';
@@ -61,12 +62,23 @@ describe('ImportService — real-DB dry-run → confirm → rollback', () => {
       roleId = existingRole[0].id;
     } else {
       roleId = uuidv7();
-      await db.insert(roles).values({ id: roleId, name: `_imp112_role_${roleId.slice(0, 8)}` });
+      // Full uuid, not a prefix — see the note on the user email below.
+      await db.insert(roles).values({ id: roleId, name: `_imp112_role_${roleId}` });
     }
     actorId = uuidv7();
     await db.insert(users).values({
       id: actorId,
-      email: `_imp112_${actorId.slice(0, 8)}@test.local`,
+      /*
+       * ⚠️ FULL uuid, NOT `.slice(0, 8)` (fixed 2026-09-02). uuidv7's first 8 hex
+       * chars are the top 32 bits of a 48-bit MILLISECOND timestamp, so they only
+       * change about every 65 seconds. The teardown deliberately leaves this user
+       * in place (append-only audit_logs FK it), so two runs inside that window
+       * collided on `users_email_unique` and the whole suite failed at `beforeAll`
+       * with all 12 tests SKIPPED — which reads like an infrastructure problem, not
+       * a fixture bug. Found by running the file twice in a minute while
+       * RED-verifying; it is latent for anyone iterating locally.
+       */
+      email: `_imp112_${actorId}@test.local`,
       fullName: 'Import Test Admin',
       roleId,
     });
@@ -88,6 +100,22 @@ describe('ImportService — real-DB dry-run → confirm → rollback', () => {
     // actor via FK, so the user cannot be deleted without going through the
     // audit-mutable teardown primitive — not worth it for a tagged test row.
     for (const bid of batchIds) {
+      /*
+       * ⚠️ SUBMISSIONS FIRST. Since Story 13-2 AC3.4 the confirm path writes a
+       * `submissions` row per imported respondent, and `submissions.respondent_id`
+       * is a plain FK with NO `onDelete: cascade` — so deleting the respondents
+       * first now raises a foreign-key violation and leaves the whole fixture
+       * behind. Found by writing the feature, not by the suite going red later.
+       */
+      const ours = await db
+        .select({ id: respondents.id })
+        .from(respondents)
+        .where(eq(respondents.importBatchId, bid));
+      if (ours.length) {
+        await db.delete(submissions).where(
+          inArray(submissions.respondentId, ours.map((r) => r.id)),
+        );
+      }
       await db.delete(respondents).where(eq(respondents.importBatchId, bid));
     }
     await db.delete(respondents).where(eq(respondents.id, existingRespondentId));
@@ -180,6 +208,88 @@ describe('ImportService — real-DB dry-run → confirm → rollback', () => {
       .from(auditLogs)
       .where(and(eq(auditLogs.action, 'import_batch.created'), eq(auditLogs.targetId, res.batchId)));
     expect(audit).toHaveLength(1);
+  });
+
+  /*
+   * ⭐ Story 13-2 AC3.4 / the 13-33 ingestion contract, end-to-end on a real DB.
+   *
+   * The importer used to write a `respondents` row and nothing else. That is not a
+   * crash and not a warning — it produces people who are COUNTED but cannot be
+   * DESCRIBED: `totalRegistered` and the LGA density map are respondent-anchored and
+   * included them, while `genderSplit`, `gpi`, `allSkills` and `skillsByLga` read
+   * `raw_data` through `registry_unified` and could not see them at all.
+   *
+   * A mocked test cannot catch this, which is why it lives here: the failure is a
+   * missing ROW, and only a real transaction proves the row lands and lands linked.
+   */
+  it('AC3.4 — confirm writes a SUBMISSION per respondent, with analytics-shaped raw_data', async () => {
+    const dry = await ImportService.dryRun({
+      buffer: Buffer.from(
+        [
+          'Name,Phone,LGA,Trade,Gender,Consent',
+          'Femi Farmer,08010000101,Ibadan North,Crop Farming,M,Yes',
+          'Bisi Tiler,08010000102,Egbeda,Tiling / Terrazzo / Marble,F,Yes',
+          'Sade Unknown,08010000103,,Astronaut,F,Yes',
+        ].join('\n'),
+        'utf8',
+      ),
+      originalFilename: 'association-members.csv',
+      source: 'imported_other',
+      parserUsed: 'csv',
+      columnMapping: {
+        Name: 'fullName',
+        Phone: 'phoneNumber',
+        LGA: 'lgaId',
+        Trade: 'profession',
+        Gender: 'gender',
+        Consent: 'consent',
+      },
+      actorId,
+    });
+
+    const res = await ImportService.confirm({
+      dryRunToken: dry.dryRunToken,
+      lawfulBasis: 'ndpa_6_1_e',
+      actorId,
+    });
+    batchIds.push(res.batchId);
+    expect(res.rowsInserted).toBe(3);
+
+    const people = await db
+      .select({ id: respondents.id, phone: respondents.phoneNumber })
+      .from(respondents)
+      .where(eq(respondents.importBatchId, res.batchId));
+    expect(people).toHaveLength(3);
+
+    const subs = await db
+      .select({ respondentId: submissions.respondentId, rawData: submissions.rawData })
+      .from(submissions)
+      .where(inArray(submissions.respondentId, people.map((p) => p.id)));
+
+    // ONE submission per imported respondent — not one for the batch, and none orphaned.
+    expect(subs).toHaveLength(3);
+    expect(new Set(subs.map((s) => s.respondentId)).size).toBe(3);
+
+    const byPhone = new Map(people.map((p) => [p.phone, p.id]));
+    const raw = (phone: string) =>
+      subs.find((s) => s.respondentId === byPhone.get(phone))?.rawData as Record<string, unknown>;
+
+    // Resolved via a taxonomy LABEL, and stored as an ARRAY — a bare string would
+    // unnest on spaces into the junk tokens "Crop" and "Farming".
+    const femi = raw('+2348010000101');
+    expect(femi.skills_possessed).toEqual(['farming']);
+    expect(femi.gender).toBe('male'); // 'M' on the sheet; 'male' is what the queries match
+
+    // Resolved via the APPENDIX B alias — no taxonomy label matches this string.
+    const bisi = raw('+2348010000102');
+    expect(bisi.skills_possessed).toEqual(['tiling']);
+    expect(bisi.gender).toBe('female');
+
+    // Unresolvable trade: the PERSON still lands, with their raw value preserved.
+    const sade = raw('+2348010000103');
+    expect(sade.skills_possessed).toBeUndefined();
+    expect(sade.skill_basis).toBe('unmapped');
+    expect(sade.trade_raw).toBe('Astronaut');
   });
 
   it('AC#6/AC#9 — imported rows produce NO marketplace profile or fraud score', async () => {

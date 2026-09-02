@@ -29,7 +29,7 @@ import { generateReferenceCode } from '@oslsr/utils';
 import { AppError } from '@oslsr/utils';
 import pino from 'pino';
 import { db } from '../db/index.js';
-import { importBatches, importBatchDrafts, respondents, lgas } from '../db/schema/index.js';
+import { importBatches, importBatchDrafts, respondents, submissions, lgas } from '../db/schema/index.js';
 import { importBatchStatusTypes } from '../db/schema/import-batches.js';
 import type { ImportDraftParsedResult } from '../db/schema/import-batch-drafts.js';
 import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
@@ -39,6 +39,7 @@ import { getParser } from './import/parsers/index.js';
 import type { ColumnMapping, ParseFailure } from './import/parsers/types.js';
 import { planIngest, type IngestDisposition } from './import/ingest-plan.js';
 import { PARSE_DEADLINE_MS } from './import/parse-limits.js';
+import { buildImportRawData } from './import/submission-payload.js';
 
 const logger = pino({ name: 'import-service' });
 
@@ -423,10 +424,29 @@ export class ImportService {
       // Mint unique reference codes (batched) + insert respondents in chunks.
       if (plan.toInsert.length > 0) {
         const codes = await ImportService.mintReferenceCodes(tx, plan.toInsert.length);
+        /*
+         * ⭐ IDS ARE MINTED HERE, NOT LEFT TO THE COLUMN DEFAULT (Story 13-2 AC3.4).
+         *
+         * Each respondent needs a `submissions` row pointing back at it, so the ids
+         * must be known BEFORE the insert. The alternative — `.returning({ id })` —
+         * would work but drags 8,000 ids back over the wire per chunk purely to
+         * learn what we could have decided ourselves. `respondents.id` is
+         * `$defaultFn(uuidv7)`, so supplying an explicit uuidv7 produces exactly the
+         * value the default would have, with the same time-ordering.
+         *
+         * ⚠️ The pairing is POSITIONAL: `ids[i]` belongs to `plan.toInsert[i]`. Both
+         * arrays are built by mapping over `plan.toInsert` and neither is filtered or
+         * re-sorted afterwards. Keep it that way — a filter on one and not the other
+         * would attach people's answers to the wrong person, silently and
+         * irreversibly. (This project has already shipped one positional-misalignment
+         * bug from a `Promise.all` whose members drifted.)
+         */
+        const ids = plan.toInsert.map(() => uuidv7());
         const values = plan.toInsert.map((c, i) => {
           const meta = c.respondent.metadata;
           const hasMeta = Object.keys(meta).length > 0;
           return {
+            id: ids[i],
             firstName: c.respondent.firstName,
             lastName: c.respondent.lastName,
             phoneNumber: c.respondent.phoneNumber,
@@ -445,6 +465,46 @@ export class ImportService {
         });
         for (const part of chunk(values, INSERT_CHUNK)) {
           await tx.insert(respondents).values(part);
+        }
+
+        /*
+         * ⭐ THE SUBMISSIONS ROW — Story 13-2 AC3.4 / the 13-33 ingestion contract.
+         *
+         * "Every channel writes a `respondents` row AND a `submissions` row with
+         * `raw_data`" (docs/registry-unified-ingestion-contract.md §Source #3). This
+         * importer is source #3 and, until now, wrote only the respondent. The effect
+         * was not a crash or a warning — it was people who COUNT but cannot be
+         * DESCRIBED: `totalRegistered` and the LGA density map are respondent-anchored
+         * and included them, while `genderSplit`, `gpi`, `allSkills` and `skillsByLga`
+         * read `raw_data` through `registry_unified` and could not see them at all.
+         * Importing ~8,000 association rows without this would have moved the public
+         * headline 377 -> ~9,880 while `withAnswers` stayed ~322, on the same page.
+         *
+         * Written INSIDE the same transaction as the respondents deliberately: a
+         * respondent without their submission is precisely the half-state this fixes,
+         * so the two must commit or fail together. The 14-day rollback flips
+         * `respondents.status`, and `registry_unified` filters `rolled_back`, so a
+         * retracted batch takes its submissions out of every aggregate with it.
+         */
+        const submissionRows = plan.toInsert.map((c, i) => ({
+          respondentId: ids[i],
+          // Deterministic and unique (the column is UNIQUE): a re-run of the same
+          // batch collides loudly instead of silently duplicating a person's answers.
+          submissionUid: `import:${batchId}:${ids[i]}`,
+          // No questionnaire was filled in. A sentinel that NAMES the channel keeps
+          // these rows filterable and stops them being mistaken for form responses —
+          // same shape as the existing `supplemental-survey` sentinel.
+          questionnaireFormId: `import:${draft.source}`,
+          rawData: buildImportRawData(c.respondent.metadata.import_extra ?? {}),
+          // `backfill` is the honest member of `ingestionSourceTypes` here: this is a
+          // bulk load of pre-existing data, not a webapp/enumerator submission. There
+          // is no `import` member, and inventing one would widen an enum every
+          // consumer switches on.
+          submittedAt: now,
+          source: 'backfill' as const,
+        }));
+        for (const part of chunk(submissionRows, INSERT_CHUNK)) {
+          await tx.insert(submissions).values(part);
         }
       }
 
