@@ -842,6 +842,45 @@ first. Reproduce the **whole** predicate: `buildWhereFragments` carries **two** 
 adjudication predict 45.7% where the truth was 45.5% — prod holds 2 orphan submissions and one of
 them answered the question.
 
+### 2ae. ⭐⭐ RUN THE GUARD THE WRONG WAY ON PURPOSE — three guards this week could not fire
+
+RED-verify (§2b) asks *"would this fail if I deleted the fix?"* That catches a **fix** that does
+nothing. It does **not** catch a **guard** that never runs. Three separate ones were found inert
+inside a week, each present in the codebase, each green forever:
+
+| guard | why it could not fire | found by |
+|---|---|---|
+| `analytics-cache-keys` version module (12-6) | built to stop a stale payload — and the one key it was written for **hardcoded past it** (`'analytics:public:insights:v3'`) | reading the key at the call site |
+| public k-anonymity floor | dropping `PUBLIC_MIN_N` 10 → **1** left all 15 tests green (SQL-side floor, mocked DB) | RED-verifying the threshold |
+| `db-guard` test-DB anti-clobber | read `process.env.DATABASE_URL` **before** `src/db/index.ts` lazily `dotenv.config()`s it, so a bare `pnpm vitest run <file>` saw `undefined`, took its `if (!dbName) return;` branch, and let the suite connect to **`app_db` — the 499k-row dev DB** | a bare local run that happened to fail for an unrelated reason |
+
+⛔ **The db-guard case is the one to internalise, because the class was ALREADY KNOWN.**
+`.husky/pre-push` carries a comment describing this exact failure and fixing it — on 2026-07-03,
+**for the gate**, by exporting `DATABASE_URL=app_test`. Nobody closed the doorway a developer walks
+through fifty times a day: running one file by hand. **A hole patched at one entrance is not
+patched.** When a fix is scoped to a caller, list every other caller before calling it done —
+[[pattern-census-counts-sites-not-callers]] is the same shape one level up.
+
+⚠️ **It was saved by luck, and the luck is worth naming.** The suite's `afterAll` did issue DELETEs
+against the dev DB. Nothing was lost only because `beforeAll` had already failed on a stale column,
+so the deletes were scoped to a fresh uuid matching no rows. Had the two schemas agreed, the
+2,000-row performance test would have inserted 2,000 respondents into the dev database and the
+teardown would have deleted from it. **A near-miss caused by a SECOND defect is not a pass.**
+
+⭐ **THE CHEAP TEST, and it is now mandatory for anything called a guard: invoke it the WRONG way
+and check it complains.** Not "does the suite pass" — *does the guard object?* For the db-guard that
+is one command with no env exported; it must print `Refusing to run the test suite against non-test
+database "app_db"` **and name the database**. A guard that stays silent when abused is a comment.
+
+⚠️ **AND THE FIRST FIX WAS TOO BLUNT — the correction is half the lesson.** Fixing the guard by
+calling `dotenv.config()` in `vitest.setup.ts` worked, and broke `photo-processing.service.test`
+within the hour: `dotenv.config()` **mutates `process.env` for every API test in the process**, the
+test sets `AWS_REGION`, the service resolves `S3_REGION || AWS_REGION || …`, and the root `.env`
+defines `S3_REGION` — so the DEV value jumped in front of the test's own. **The guard needed to KNOW
+one variable, not INJECT forty.** `dotenv.parse` reads the same file with zero side effects. Ask of
+any test-harness change: *what else does this now see that it did not see before?* One test caught
+this; the others may merely have been luckier.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
@@ -892,13 +931,35 @@ here — D6.** Run the two header commands in §0.
   INCLUDE with a badge" versus AC3.3's "excluded from marketplace-extraction". Written pre-ruling,
   never revised when the ruling landed. A dev reading top-to-bottom meets the ruling at line 7 and the
   instruction to violate it at line 75, **and the AC wins, because the AC is the checkable artefact.**
-- ⛔ **THE OPEN QUESTION BLOCKING THE 8,000-ROW IMPORT — measured, not guessed.** See §7r. Short form:
-  the importer writes a `respondents` row and **no `submissions` row**, and the trade normaliser maps
-  against a **45-key legacy vocabulary with 13 targets**, not the canonical **192-slug
-  `SKILL_TAXONOMY`**. Measured against the real farming file: **0 of 9,563 rows map.** So an import
-  today lands 8,000 people who **count in the headline and the LGA map but are invisible in skills and
-  gender**, and it moves the public headline **375 → ~9,880 in one step** while `withAnswers` stays
-  ~375. Awaiting Awwal's ruling on ordering (see the three options in §7r).
+- ✅ **THE 8,000-ROW BLOCKER IS CLOSED (2026-09-02/03).** The importer now writes a `submissions` row
+  per respondent, so imported people are DESCRIBABLE and not merely counted. Two halves: a
+  **trade → `SKILL_TAXONOMY` reconciliation** (`d48f1ef`) and the **write path** (`aa8700b`).
+  Measured cause: `normaliseTrade` maps against a Story-11-2 vocabulary of 45 keys / **13 display
+  labels**, so **0 of 9,563** farming rows and **0 of 56** tiler rows resolved. `normaliseTrade` is
+  deliberately untouched — it answers "what do we call this person" for the marketplace; the new
+  resolver answers "which canonical skill is this" against the 192 slugs.
+- ⭐ **THE FIELDS NEEDED TRANSLATING, NOT COPYING — and copying was the trap.** The extras already
+  survived on `metadata.import_extra`; they were stored where no aggregate reads. Two translations
+  are load-bearing: `gender` must be exactly `male`/`female` (the sheets carry **M/F**, so a verbatim
+  copy would have made all 9,563 invisible to `genderSplit` and the GPI), and `skills_possessed` must
+  be an **ARRAY OF SLUGS** (`selectMultipleUnnest` splits a bare string **on spaces**, so `"Crop
+  Farming"` unnests to the junk tokens `Crop` and `Farming`). Same defect class the registry keeps
+  paying for: a value that is present, plausible, and read by nothing.
+- 🆕 **13-33's `it.todo` is implemented** — it had sat executable-but-unrun since the contract was
+  written, and the gap it named was real: the importer shipped without it.
+- 📌 **The import target is 8,234, not 9,505 or 9,563 — and the three numbers finally reconcile.**
+  `consolidated.csv` carries a `review_flags` column: **9,563** distinct people, **1,329** flagged,
+  **8,234 clean** (Awwal's "more than 8,000"), plus **153** no-phone rows already routed out and never
+  in the 9,563. The queue's 9,505 was the whole-file planner count *before* flag-filtering — a real
+  number for a different set. Flags: 786 shared-phone, 274 column-shift, 107 skill-unmapped,
+  99 unmatched, 178 bad-length NIN.
+- ⛔ **13-50 is DEPLOYED (`f881577`) but deliberately STILL `review`.** R1's first post-deploy reading
+  is clean on both forms with REAL controls (172 adopted respondents, 163 `wizard_resume` tokens ever
+  minted, 159 adopted-with-email — so the predicate could have matched). **But live `wizard_resume`
+  tokens are 0 for ANY owner, so this reading cannot separate "13-50 stopped the minting" from "the
+  old stock expired."** R4 cannot run at all yet — 4 audit rows, all NULL trigger, no new mint since
+  deploy. **Next reading after a day of jingle traffic or the next blast: R1 (both forms) AND R4
+  together**, then → `done`.
 
 ### Residual watch (things that will bite if unread)
 | What | State |
@@ -906,6 +967,8 @@ here — D6.** Run the two header commands in §0.
 | **R-A1** — the sheet's `Date of birth (or Age)` is one column for two facts; ages are dropped | **MEASURED, and it is not immaterial: 36 of 56 clean tiler rows (64%) fail to parse as a date.** The residual asked "count it before choosing a fix" — it has now been counted. |
 | **R-A2** — `imported_unverified` gates marketplace + fraud | Deliberate sequencing, **not** a bug to flip. Opening the marketplace before 13-38's badge renders would breach ruling §3 (an unbadged card reads as verified). The **fraud half is independent** and should move sooner. |
 | **R-A3** — `/insights` has no gate for imported rows | Working as ruled, logged as a standing hazard: **every association confirm is a public publish.** There is no staging step between dry-run and confirm. |
+| **R-A4** — the import makes **9,122 distinct phones** reachable | The import itself is SILENT (verified: no queue/notifier/email import in `import.service.ts`, no DB trigger on a respondents insert, every SMS caller user-initiated). But **phone is not structurally safe the way email is** — email has no column and `metadata.imported_email` is write-only; `respondents.phone_number` is a real indexed E.164 column. Awwal's consent ruling covers being COUNTED; an unsolicited SMS is a different act. Also: 9,563 rows → 9,122 numbers, so a blast reaches **handsets, not people**. |
+| **R-A5** — one Appendix B box spans two slugs | 'Agriculture / Agro-processing' maps to `farming`, so an agro-processor is recorded as a farmer. Mapped on the dominant reading, not because the collision is resolved. Fix is a split box at the next sheet re-print. |
 | **12-4 R4** — `registry_unified` view dropped on every deploy | Unchanged, impact still nil (nothing runtime reads the view). Reopen if anything does. |
 
 ## 3-old4. Current state (2026-08-18) — superseded by §3 above
@@ -1775,6 +1838,75 @@ Registry **clean** — 0 duplicate NIN/phone/name/reference-code, including **no
 check that actually finds duplicates). **Pending-NIN cohort 20 → 36**: 13-53's reopen condition has
 fired. Re-engagement conversion **≥15 of 75 (~20%)**, stated as a floor because it uses the method
 §11.2 disproved. **`clicked = 0` across all 987 sends** — there is no engagement funnel at all (13-44).
+
+## 7s. Session 2026-09-01 → 09-03 — the 8,000-row blocker closed, and a guard that was guarding nothing
+
+### The import gap, and why "copy the fields across" would have failed twice
+The importer wrote a `respondents` row and no `submissions` row. Not a crash, not a warning — it
+produced people who are **counted but not describable**: `totalRegistered` and the LGA map are
+respondent-anchored and included them, while `genderSplit`, `gpi`, `allSkills` and `skillsByLga` read
+`raw_data` and could not see them. ~8,000 rows would have moved the public headline **377 → ~9,880**
+while `withAnswers` stayed **322**, on the same page.
+
+The data was never lost — it sat on `metadata.import_extra`, where no aggregate reads. But the
+obvious fix (copy it into `raw_data`) would have produced a **second** silent loss:
+- **`gender`**: sheets carry `M`/`F`; every public query matches `'male'`/`'female'`. Copied through,
+  all 9,563 would be counted by neither side of the parity index.
+- **`skills_possessed`**: `selectMultipleUnnest` splits a bare string **on spaces**, so `"Crop
+  Farming"` unnests to `Crop` and `Farming` — two tokens that are not slugs and cluster under nothing.
+
+⭐ **Transferable:** "the value is present" and "the value is read" are different claims. The registry's
+most expensive defects all live in the gap between them.
+
+### The pilot earned its keep by being verified with the REAL parser
+The 56-row tiler CLEAN workbook was checked by running the **actual** xlsx parser and the **actual**
+mapping over it, not a re-implementation. That surfaced `profession:[unmapped]` on all 56 — and
+extending the check to the real farming file gave **0 of 9,563**. A splitter that agrees with itself
+proves nothing. ⚠️ My own harness failed the same way twice more and was caught only by controls: the
+slug regex matched `slug:` when the taxonomy's key is `name:` (returning `clean: 0/70` — it failed
+CLOSED, which is the only reason it was obvious), and a fuzzy-match pass proposed `fine_art` for
+"Painting". Nearest-neighbour string distance is how "three clusters of one" gets minted.
+
+### The guard that was guarding nothing → §2ae
+`db-guard` let a bare `pnpm vitest run <file>` connect to the **499k-row dev database**, and its
+`afterAll` issued DELETEs there. The full write-up, including the too-blunt first fix that broke
+`photo-processing.service.test`, is **§2ae** — read that, not this paragraph.
+
+The schema drift that exposed it is also resolved: `app_db` was behind by **29 columns including two
+entire tables**, and carried one column the schema had dropped. Both DBs are now **384 columns, zero
+difference**. ⚠️ The drop was not harmless — `users.liveness_score` held **179 non-null values**,
+exported to `Downloads/farming-consolidation/app_db-liveness_score-backup.json` first. The backup was
+**needed, not precautionary**: the column is gone and those values exist only there.
+
+### Two latent bugs in an existing suite, found by writing the feature
+1. The integration teardown deleted respondents while `submissions.respondent_id` is a plain FK with
+   **no cascade** — it would now raise a violation and leave the whole fixture behind.
+2. The fixture email used `actorId.slice(0, 8)`, but **uuidv7's first 8 hex chars are the top 32 bits
+   of a 48-bit millisecond timestamp — they only change every ~65 seconds.** Two runs inside that
+   window collided on `users_email_unique`, and the suite failed at `beforeAll` with all 12 tests
+   **SKIPPED** — which reads like broken infrastructure, not a fixture bug.
+
+⭐ **Transferable:** a suite that fails at `beforeAll` reports *skipped*, not *failed*. Skipped is the
+most ignorable word in a test report. Check the FILE COUNT and the skip count, not just the pass count.
+
+### The vitest-memory fix that FAILED — recorded so it is not retried
+A RAM-adaptive worker cap (1 worker below 3 GB free) was implemented, measured on the full suite, and
+**reverted**: it doubled the runtime (1,290s vs 604s) and still failed, dragging a second test over
+its budget. The profile says why — `environment` (jsdom instantiated 274×) is **570s of 1,290s**, and
+worker count does not touch it. The only lever that would is a lighter DOM (happy-dom), which changes
+what the suite proves and belongs in its own story. **A gate must not be made cheaper by making it
+weaker.** What shipped instead: `route-resolution`'s budget 15s → 30s, its third raise, with the
+measurements in the test comment so the next reader does not re-run the failed experiment.
+
+⚠️ **§11's file-count tell is now 0-for-4 and should be RETIRED, not corrected.** Both pushes collected
+all 274 files; the contended one collected the full set and failed a test anyway. It actively misled
+me — I cited "274 collected, so full collection" while reporting a contention-damaged run. **Free RAM
+is the variable; file count tells you nothing.**
+
+⚠️ **The exit-code trap fired SIX times this session** ([[feedback-never-pipe-a-push-to-tail]]), incl.
+twice reported to Awwal as success before the remote was checked. The file-capture recipe
+(`{ git push … > log 2>&1; echo $? > exit; }`) catches it; **the notification never does.** Verify a
+push by `git ls-remote origin main` against `git rev-parse HEAD`. Always.
 
 ## 7r. Session 2026-08-24 → 08-31 — the page got smaller on purpose, and a measurement stopped an import
 
