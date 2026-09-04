@@ -63,6 +63,33 @@ function productionSources(): string[] {
   return out;
 }
 
+/*
+ * ⭐ MEMOISED — the tree is walked ONCE, and each file is read ONCE (2026-09-04).
+ *
+ * `productionSources()` was called by five separate tests, each re-walking both
+ * SEARCH_ROOTS with a `statSync` per directory entry, and each then `readFileSync`-ing
+ * every file it found. That is five tree walks and roughly 1,980 file reads per run of
+ * this one file, for a snapshot that cannot change while the process is alive.
+ *
+ * It made this the slowest API test file in the suite (9.7s / 12 tests = 811ms per test,
+ * in a NODE environment where that should be milliseconds). Same shape as
+ * `a3-eslint-policy` building a new ESLint per test: the work was redundant, not slow.
+ *
+ * ⚠️ Deliberately NOT a behaviour change — every caller sees exactly the bytes it saw
+ * before. The census still reads the real tree; it just stops reading it five times.
+ */
+let sourceCache: Map<string, string> | undefined;
+function sourceIndex(): Map<string, string> {
+  if (!sourceCache) {
+    sourceCache = new Map(productionSources().map((f) => [f, readFileSync(f, 'utf8')]));
+  }
+  return sourceCache;
+}
+/** Every production source, as [path, contents]. Walk + read happen once per process. */
+function productionSourceEntries(): Array<[string, string]> {
+  return [...sourceIndex()];
+}
+
 const rel = (f: string) => relative(API_ROOT, f).replace(/\\/g, '/');
 
 /**
@@ -93,8 +120,7 @@ function promoteSitesIn(source: string): number {
 describe('13-55 AC1.4 — exactly one implementation writes nin + status=active', () => {
   it('finds the promote in respondent-identity.ts and NOWHERE else', () => {
     const offenders: string[] = [];
-    for (const file of productionSources()) {
-      const source = readFileSync(file, 'utf8');
+    for (const [file, source] of productionSourceEntries()) {
       const sites = promoteSitesIn(source);
       if (sites > 0) offenders.push(`${rel(file)} (${sites})`);
     }
@@ -139,10 +165,9 @@ describe('13-55 AC1.4 — exactly one implementation writes nin + status=active'
     const PRIMITIVE = 'promoteRespondentWithArrivingNin';
     const callers: string[] = [];
 
-    for (const file of productionSources()) {
+    for (const [file, source] of productionSourceEntries()) {
       // The module that DEFINES the primitive is allowed to name it. Nothing else is.
       if (rel(file) === 'src/services/respondent-identity.ts') continue;
-      const source = readFileSync(file, 'utf8');
       // Strip comments first: prose about the primitive is documentation, not a call.
       const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
       if (new RegExp(`\\b${PRIMITIVE}\\b`).test(code)) callers.push(rel(file));
@@ -221,8 +246,8 @@ describe('13-55 R2 — raw `UPDATE "respondents"` sites are inventoried, not mer
 
   it('matches the pinned inventory — a new raw writer is unreviewed, not forbidden', () => {
     const measured: Record<string, number> = {};
-    for (const file of productionSources()) {
-      const hits = readFileSync(file, 'utf8').match(/UPDATE\s+"respondents"/g);
+    for (const [file, source] of productionSourceEntries()) {
+      const hits = source.match(/UPDATE\s+"respondents"/g);
       if (hits) measured[rel(file)] = hits.length;
     }
 
@@ -257,8 +282,7 @@ describe('13-55 AC1.3 — every route is separately attributable in the audit tr
   /** Pull every `trigger: '<literal>'` handed to the shared promote, with its file. */
   function triggerCallSites(): Array<{ file: string; trigger: string }> {
     const found: Array<{ file: string; trigger: string }> = [];
-    for (const file of productionSources()) {
-      const source = readFileSync(file, 'utf8');
+    for (const [file, source] of productionSourceEntries()) {
       for (const m of source.matchAll(/promoteRespondentToActive\s*\([\s\S]{0,1600}?\)/g)) {
         for (const t of m[0].matchAll(/\btrigger:\s*'([a-z0-9_]+)'/g)) {
           found.push({ file: rel(file), trigger: t[1] });
@@ -350,8 +374,7 @@ describe('13-55 AC1.5 — no caller widened its status scope', () => {
        * renamed.
        */
       let block: string | null = null;
-      for (const file of productionSources()) {
-        const source = readFileSync(file, 'utf8');
+      for (const [file, source] of productionSourceEntries()) {
         const starts = [...source.matchAll(/promoteRespondentToActive\s*\(/g)].map((m) => m.index!);
         for (let i = 0; i < starts.length; i += 1) {
           const seg = source.slice(starts[i], starts[i + 1] ?? source.length);
