@@ -2,11 +2,34 @@
 import { describe, expect, it } from 'vitest';
 import { ESLint } from 'eslint';
 
+/*
+ * ⭐ ONE ESLint INSTANCE, NOT ONE PER TEST (2026-09-04).
+ *
+ * This used to `new ESLint(...)` inside `lintText`, so all three tests each paid
+ * the full cost of resolving `eslint.config.js` and its entire plugin graph — for
+ * three one-line lints. It is by far the most expensive thing in the web suite per
+ * assertion, and on a memory-starved machine it blew the 30s budget outright and
+ * cost a push (observed twice: 58.9s under a 1-worker run, then a 30s timeout at
+ * 1.32 GB free).
+ *
+ * ⚠️ The reflex fix was to raise the timeout again, as `route-resolution` has now
+ * been raised three times. That would have been treating the symptom: the work is
+ * genuinely redundant, not genuinely slow. Constructing once cuts the config load
+ * from three to one and changes nothing about what is asserted — the instance is
+ * stateless across `lintText` calls, which is exactly why sharing it is safe.
+ *
+ * Lazy rather than top-level so the cost lands inside the first test's budget
+ * (where a failure is attributable) instead of at module load (where it would
+ * surface as an opaque suite-level timeout).
+ */
+let shared: ESLint | undefined;
+function eslintInstance(): ESLint {
+  shared ??= new ESLint({ overrideConfigFile: 'eslint.config.js' });
+  return shared;
+}
+
 async function lintText(code: string, filename: string) {
-  const eslint = new ESLint({
-    overrideConfigFile: 'eslint.config.js',
-  });
-  const [result] = await eslint.lintText(code, { filePath: filename });
+  const [result] = await eslintInstance().lintText(code, { filePath: filename });
   return result.messages;
 }
 
