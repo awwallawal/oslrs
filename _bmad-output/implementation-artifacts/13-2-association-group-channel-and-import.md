@@ -1,6 +1,20 @@
 # Story 13.2: Association Group Channel & Importer — Freeze the Condensed Sheet + `imported_association` on the Epic 11 Import Spine
 
-Status: ready-for-dev
+Status: review
+
+> ⚠️ **STATUS CORRECTED 2026-09-05 — it read `ready-for-dev` while the channel was LIVE ON PROD with
+> 8,278 rows imported through it.** The header below still opens with a `BLOCKED-FOR-DEV` banner from
+> 2026-07-19; that block is HISTORY, not current state, and is kept for provenance. Anyone opening this
+> story cold would have concluded the work was unstarted and re-implemented the config, the
+> trade→taxonomy reconciliation and the submissions-write — all of which are deployed and running.
+>
+> **What is actually built and exercised on prod:** AC1 (sheet frozen), AC2 (`imported_association`
+> source + `ASSOCIATION_CONFIG` with an HTML-parsing drift guard), AC3 (importer on the 11-2 backbone —
+> **two real imports confirmed**, `01a071c8…` 56/56 and `01a072ae…` 8,222/8,234), AC3.4 (the submissions
+> -write, closing the 13-33 ingestion contract), AC4 (required-field + dedup, R2-corrected), AC6 (tests).
+>
+> **Why `review` and not `done`:** residuals R-A2 through R-A6 are open, and the story-residual lint
+> guard refuses `done` with open residuals — correctly. R-A1 is discharged.
 
 > 🔗 **Anchors on the [Registry Data-Status Taxonomy](../planning-artifacts/registry-data-status-taxonomy.md)** (2026-07-01; **12-4** is the derivation MODEL). Association rows classify as **`source=imported_association` / `completeness=core` / `verification=unverified_import`** — they enter `respondents` + the frontend in an HONEST unverified stratum (excluded from the "verified registry" headline) until a **member-side check** (confirmation SMS once Termii clears, or a sampled **Assessor callback** — the Assessor "verify imported rows" queue) promotes them. Adding `imported_association` to `respondents.source` + import-sources config is the cheap PRE-Jul-1 slice; the verify-queue is post-launch. _The taxonomy is the honest-display contract these AC5.x checks must satisfy._
 
