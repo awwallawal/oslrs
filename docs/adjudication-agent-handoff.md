@@ -881,6 +881,37 @@ one variable, not INJECT forty.** `dotenv.parse` reads the same file with zero s
 any test-harness change: *what else does this now see that it did not see before?* One test caught
 this; the others may merely have been luckier.
 
+### 2af. ⭐⭐ A SUSPICIOUS COUNT IS A PROMPT TO GO AND LOOK — I reasoned from an absence and was wrong
+
+The first dry-run of the 8,234-row farming import returned rows with **no name**. I measured it,
+found **5,301 of 8,234 (64%) nameless**, treated that as a property of the data, and escalated a
+policy question to Awwal: *import nameless people, or hold them?* He opened the source document and
+said the `Full Name` column was right there.
+
+It was. `N_Cares_FInal_Cleaning.csv`, column 3, 6,516 rows — and the consolidation had already read
+it correctly into `full_name` (5,301/5,301 populated). Two downstream mistakes lost it, neither of
+which errors or warns: the extract emitted only `Surname`/`First name` (which that source does not
+have), and `ASSOCIATION_CONFIG` had no key for a single-column name, so even present it would have
+been ignored — headers match exactly, and an unmatched header is kept in `raw` and never becomes
+canonical.
+
+⛔ **THE EVIDENCE WAS IN MY OWN OUTPUT AND I READ PAST IT.** The "missing" fields were **2,933 for
+name AND dob AND town AND NIN** — four unrelated fields agreeing to the exact row. I even wrote, in
+the same message, that this "says two source cohorts with different schemas." That is precisely what
+it says. The honest next step was `head -1` on the source file: one command, ten seconds.
+
+⭐ **The rule: when a count is too round, too exact, or repeats across unrelated fields, the cause is
+almost always STRUCTURAL — a join, a mapping, a schema difference — not a property of the world.
+Go and open the source.** Reasoning forward from an absence produces a confident, well-argued, wrong
+conclusion, and it wastes the principal's time on a policy question that did not exist. Sibling of
+§2t (an empty result is not a negative result) — but sharper, because here the emptiness was
+MANUFACTURED BY MY OWN PIPELINE.
+
+⚠️ **The tell I should have trusted: I had treated the same defect the OPPOSITE way an hour earlier.**
+My tiler splitter HELD 14 rows partly for missing names, and I was about to import 5,301 nameless
+rows. When your own two decisions on one defect contradict each other, at least one rests on a wrong
+premise — that inconsistency is a signal to re-examine, not to rationalise.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
@@ -931,35 +962,26 @@ here — D6.** Run the two header commands in §0.
   INCLUDE with a badge" versus AC3.3's "excluded from marketplace-extraction". Written pre-ruling,
   never revised when the ruling landed. A dev reading top-to-bottom meets the ruling at line 7 and the
   instruction to violate it at line 75, **and the AC wins, because the AC is the checkable artefact.**
-- ✅ **THE 8,000-ROW BLOCKER IS CLOSED (2026-09-02/03).** The importer now writes a `submissions` row
-  per respondent, so imported people are DESCRIBABLE and not merely counted. Two halves: a
-  **trade → `SKILL_TAXONOMY` reconciliation** (`d48f1ef`) and the **write path** (`aa8700b`).
-  Measured cause: `normaliseTrade` maps against a Story-11-2 vocabulary of 45 keys / **13 display
-  labels**, so **0 of 9,563** farming rows and **0 of 56** tiler rows resolved. `normaliseTrade` is
-  deliberately untouched — it answers "what do we call this person" for the marketplace; the new
-  resolver answers "which canonical skill is this" against the 192 slugs.
-- ⭐ **THE FIELDS NEEDED TRANSLATING, NOT COPYING — and copying was the trap.** The extras already
-  survived on `metadata.import_extra`; they were stored where no aggregate reads. Two translations
-  are load-bearing: `gender` must be exactly `male`/`female` (the sheets carry **M/F**, so a verbatim
-  copy would have made all 9,563 invisible to `genderSplit` and the GPI), and `skills_possessed` must
-  be an **ARRAY OF SLUGS** (`selectMultipleUnnest` splits a bare string **on spaces**, so `"Crop
-  Farming"` unnests to the junk tokens `Crop` and `Farming`). Same defect class the registry keeps
-  paying for: a value that is present, plausible, and read by nothing.
-- 🆕 **13-33's `it.todo` is implemented** — it had sat executable-but-unrun since the contract was
-  written, and the gap it named was real: the importer shipped without it.
-- 📌 **The import target is 8,234, not 9,505 or 9,563 — and the three numbers finally reconcile.**
-  `consolidated.csv` carries a `review_flags` column: **9,563** distinct people, **1,329** flagged,
-  **8,234 clean** (Awwal's "more than 8,000"), plus **153** no-phone rows already routed out and never
-  in the 9,563. The queue's 9,505 was the whole-file planner count *before* flag-filtering — a real
-  number for a different set. Flags: 786 shared-phone, 274 column-shift, 107 skill-unmapped,
-  99 unmatched, 178 bad-length NIN.
-- ⛔ **13-50 is DEPLOYED (`f881577`) but deliberately STILL `review`.** R1's first post-deploy reading
-  is clean on both forms with REAL controls (172 adopted respondents, 163 `wizard_resume` tokens ever
-  minted, 159 adopted-with-email — so the predicate could have matched). **But live `wizard_resume`
-  tokens are 0 for ANY owner, so this reading cannot separate "13-50 stopped the minting" from "the
-  old stock expired."** R4 cannot run at all yet — 4 audit rows, all NULL trigger, no new mint since
-  deploy. **Next reading after a day of jingle traffic or the next blast: R1 (both forms) AND R4
-  together**, then → `done`.
+- ✅✅ **THE ASSOCIATION CHANNEL IS LIVE, AND THE REGISTRY IS 8,662 PEOPLE (from 327 on 2026-08-23).**
+  Two imports confirmed on prod: the **ASNAT tiler pilot** (`01a071c8…`, 56/56) and the **farming
+  intake** (`01a072ae…`, **8,222 inserted / 12 matched / 0 failed, 6.1s**). LGA coverage with a
+  publishable trade went **2 → 33** — every local government in Oyo.
+- ⭐ **They are DESCRIBABLE, not merely counted.** Every imported row now carries a `submissions` row
+  with a canonical `skills_possessed` slug, so imported people appear in `genderSplit`, `gpi`,
+  `allSkills` and `skillsByLga` — verified by reading them back through `registry_unified` itself.
+  Before AC3.4 they would have been a headcount jump with an unmoved `withAnswers` on the same page.
+- ⭐ **BOTH IMPORTS WERE PREDICTED BEFORE WRITING AND MATCHED EXACTLY** — headcount, `withAnswers`,
+  gender split, GPI, and the k-anonymity cells. The single miss: 8,223 → 8,222, because the local
+  dedup check compared phones only while the importer dedups on phone **OR NIN**. A miss that
+  explains itself is the useful kind. Shape to copy → [[pattern-predict-then-compare]].
+- ⛔ **THE DEFECT OF THE SESSION WAS CAUGHT BY AWWAL, NOT BY ME → §2af.** I reported that 64% of the
+  farming batch had no names and asked how to proceed; he opened the source and the `Full Name`
+  column was there all along. Read §2af before the next import.
+- ⚠️ **GPI is now 0.42** (was 0.71 five days ago), because the agricultural intake is 70.7% male. It
+  is honest and it is public, and it is the figure most exposed to a screenshot. Flagged to Awwal
+  before each confirm, not after.
+- ⚠️ **Still outside the registry:** 1,329 flagged rows + 153 with no usable phone + 14 held tilers.
+  That is the next enrichment target, not a defect.
 
 ### Residual watch (things that will bite if unread)
 | What | State |
@@ -968,6 +990,8 @@ here — D6.** Run the two header commands in §0.
 | **R-A2** — `imported_unverified` gates marketplace + fraud | Deliberate sequencing, **not** a bug to flip. Opening the marketplace before 13-38's badge renders would breach ruling §3 (an unbadged card reads as verified). The **fraud half is independent** and should move sooner. |
 | **R-A3** — `/insights` has no gate for imported rows | Working as ruled, logged as a standing hazard: **every association confirm is a public publish.** There is no staging step between dry-run and confirm. |
 | **R-A4** — the import makes **9,122 distinct phones** reachable | The import itself is SILENT (verified: no queue/notifier/email import in `import.service.ts`, no DB trigger on a respondents insert, every SMS caller user-initiated). But **phone is not structurally safe the way email is** — email has no column and `metadata.imported_email` is write-only; `respondents.phone_number` is a real indexed E.164 column. Awwal's consent ruling covers being COUNTED; an unsolicited SMS is a different act. Also: 9,563 rows → 9,122 numbers, so a blast reaches **handsets, not people**. |
+| **R-A6** — NCARES name ORDER unreliable | 5,301 rows split first-token-as-given-name while the source flags order unreliable. Recoverable, not lost: the verbatim string is in `metadata.import_extra.full_name` on all 8,222 rows. Do NOT "fix" by swapping the rule — that inverts the ones now correct. |
+| ~~**R-A1**~~ **DISCHARGED** | Counted, as the residual demanded: 31/56 tiler rows lost an age; **0** farming rows (that source has no DOB column). Material for PAPER intake, immaterial for machine extracts → closed as a sheet-design item. |
 | **R-A5** — one Appendix B box spans two slugs | 'Agriculture / Agro-processing' maps to `farming`, so an agro-processor is recorded as a farmer. Mapped on the dominant reading, not because the collision is resolved. Fix is a split box at the next sheet re-print. |
 | **12-4 R4** — `registry_unified` view dropped on every deploy | Unchanged, impact still nil (nothing runtime reads the view). Reopen if anything does. |
 
@@ -1907,6 +1931,59 @@ is the variable; file count tells you nothing.**
 twice reported to Awwal as success before the remote was checked. The file-capture recipe
 (`{ git push … > log 2>&1; echo $? > exit; }`) catches it; **the notification never does.** Verify a
 push by `git ls-remote origin main` against `git rev-parse HEAD`. Always.
+
+## 7t. Session 2026-09-04/05 — the channel opened, and the principal caught the defect
+
+### 8,662 people, and they are describable
+Two imports confirmed on prod: the tiler pilot (56/56) and the farming intake (**8,222 inserted / 12
+matched / 0 failed in 6.1s**). Registry **440 → 8,662**; LGA coverage with a publishable trade
+**2 → 33**. Every row carries a `submissions` row with a canonical slug, so these people are in the
+skills map rather than being an inert headcount — the difference AC3.4 existed to make.
+
+Both imports were **predicted before writing and matched exactly**. The one miss (8,223 → 8,222) was
+a local dedup check comparing phones while the importer dedups on phone **OR NIN**. Predicting first
+is what makes a match evidence; "the number moved" would have passed for a wrong number too.
+
+### The defect I missed, and Awwal did not → §2af
+The first farming dry-run returned nameless rows. I measured 64% missing, treated it as a property of
+the data, and escalated a policy question: import nameless people, or hold them? Awwal opened the
+source document and the `Full Name` column was there — 6,516 rows, already read correctly into
+`full_name` by the consolidation. My extract emitted the wrong columns and the config had no key for
+a single-column name.
+
+**The evidence was in my own output.** The missing fields were 2,933 for name AND dob AND town AND
+NIN — four unrelated fields agreeing to the exact row — and I wrote in the same breath that this
+meant "two source cohorts with different schemas", then reasoned from the absence anyway. A count
+that structural is a prompt to open the file, not to theorise. Full write-up in §2af, including the
+tell I ignored: I had held 14 tiler rows for missing names an hour earlier, so my two decisions on
+one defect contradicted each other.
+
+### A safety guard that was guarding nothing → §2ae
+`db-guard` let a bare `pnpm vitest run <file>` connect to the **499k-row dev database**, and its
+`afterAll` issued DELETEs there. Nothing was lost only because a stale schema had already failed
+`beforeAll` — luck, not design. The class was documented in `.husky/pre-push` and fixed there on
+2026-07-03 **for the gate**; nobody closed the doorway a developer uses fifty times a day. My first
+fix was too blunt (`dotenv.config()` injected forty dev variables into every test and broke
+`photo-processing`), which is half the lesson.
+
+### The suite's two pathological hotspots
+`a3-eslint-policy` built a new ESLint **per test** (three full plugin-graph loads for three one-line
+lints); `respondent-promotion-census` walked the source tree **five times**, ~1,980 file reads for an
+immutable snapshot. Fixed: 9,733ms → 748ms on the census (13x), and tests 2–3 of the ESLint file went
+from ~6.8s each to ~46ms combined. **Only after the waste was gone** was a budget raise honest
+(30s → 90s on the irreducible single config load).
+
+⚠️ **Earlier in the session I reported this sweep as "exhausted, two files, both fixed." That was
+premature** — the ESLint fix cut three loads to one but left the remaining one still able to blow a
+30s budget, and it cost another push before I saw it. The ordering was right; the claim of completion
+was not.
+
+### Also this session
+`app_db`/`app_test` schema drift resolved (**29 columns and two entire tables** behind; both now 384,
+zero difference; `users.liveness_score` held 179 values and was backed up before the push dropped it).
+Five bounded security overrides for newly-disclosed advisories on unchanged deps. The Super Admin
+mobile drawer could not scroll — `SheetContent` is a fixed flex column and the nav had neither
+`flex-1` nor `overflow-y-auto`; swept all five drawers and found a second, weaker instance.
 
 ## 7r. Session 2026-08-24 → 08-31 — the page got smaller on purpose, and a measurement stopped an import
 
