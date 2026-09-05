@@ -13,7 +13,7 @@
 
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -235,6 +235,41 @@ describe('ProfileDropdown', () => {
 });
 
 describe('SidebarNav', () => {
+  /*
+   * ⭐ Reported 2026-09-05 from a Super Admin phone: opening the hamburger showed the
+   * nav, but items below the fold could not be reached at all.
+   *
+   * Cause: `SheetContent` is `fixed inset-y-0 h-full flex flex-col`, and the nav sat
+   * in a plain `<div className="p-4">` — no `flex-1`, so it never took the remaining
+   * height, and no `overflow-y-auto`, so anything past the viewport was CLIPPED.
+   * super_admin has the longest sidebar in the app, so it is the role where the list
+   * reliably exceeds a phone screen.
+   *
+   * ⚠️ THIS TEST ASSERTS CLASSES, AND THAT IS A WEAKER CHECK THAN IT LOOKS — say so
+   * rather than let a future reader over-trust it. jsdom has NO layout engine: it
+   * cannot measure height, cannot overflow, and cannot scroll, so no assertion here
+   * can prove the drawer actually scrolls on a phone. What it CAN do is stop the two
+   * classes being dropped again, which is the regression that happened.
+   *
+   * Both are load-bearing and one without the other looks fixed while staying broken:
+   * `overflow-y-auto` alone yields a box that never exceeds its content height, so
+   * there is nothing to scroll; `flex-1` alone makes it fill the column and clip.
+   * Real verification is a phone, and that is the operator check on this fix.
+   */
+  describe('mobile nav drawer is scrollable (2026-09-05 regression guard)', () => {
+    it('gives the drawer nav BOTH flex-1 and overflow-y-auto', async () => {
+      const user = createMockUser('super_admin');
+      renderWithDashboardLayout({ user });
+
+      const trigger = await screen.findByRole('button', { name: 'Open navigation menu' });
+      fireEvent.click(trigger);
+
+      const nav = await screen.findByTestId('mobile-drawer-nav');
+      expect(nav.className).toContain('flex-1');
+      expect(nav.className).toContain('overflow-y-auto');
+    });
+  });
+
   describe('AC4: Active nav item visually indicated', () => {
     it('renders navigation items with proper structure', async () => {
       const user = createMockUser('enumerator');

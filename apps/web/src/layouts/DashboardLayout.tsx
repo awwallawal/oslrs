@@ -210,7 +210,29 @@ export function DashboardLayout() {
                 </span>
               </SheetTitle>
             </SheetHeader>
-            <div className="p-4">
+            {/*
+              ⭐ `flex-1 overflow-y-auto` — WITHOUT BOTH, THE NAV IS UNREACHABLE BELOW
+              THE FOLD (fixed 2026-09-05, reported from a Super Admin phone).
+
+              `SheetContent` is `fixed inset-y-0 h-full flex flex-col`, so it is a
+              full-height flex column that never grows past the viewport. This nav
+              sat in a plain `<div className="p-4">`: no `flex-1`, so it did not take
+              the remaining height, and no `overflow-y-auto`, so anything past the
+              bottom edge was simply CLIPPED. A super_admin has the longest sidebar in
+              the app, so it is the one role where the list reliably exceeds a phone
+              screen — the items below the fold could not be reached at all.
+
+              ⚠️ BOTH classes are load-bearing, and one without the other looks fixed
+              while staying broken. `overflow-y-auto` alone gives a box that never
+              exceeds its content height, so there is nothing to scroll; `flex-1`
+              alone makes it fill the column and clip. (`min-h-0` is NOT needed: per
+              the flexbox spec a box with overflow other than `visible` already has an
+              automatic minimum size of zero.)
+
+              The public `MobileNav` and two other sheets already do exactly this;
+              this one and the audit-log filter sheet were the outliers.
+            */}
+            <div className="flex-1 overflow-y-auto p-4" data-testid="mobile-drawer-nav">
               <SidebarNav
                 items={sidebarItems}
                 onItemClick={() => setIsMobileNavOpen(false)}

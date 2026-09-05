@@ -308,7 +308,15 @@ export default function AuditLogPage() {
               <SheetHeader>
                 <SheetTitle>Filters</SheetTitle>
               </SheetHeader>
-              <div className="overflow-y-auto px-4 pb-6">
+              {/*
+                `flex-1` added 2026-09-05 alongside the DashboardLayout fix. This had
+                `overflow-y-auto` but never `flex-1`, so inside `SheetContent`'s flex
+                column it only ever grew to its content height — a scroll container
+                with nothing to scroll. The filter form is short enough that it fits
+                on most phones today, which is exactly why this would have surfaced
+                later, as "sometimes I can't reach Apply", rather than now.
+              */}
+              <div className="flex-1 overflow-y-auto px-4 pb-6">
                 <AuditLogFilter
                   value={filter}
                   onApply={handleApply}
