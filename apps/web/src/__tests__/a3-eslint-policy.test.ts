@@ -33,7 +33,24 @@ async function lintText(code: string, filename: string) {
   return result.messages;
 }
 
-describe('A3 ESLint policy', { timeout: 30_000 }, () => {
+/*
+ * ⏱️ 30s -> 90s (2026-09-05), and ONLY AFTER the redundant work was removed.
+ *
+ * Raising a timeout to hide repeated work is how a slow suite gets slower quietly.
+ * So the waste went first: this file used to construct a new ESLint per test, three
+ * full loads of `eslint.config.js` and its whole plugin graph. That is fixed above —
+ * tests 2 and 3 now cost ~46ms combined.
+ *
+ * What remains is IRREDUCIBLE: one config load, borne by the first test. Measured
+ * 6.8s on a warm machine, but it degrades far worse than linearly under memory
+ * pressure — 58.9s in a 1-worker run, and a hard 30s timeout at 1.32 GB free, which
+ * has now cost two pushes. 90s covers the observed worst case with headroom.
+ *
+ * This is a budget for a REAL cost, not a cover for a fixable one. If it ever blows
+ * 90s, do not raise it again — that would mean the config graph itself has grown,
+ * and the answer then is to look at `eslint.config.js`, not at this number.
+ */
+describe('A3 ESLint policy', { timeout: 90_000 }, () => {
   it('rejects CSS class selectors in unit/integration test files', async () => {
     const messages = await lintText(
       "document.querySelector('.foo')",
