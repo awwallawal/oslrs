@@ -120,6 +120,35 @@ const ASSOCIATION_CONFIG: ImportSourceConfig = {
     'Years exp.': 'experienceLevel',
     'NIN (if to hand)': 'nin',
     'Consent (Yes/No)': 'consent',
+    /*
+     * ⭐ SINGLE-COLUMN NAME (added 2026-09-05). The frozen PAPER sheet has two name
+     * columns, and a coordinator filling it by hand produces two. But a
+     * MACHINE-PREPARED extract routinely carries one — the NCARES agricultural
+     * register is exactly that shape, 6,516 rows whose only name field is
+     * `Full Name`. Without this key those 5,301 importable people would arrive
+     * NAMELESS: the column is present in the file, unmapped, and therefore
+     * silently ignored (headers are matched exactly; an unmatched one is kept in
+     * `raw` and never becomes canonical). Caught by reading a dry-run's sample row
+     * and noticing it had no name — Awwal went to the source and confirmed the
+     * column was there all along.
+     *
+     * `ingest-plan`'s `splitName` PREFERS explicit first/last when present, so a
+     * sheet carrying both spellings is unambiguous: the L-PRES rows use their own
+     * Surname/First name, the NCARES rows fall back to this. ITF-SUPA already maps
+     * `FULL NAME` the same way, so this adopts an existing shape rather than
+     * inventing one.
+     *
+     * ⚠️ NAME ORDER IS NOT GUARANTEED, and this is the honest trade. `splitName`
+     * takes the first token as the given name and the rest as the surname, while
+     * the consolidation flagged every NCARES row `name_order_unreliable = YES` —
+     * Yoruba registers are inconsistent about which comes first. Some will land
+     * inverted. That is still far better than nameless, and it is RECOVERABLE:
+     * `EXTRA_FIELDS` preserves the verbatim original in
+     * `metadata.import_extra.full_name`, so the true string survives the split and
+     * a later pass can re-derive it. Tracked as 13-2 R-A6.
+     */
+    'Full Name': 'fullName',
+    'Full name': 'fullName',
     // Transcription variants — the parenthetical dropped, or spacing normalised.
     'First Name': 'firstName',
     'Phone Number': 'phoneNumber',
