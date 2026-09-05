@@ -18,6 +18,139 @@
 
 ---
 
+## §0 — Provisioning an enumerator account (recorded live, 2026-09-05)
+
+This runbook began at "you have an enumerator". §0 is the step before it, written by actually doing
+it on prod rather than from reading the code — the two disagreed twice, and both disagreements are
+recorded below.
+
+### 0.1 The five inputs, and the two that are not obvious
+
+| field | value | note |
+|---|---|---|
+| `fullName` | `Lawal Kolade (TEST ENUMERATOR)` | Put the word TEST in the NAME. It is the only marker visible to someone reading a dashboard who does not know the email convention. |
+| `email` | `lawalkolade+test@gmail.com` | **Plus-addressing.** Delivers to the existing inbox — no new mailbox to create. Survives the app's normalisation (emails are only lowercased and trimmed; nothing strips `+`). |
+| `phone` | `+2348000000001` | ⚠️ **`users.phone` is UNIQUE.** Every account needs its own. Reserved sentinel series for test staff: `+234800000000X`. Verified free before use. |
+| `roleId` | `019c899b-6ccf-7b55-8c04-49dec8280e45` | enumerator |
+| `lgaId` | `019c899b-6d7e-7ed3-bc7b-53b96b48a72d` | Ibadan North |
+
+⛔ **`lgaId` IS MANDATORY FOR ENUMERATORS, despite being `.optional()` in the schema.** The Zod
+schema says `lgaId: z.string().uuid().optional()` — "optional for state-wide" — but
+`staff.service.ts:866` throws `LGA_REQUIRED` for the enumerator role. Discovered by the create call
+failing, not by reading the type. **There is no state-wide enumerator.** Decide each person's LGA
+before you start; it is not a field you can leave for later.
+
+### 0.2 The call
+
+Operator path is **Super Admin → Staff** (`/staff`), which posts to `POST /api/v1/staff/manual`
+(super_admin only). Server-side equivalent, used here because the operator UI was not the path under
+test:
+
+```ts
+await StaffService.createManual(
+  { fullName, email, phone, roleId, lgaId },
+  actorId,   // the super_admin performing it — this lands in audit_logs
+);
+```
+
+Bulk: `POST /api/v1/staff/import`, CSV columns **`full_name, email, phone, role_name, lga_name`** —
+role and LGA by NAME, not UUID, which is what makes a 20-row sheet writable by hand.
+
+### 0.3 What was actually created
+
+```
+userId      : 01a0733b-5f22-7776-8f2f-7239b31324e8
+email       : lawalkolade+test@gmail.com
+status      : invited
+emailStatus : pending          <- QUEUED, not sent. See 0.4.
+invited_at  : 2026-09-05 20:21:05+00
+```
+
+### 0.4 Proving the invitation actually arrived — and the wrong turn taken here
+
+`emailStatus: "pending"` means the job was **queued to BullMQ**, not that mail was sent. The first
+check grepped the API logs for the address and found nothing, and this runbook nearly recorded "the
+email did not send". **It had.** The worker logs key on `userId`, not the address:
+
+```
+email-worker    email.job.completed  jobId=8265 type=staff-invitation userId=01a0733b…
+resend-webhook  resend_webhook.recorded  type=sent       campaignId=staff-invitation
+resend-webhook  resend_webhook.recorded  type=delivered  campaignId=staff-invitation
+```
+
+⭐ **Grep the logs by `userId`, not by email.** And treat `delivered` from the Resend webhook as the
+proof — `sent` only means Resend accepted it.
+
+### 0.5 ⏰ THE 24-HOUR CLOCK — the constraint that shapes a 20-person rollout
+
+`auth.service.ts:136` — the invitation expires **24 hours after `invited_at`**, hard. Not 24 hours
+after first click, not extendable.
+
+**So do NOT bulk-create 20 accounts days ahead of the trial.** Provision them the morning people are
+in the room to activate, or you will spend the first hour on
+`POST /api/v1/staff/:userId/resend-invitation` (itself rate-limited — `RESEND_LIMIT_TTL` is 24h).
+
+Check who has not activated:
+
+```sql
+SELECT email, invited_at, invited_at + interval '24 hours' AS expires_at
+FROM users WHERE status = 'invited' ORDER BY invited_at;
+```
+
+### 0.6 The teardown key — capture it NOW, not at teardown
+
+⚠️ **Delete by `submitter_id`, never by matching the email string.** The `+test` tail is the
+human-readable marker; the **user id is the join key**. The reason is already on prod: four earlier
+test enumerators exist and their addresses are `+enum1`, `+testenumerator`, `+testenumeratornew`,
+`+testfour` — **`+enum1` does not match `%+test%`**. One inconsistent address and a string-based
+teardown silently misses a whole enumerator's rows.
+
+Record every id at creation. The chain that makes teardown possible:
+`respondents.submitter_id` → `users.id` → `users.email` (verified on prod).
+
+```sql
+-- The trial cohort, as ids. Paste the list into the teardown; do not re-derive it by pattern.
+SELECT u.id, u.email, u.full_name FROM users u
+JOIN roles r ON r.id = u.role_id
+WHERE r.name = 'enumerator' AND u.email LIKE '%+test%';
+```
+
+⚠️ **Bound the teardown by TIME as well as submitter** — `AND created_at BETWEEN <trial start> AND
+<trial end>`. The day a trial account is reused for real work, its genuine registrations would
+otherwise match the delete.
+
+⚠️ **TEARDOWN IS CHILD-FIRST, AND IT CHANGED ON 2026-09-05.** The importer now writes a `submissions`
+row per respondent and `submissions.respondent_id` is a plain FK with **no cascade**. Deleting
+respondents first raises a foreign-key violation and leaves the whole set behind. Delete
+`submissions`, then `respondents`. (Found the hard way in the API integration suite the same day.)
+
+⚠️ **`audit_logs` are append-only by trigger and are NEVER deleted.** Teardown removes the people;
+the permanent record that they were created and removed remains, and an auditor can see it. That is
+correct and honest — know it rather than discover it.
+
+### 0.7 What a trial does and does not disturb on the public page
+
+Verified against the live payload 2026-09-05:
+
+- **Accounts alone are publicly invisible.** `/insights` carries no staff or enumerator counts. Twenty
+  accounts move nothing a citizen can see.
+- **The headline absorbs practice rows.** At **8,662** registered, ~100 practice rows is a **1.2%**
+  wobble. At 387 the same rows would have been a 26% spike and a visible collapse. The scale is the
+  cover, and it only arrived with the association import.
+- ⚠️ **The thin cells do NOT absorb them.** `PUBLIC_MIN_N = 10`, and published cells sit exactly on it
+  today — `akinyele/teaching = 10`, `itesiwaju/livestock = 10`, `event_planning = 10`. If practice
+  rows cluster 10+ in one LGA×trade, a **new cell appears on the public map and vanishes at
+  teardown**; a genuine 9-person cell pushed to 10 will blink into view and back out.
+  **Brief the trial: vary LGA and trade, and prefer dense trades** (`farming` 4,654, `livestock`
+  2,619 swallow anything). Natural spread across 33 LGAs does most of this — the failure mode is
+  twenty people in one room reaching for the same default.
+
+### 0.8 Handover to §B
+
+The account is `invited`. The person clicks the activation URL **within 24 hours**, sets a password,
+and lands as `active`. From there §B's test-data protocol applies unchanged — and it should be read
+BEFORE the first submission, not after.
+
 ## 🚦 The gate — buy no media until all seven are green
 
 | # | Gate item | How to verify | Verdict |
