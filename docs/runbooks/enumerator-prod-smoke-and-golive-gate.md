@@ -145,6 +145,173 @@ Verified against the live payload 2026-09-05:
   2,619 swallow anything). Natural spread across 33 LGAs does most of this — the failure mode is
   twenty people in one room reaching for the same default.
 
+### 0.9 The trial cohort — ids, onboarding tracker, and the teardown query
+
+Provisioned **2026-09-06 08:18 UTC**: 17 enumerators from the OYO STATE LABOUR REGISTRY WhatsApp
+group, plus the operator test account from 0.3. All 17 invitations **delivered** (confirmed by
+Resend `delivered` webhooks, not merely queued).
+
+**Invitation deadline — 48h from creation:** the 17 expire **2026-09-08 08:18 UTC**; the operator
+account, created a day earlier, expires **2026-09-07 20:21 UTC**.
+
+⚠️ **THE ID LIST IS THE KEY. The email pattern is a convenience, not the selector.** Today
+`email LIKE '%+test@%'` happens to select exactly these 18 and correctly excludes the four earlier
+test enumerators (`+enum1`, `+testenumerator`, `+testenumeratornew`, `+testfour` — none of which
+contain the literal `+test@`). That is luck, not design: `+enum1` carries no "test" at all, so one
+inconsistent address in a future cohort makes a pattern-based teardown silently miss a whole
+enumerator's rows. **Paste the ids. Do not re-derive the cohort by pattern.**
+
+| user id | test account | LGA |
+|---|---|---|
+| `01a0733b-5f22-7776-8f2f-7239b31324e8` | lawalkolade+test@gmail.com | Ibadan North |
+| `01a075cc-0a52-760f-a55d-7548f0d47054` | zjbadmus+test@gmail.com | Oluyole |
+| `01a075cc-0a8d-749b-a20b-e117dfc89d31` | olayiwolaprecious109+test@gmail.com | Ibadan South-West |
+| `01a075cc-0aa8-78fe-b76d-be11041e8c5b` | atitebiesther948+test@gmail.com | Ibadan South-West |
+| `01a075cc-0ac2-750b-9c20-a6b4ab08d49b` | bashiratfasasi+test@gmail.com | Lagelu |
+| `01a075cc-0ad6-763d-86c0-0132e000008d` | checkadetola+test@gmail.com | Egbeda |
+| `01a075cc-0aed-7efa-afea-98e28d175e8a` | folashadeasmau+test@gmail.com | Ibadan North-West |
+| `01a075cc-0b11-744c-b2da-7f8736784d56` | badmusalia2+test@gmail.com | Oluyole |
+| `01a075cc-0b24-79cd-a621-ef6649c9882d` | ferdew31+test@gmail.com | Ona Ara |
+| `01a075cc-0b37-7505-b606-d9f4512b2a1d` | uthmanayo07+test@gmail.com | Egbeda |
+| `01a075cc-0b47-79da-bfd5-60b60a4ac7be` | koyebimpe2011+test@gmail.com | Ido |
+| `01a075cc-0b57-7a24-b7f9-256519151d38` | anuoluwapo568+test@gmail.com | Ido |
+| `01a075cc-0b73-79c5-aa4c-c5ae1bd7b722` | faaizbadmus+test@gmail.com | Ibadan North |
+| `01a075cc-0b84-747a-b2b7-5d1866d8473f` | victoriakilanko023+test@gmail.com | Ibadan North-East |
+| `01a075cc-0b97-7f06-92d2-3ec826d0c9ee` | callmezainab3000+test@gmail.com | Akinyele |
+| `01a075cc-0baf-7907-8b8f-4fb59881509c` | badmusboluwatife22+test@gmail.com | Ibadan North |
+| `01a075cc-0bd7-7cfa-8b0c-b6c6f7462585` | oladokuncomfort77+test@gmail.com | Lagelu |
+| `01a075cc-0bea-7d3d-8092-268d8010d88d` | moboladeidrees+test@gmail.com | Akinyele |
+
+**The id list, ready to paste** — substitute it wherever a query below says `/* the 18 ids */`:
+
+```sql
+-- 18 ids: 17 field enumerators + the operator test account.
+'01a0733b-5f22-7776-8f2f-7239b31324e8',
+  '01a075cc-0a52-760f-a55d-7548f0d47054',
+  '01a075cc-0a8d-749b-a20b-e117dfc89d31',
+  '01a075cc-0aa8-78fe-b76d-be11041e8c5b',
+  '01a075cc-0ac2-750b-9c20-a6b4ab08d49b',
+  '01a075cc-0ad6-763d-86c0-0132e000008d',
+  '01a075cc-0aed-7efa-afea-98e28d175e8a',
+  '01a075cc-0b11-744c-b2da-7f8736784d56',
+  '01a075cc-0b24-79cd-a621-ef6649c9882d',
+  '01a075cc-0b37-7505-b606-d9f4512b2a1d',
+  '01a075cc-0b47-79da-bfd5-60b60a4ac7be',
+  '01a075cc-0b57-7a24-b7f9-256519151d38',
+  '01a075cc-0b73-79c5-aa4c-c5ae1bd7b722',
+  '01a075cc-0b84-747a-b2b7-5d1866d8473f',
+  '01a075cc-0b97-7f06-92d2-3ec826d0c9ee',
+  '01a075cc-0baf-7907-8b8f-4fb59881509c',
+  '01a075cc-0bd7-7cfa-8b0c-b6c6f7462585',
+  '01a075cc-0bea-7d3d-8092-268d8010d88d'
+```
+
+#### Tracking onboarding — who has actually logged in
+
+`invited` means the email was sent. `active` means they clicked, set a password, and completed the
+activation form. Only the second is onboarding.
+
+```sql
+-- Progress board. Run this to see who is still outstanding and how long they have left.
+SELECT
+  u.full_name,
+  u.email,
+  l.name                                          AS lga,
+  u.status,                                       -- invited = not yet onboarded; active = can log in
+  (u.invited_at + interval '48 hours')            AS invitation_expires_utc,
+  round(extract(epoch FROM (u.invited_at + interval '48 hours' - now()))/3600, 1) AS hours_left,
+  u.last_login_at
+FROM users u
+JOIN roles r ON r.id = u.role_id
+LEFT JOIN lgas l ON l.id = u.lga_id
+WHERE r.name = 'enumerator' AND u.id IN ( /* the 18 ids */ )
+ORDER BY u.status, u.full_name;
+```
+
+```sql
+-- One-line summary for a standup.
+SELECT count(*) FILTER (WHERE status = 'active')  AS onboarded,
+       count(*) FILTER (WHERE status = 'invited') AS still_invited,
+       count(*)                                    AS cohort
+FROM users WHERE id IN ( /* the 18 ids */ );
+```
+
+⚠️ **`status = 'active'` means they CAN log in — it does not mean they have.** `last_login_at` is
+the column that answers "did they actually get in". A person can complete activation and still fail
+at the login screen, and the two are different support problems.
+
+**If someone misses the 48h window:** `POST /api/v1/staff/:userId/resend-invitation`. It mints a
+fresh token and a fresh 48h. It is rate-limited per user (`RESEND_LIMIT_TTL` = 24h), so it is not a
+button to lean on for a whole cohort — which is the argument for provisioning the morning people are
+ready, per 0.5.
+
+#### ⭐ Teardown — child-first, and VERIFIED AS COUNTS BEFORE ANY DELETE
+
+Run the SELECT form first, every time. It is the same predicate as the delete, so a surprising number
+here is a surprising delete you have not run yet. Measured 2026-09-06, immediately after
+provisioning: **submissions 0, respondents 0, marketplace_profiles 0** — correct, because nobody had
+submitted anything. Re-run after the trial; the numbers should match the practice rows you expect,
+and if they do not, STOP.
+
+```sql
+-- 1. DRY RUN. What would be deleted? Run this, read it, and only then proceed.
+WITH cohort AS (
+  SELECT u.id::text AS uid FROM users u
+  JOIN roles r ON r.id = u.role_id
+  WHERE r.name = 'enumerator' AND u.id IN ( /* the 18 ids */ )
+), theirs AS (
+  SELECT rp.id FROM respondents rp
+  WHERE rp.submitter_id IN (SELECT uid FROM cohort)
+    AND rp.created_at BETWEEN :trial_start AND :trial_end   -- ⚠️ ALWAYS bound by time
+)
+SELECT
+  (SELECT count(*) FROM submissions          WHERE respondent_id IN (SELECT id FROM theirs)) AS submissions,
+  (SELECT count(*) FROM marketplace_profiles WHERE respondent_id IN (SELECT id FROM theirs)) AS marketplace_profiles,
+  (SELECT count(*) FROM theirs)                                                              AS respondents;
+```
+
+```sql
+-- 2. DELETE, child-first. Order is NOT optional.
+BEGIN;
+-- children first: submissions.respondent_id is a plain FK with NO cascade (since 2026-09-05),
+-- so deleting respondents first raises a violation and leaves the whole set behind.
+DELETE FROM submissions          WHERE respondent_id IN (SELECT id FROM theirs);
+DELETE FROM marketplace_profiles WHERE respondent_id IN (SELECT id FROM theirs);
+DELETE FROM respondents          WHERE id             IN (SELECT id FROM theirs);
+-- Check the row counts against the dry run BEFORE committing.
+COMMIT;   -- or ROLLBACK if anything surprised you
+```
+
+⚠️ **BOUND IT BY TIME, not only by submitter.** The day a trial account is promoted to real work, its
+genuine registrations match `submitter_id` too. `:trial_start` / `:trial_end` are what stop the
+teardown eating real data.
+
+⚠️ **The ACCOUNTS are not deleted by this.** Teardown removes the practice DATA; the 18 users stay so
+`audit_logs` (append-only, FK to the actor) remains intact. Retire an account with
+`POST /api/v1/staff/:userId/deactivate`, not a `DELETE`.
+
+⚠️ **`audit_logs` are never removed.** The permanent record that these rows were created and deleted
+survives and is visible to an auditor. Correct and honest — know it rather than discover it.
+
+#### ⚠️ Resend rate limit — 7 of 17 failed on the first attempt
+
+Creating 17 accounts in a tight loop outran the mail provider: **7 invitation jobs failed with
+`Too many requests. You can only make 10 requests per second`.**
+
+All 7 recovered — BullMQ retried and all 17 show `email.job.completed` with 17 `delivered` webhooks.
+**But that only worked because invitations go through a QUEUE.** A loop calling the mail provider
+directly would have silently dropped 7 of 17: the accounts would exist, look perfectly healthy in the
+database, and seven people would sit waiting for an email that was never going to arrive.
+
+⭐ **So: after any bulk provisioning, COUNT the completions — do not assume the creations imply them.**
+
+```sql
+-- Anyone provisioned but with no invitation actually delivered is invisible in `users`.
+-- There is no delivery column, so cross-check the worker log by userId:
+--   pm2 logs oslsr-api --lines 4000 --nostream | grep "email.job.completed.*staff-invitation.*<id>"
+-- Expect one line per account. Missing = resend that user.
+```
+
 ### 0.8 Handover to §B
 
 The account is `invited`. The person clicks the activation URL **within 24 hours**, sets a password,
