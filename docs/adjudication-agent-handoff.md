@@ -912,6 +912,35 @@ My tiler splitter HELD 14 rows partly for missing names, and I was about to impo
 rows. When your own two decisions on one defect contradict each other, at least one rests on a wrong
 premise — that inconsistency is a signal to re-examine, not to rationalise.
 
+### 2ag. ⭐⭐ WHEN A CHECK REPORTS "NOTHING FOUND", SUSPECT THE CHECK — three of mine lied in one session
+
+§2af says a suspicious count is a prompt to go and look at the DATA. This is the same rule turned on
+the INSTRUMENT, and it cost more time than the data ever did. Three checks reported clean, all three
+were broken, and all three looked like findings:
+
+| the check | what it reported | what was actually wrong |
+|---|---|---|
+| RED-verify of the residual guard (attempt 1) | guard green with an OPEN residual → *"the guard is not policing this story"* | my injected text contained the word **"Closed"**, which cancels the OPEN marker **by design** |
+| RED-verify (attempt 2) | still green | my injected row had **no trailing `\|`**, so `TABLE_ROW` never matched it — **14 rows parsed instead of 15**, and the row was invisible |
+| enumerator extractor | *"LEFT the group: (none)"* | departures are SYSTEM lines with no `sender:` prefix, so they never matched the header regex I was checking them after |
+
+Plus a fourth, recurring: **`` written through a Python heredoc becomes a literal BACKSPACE
+(``)**, silently disabling a regex. Twice this week. `cat -A` shows it as `^H`; nothing else does.
+
+⛔ **The costly one was the guard, because I twice reached the conclusion "the safety net has a
+hole".** That is a serious claim, and I was about to record it. The third, well-formed injection made
+it fire instantly.
+
+⭐ **The tell is a negative result that arrives TOO CLEANLY.** "None", "zero", "no matches" from a
+check you have just written deserves the same suspicion as a surprising positive. Before believing
+it, make the check FAIL ON PURPOSE with something you know it should catch. If you cannot make it
+fail, you have not tested it — you have run it.
+
+⚠️ And when the target is a GUARD, that discipline is not optional: a wrong "the guard is broken"
+sends someone to rebuild a working safety net, while a wrong "the guard is fine" leaves a real hole.
+Both directions are expensive, which is why §2ae's rule — *invoke it the wrong way and check it
+complains* — has to be executed carefully enough that the invocation itself is valid.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
@@ -983,6 +1012,42 @@ here — D6.** Run the two header commands in §0.
 - ⚠️ **Still outside the registry:** 1,329 flagged rows + 153 with no usable phone + 14 held tilers.
   That is the next enrichment target, not a defect.
 
+- ✅ **13-50 CLOSED 2026-09-06 — all NINE residuals resolved, `Status: done`.** The second reading,
+  4 days and 6 jingle sessions after deploy `f881577`, produced the discriminating event the first
+  reading could not get: **one `/check-registration` call at 2026-09-02 16:36:57 UTC that minted
+  `login`, NOT `wizard_resume`.** R1/R2/R3 discharged on that plus controls; R4/R8/R9 had **already
+  been ruled in the story body while their ledger cells still read OPEN** (record-vs-work drift
+  inside ONE document — the ledger is what the guard and every sweep read); R5/R6/R7 accepted and
+  closed by Awwal with reopen triggers kept. ⚠️ **R4 corrected FOUR phantoms → FIVE.**
+- ⚠️ **R2's scare is the one to remember.** 12 `wizard_resume` tokens minted 08-24 → 08-28 with ZERO
+  audit rows looked exactly like the attribution fix having failed. They all PREDATE the 09-02
+  deploy — they are the blind spot itself, caught in the wild. With no post-deploy `wizard_resume`
+  mint to observe, R2 was discharged **structurally**: the audit write lives INSIDE `issueToken`
+  unconditionally, and `insert(magicLinkTokens)` appears at **exactly one site** — inside that same
+  primitive. "A mint that is not audited" is not expressible.
+- 🆕 **13-67 CARVED (`association-identity-as-structured-data`), and it BLOCKS 13-58.** 13-58's AC1
+  renders "[Association] — confirmed member" using *the stored association name* — **and there is no
+  such field.** Identity exists only as operator free text in `import_batches.source_description`,
+  one of which reads "Oyo farming groups consolidated intake…", naming no accountable body at all.
+  ⭐ **Awwal ruled the bodies 2026-09-05: ASNAT (tilers, 56) and AFAN (farming, 8,222).** Design note
+  carried into the story: `registry_unified` exposes `metadata` but **NOT `import_batch_id`**, so a
+  batch-column-only design forces a join or a canonical-view change — write
+  `respondents.metadata.association_name` at import instead.
+- ⚠️ **13-2's R-A2 named the WRONG gating story and is corrected.** It said 13-38; the gate is
+  **13-58**. The two share the slug `marketplace-association-confirmed-badge`, and 13-38 closed on
+  prod 2026-08-18 having shipped **experience levels and trading names**, not the badge. Reading the
+  `done` one as the gate would have opened the marketplace to 8,278 people with **no provenance
+  badge** — ruling §3 breached at scale. **Check the number, not the name.**
+- 🆕 **17 FIELD ENUMERATORS PROVISIONED ON PROD 2026-09-06** from the OYO STATE LABOUR REGISTRY
+  WhatsApp group, across 10 LGAs, all invitations **delivered**. Roster extracted from the chat
+  export rather than transcribed — name, email, LGA and the phone-as-sender were all already there.
+  Full record in `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md` **§0** (provisioning) and
+  **§0.9** (ids, onboarding tracker, tested teardown).
+- 🆕 **Invitation window 24h → 48h** (`INVITATION_EXPIRY_HOURS`), because the trial was provisioned on
+  a Friday. ⚠️ The number had been written **five times across two files** — three that set what the
+  email PROMISES, two that ENFORCE it — so changing one made the system lie. Now one constant, and it
+  caught **two tests** that had hardcoded the old window.
+
 ### Residual watch (things that will bite if unread)
 | What | State |
 |---|---|
@@ -990,6 +1055,8 @@ here — D6.** Run the two header commands in §0.
 | **R-A2** — `imported_unverified` gates marketplace + fraud | Deliberate sequencing, **not** a bug to flip. Opening the marketplace before 13-38's badge renders would breach ruling §3 (an unbadged card reads as verified). The **fraud half is independent** and should move sooner. |
 | **R-A3** — `/insights` has no gate for imported rows | Working as ruled, logged as a standing hazard: **every association confirm is a public publish.** There is no staging step between dry-run and confirm. |
 | **R-A4** — the import makes **9,122 distinct phones** reachable | The import itself is SILENT (verified: no queue/notifier/email import in `import.service.ts`, no DB trigger on a respondents insert, every SMS caller user-initiated). But **phone is not structurally safe the way email is** — email has no column and `metadata.imported_email` is write-only; `respondents.phone_number` is a real indexed E.164 column. Awwal's consent ruling covers being COUNTED; an unsolicited SMS is a different act. Also: 9,563 rows → 9,122 numbers, so a blast reaches **handsets, not people**. |
+| **13-58 gate** | ⛔ Do NOT open `PIPELINE_EXCLUDED_STATUSES` before the badge renders. **8,278 association members are in the registry and invisible to the marketplace** (`marketplace_profiles` = 291 against a registry of 8,662). Order: 13-67 → 13-58 → open the gate. Reversed, they appear on cards reading as ordinary verified listings. |
+| **17 enumerators** | Invitations expire **2026-09-08 08:18 UTC**. Teardown key = the 18 user ids in runbook §0.9, NOT the `+test` email pattern (`+enum1` matches no `%+test%`). Delete submissions BEFORE respondents — no FK cascade. |
 | **R-A6** — NCARES name ORDER unreliable | 5,301 rows split first-token-as-given-name while the source flags order unreliable. Recoverable, not lost: the verbatim string is in `metadata.import_extra.full_name` on all 8,222 rows. Do NOT "fix" by swapping the rule — that inverts the ones now correct. |
 | ~~**R-A1**~~ **DISCHARGED** | Counted, as the residual demanded: 31/56 tiler rows lost an age; **0** farming rows (that source has no DOB column). Material for PAPER intake, immaterial for machine extracts → closed as a sheet-design item. |
 | **R-A5** — one Appendix B box spans two slugs | 'Agriculture / Agro-processing' maps to `farming`, so an agro-processor is recorded as a farmer. Mapped on the dominant reading, not because the collision is resolved. Fix is a split box at the next sheet re-print. |
@@ -1931,6 +1998,65 @@ is the variable; file count tells you nothing.**
 twice reported to Awwal as success before the remote was checked. The file-capture recipe
 (`{ git push … > log 2>&1; echo $? > exit; }`) catches it; **the notification never does.** Verify a
 push by `git ls-remote origin main` against `git rev-parse HEAD`. Always.
+
+## 7u. Session 2026-09-05/06 — 13-50 closed, the field cohort onboarded, and three bad tests of my own
+
+### 13-50: nine residuals, and the one row that closed it
+The first reading (09-02) saw zeros it could not interpret. The second (09-06), after 6 jingle
+sessions, found the discriminating event: **one `/check-registration` call at 16:36:57 on 09-02 that
+minted `login`, not `wizard_resume`.** That single row separates "13-50 works" from "nothing was
+tried", which no amount of zero ever could.
+
+⭐ **R2 nearly went down as a failure.** 12 `wizard_resume` tokens minted 08-24 → 08-28 with **zero**
+audit rows is precisely the shape of an attribution fix that never fired. They all predate the 09-02
+deploy — they are the blind spot, observed. With no post-deploy mint to watch, R2 was discharged
+**structurally**: the audit write is inside `issueToken`, unconditional, and there is **exactly one**
+`insert(magicLinkTokens)` in the codebase, inside that same primitive. When you cannot observe the
+event, prove the event cannot happen unobserved.
+
+⚠️ **R4/R8/R9 were already ruled — in the same document whose ledger still said OPEN.**
+Record-vs-work drift with no distance at all between the record and the work. The ledger is what the
+CI guard and every status sweep read, so three settled decisions looked outstanding. Re-measured
+rather than trusted, because the evidence predated a 20× registry: R8 non-vacuous (intersect grew
+127 → 176), R9 same answer on a larger corpus (310 drafts), and **R4 corrected from four phantoms to
+five**.
+
+### ⚠️ THREE BAD TESTS OF MY OWN, IN ONE SESSION — the honest theme
+1. **RED-verifying the residual guard**, twice: first with injected text containing the word
+   "Closed" (which cancels the OPEN marker by design), then with a row missing its trailing `|` (so
+   `TABLE_ROW` never matched and the row was invisible — 14 parsed instead of 15). **I concluded
+   "the guard is not policing this story" and was wrong both times.** The third, well-formed
+   injection made it fire instantly.
+2. **The enumerator extractor**, whose leaver-detection found none while the chat plainly showed two
+   people leaving — the system lines have no `sender:` prefix, so they never matched the header
+   regex I checked them after.
+3. **`` becoming a literal backspace** through a Python heredoc, twice, silently disabling two
+   regexes. Same trap as earlier in the week.
+
+⭐ **The pattern: when a check reports "nothing found", suspect the CHECK before the world.** All
+three failed silently and all three looked like real findings. The tell is a negative result that
+arrives too cleanly — §2af's rule pointed at my own instruments rather than at the data.
+
+### The field cohort — 17 enumerators, extracted not transcribed
+The WhatsApp export already held name, email, LGA **and** the phone as message sender, so nobody had
+to be asked for anything again. Extracted programmatically: nineteen records copied by eye is how a
+digit goes missing, and `users.phone` is UNIQUE so a wrong number is expensive. Two withdrawals
+excluded (one by direct name match, one — "Bettina" — by an INFERENCE chain written into the script
+so it can be overruled). Runbook **§0** and **§0.9** carry provisioning, the ids, the onboarding
+tracker and a teardown executed as counts before being written down.
+
+⭐ **7 of 17 invitations FAILED on first attempt** — Resend's 10 req/sec. All recovered, because
+invitations go through a queue. A loop calling the provider directly would have silently dropped 7 of
+17: accounts present, healthy-looking, and seven people waiting for mail that was never coming.
+**After bulk provisioning, COUNT the completions — creations do not imply them.**
+
+### Also
+Invitation window 24h → 48h, and the number had been written **five times across two files** (three
+promising, two enforcing) so changing one made the system lie; now one constant, which immediately
+caught two tests carrying the old value. `13-67` carved to unblock `13-58`, with **AFAN/ASNAT** named
+by Awwal and the `metadata.association_name` design recorded because `registry_unified` exposes
+`metadata` but not `import_batch_id`. And 13-2's **R-A2 named the wrong gating story** — 13-38 is
+`done` and shipped something else; the gate is 13-58, whose slug is identical.
 
 ## 7t. Session 2026-09-04/05 — the channel opened, and the principal caught the defect
 
