@@ -502,6 +502,30 @@ export class ImportService {
           // consumer switches on.
           submittedAt: now,
           source: 'backfill' as const,
+          /*
+           * ⛔ `processed: true` IS LOAD-BEARING — omitting it BLINDED A SAFETY MONITOR.
+           *
+           * `submissions.processed` defaults to FALSE, and the ingestion health check reads
+           * `processed = false AND processing_error IS NULL` as "never became a respondent —
+           * those people are NOT on the register" (`ops-digest.worker.ts:197`). That predicate
+           * is a PROXY, and it was a sound one until this path existed: every other producer
+           * writes a submission FIRST and lets the pipeline create the respondent, so an
+           * unprocessed row really does mean a person who never landed.
+           *
+           * This importer inverts that order — the respondent is created in the SAME
+           * transaction, so the row arrives already reconciled and the pipeline has nothing
+           * left to do with it. Left at the default, all 8,278 imported rows were counted as
+           * people missing from the register when every one of them was on it
+           * (measured 2026-09-06: `stuck_with_NO_respondent = 0`).
+           *
+           * ⚠️ THE COST WAS NOT COSMETIC. The digest went permanently RED and says so in its own
+           * text — *"otherwise this stays red forever and stops being read"*. Worse, it MASKS the
+           * real thing: a genuine unprocessable submission tomorrow is 1 among 8,279 and
+           * invisible. A monitor that cannot go green cannot go red either.
+           * → [[pattern-monitor-measuring-something-else]]
+           */
+          processed: true,
+          processedAt: now,
         }));
         for (const part of chunk(submissionRows, INSERT_CHUNK)) {
           await tx.insert(submissions).values(part);

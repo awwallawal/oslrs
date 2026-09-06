@@ -262,12 +262,31 @@ describe('ImportService — real-DB dry-run → confirm → rollback', () => {
     expect(people).toHaveLength(3);
 
     const subs = await db
-      .select({ respondentId: submissions.respondentId, rawData: submissions.rawData })
+      .select({ respondentId: submissions.respondentId, rawData: submissions.rawData, processed: submissions.processed })
       .from(submissions)
       .where(inArray(submissions.respondentId, people.map((p) => p.id)));
 
     // ONE submission per imported respondent — not one for the batch, and none orphaned.
     expect(subs).toHaveLength(3);
+
+    /*
+     * ⛔ EVERY IMPORTED SUBMISSION MUST BE `processed = true`.
+     *
+     * The column defaults to FALSE, and the ingestion health monitor reads
+     * `processed = false AND processing_error IS NULL` as "never became a respondent —
+     * those people are NOT on the register". That proxy is sound for every other producer,
+     * which writes the submission first and lets the pipeline make the respondent. This path
+     * inverts it: the respondent exists in the same transaction, so the row is already
+     * reconciled and the pipeline has nothing to do.
+     *
+     * Left at the default it put 8,278 rows on prod into a permanent RED digest, every one of
+     * them describing a person who WAS on the register — and worse, it masked any genuine
+     * unprocessable submission behind that count. Guarded here because the failure is invisible
+     * in the import's own result: rowsInserted was correct, the rows were correct, and only a
+     * monitor twelve hours later disagreed.
+     */
+    const unprocessed = subs.filter((s) => !s.processed);
+    expect(unprocessed).toHaveLength(0);
     expect(new Set(subs.map((s) => s.respondentId)).size).toBe(3);
 
     const byPhone = new Map(people.map((p) => [p.phone, p.id]));
