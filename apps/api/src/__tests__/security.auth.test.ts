@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { INVITATION_EXPIRY_HOURS } from '../config/invitation.js';
 import supertest from 'supertest';
 import { app } from '../app.js';
 import { db } from '../db/index.js';
@@ -31,7 +32,18 @@ describe('Security: Authentication & Authorization', () => {
       vi.useRealTimers();
     });
 
-    it('should reject activation token after 24 hours', async () => {
+    /*
+     * Expressed RELATIVE to INVITATION_EXPIRY_HOURS (2026-09-05). This used a fake
+     * clock advanced to a LITERAL '2025-01-02T11:00:00Z  // +25h', which silently
+     * stopped testing anything the moment the window moved 24h -> 48h: 25 hours was
+     * then well inside it, so the token was valid and the assertion failed.
+     *
+     * Second site of the same defect in one change (the other was in
+     * auth.activation.test.ts). Both were invisible until the real value moved —
+     * which is precisely the argument for the shared constant: a hardcoded window in
+     * a TEST is the same defect as one in the code, and it hides for longer.
+     */
+    it(`should reject activation token after ${INVITATION_EXPIRY_HOURS} hours`, async () => {
       // 1. Set time to "Start"
       const startTime = new Date('2025-01-01T10:00:00Z');
       vi.setSystemTime(startTime);
@@ -49,8 +61,8 @@ describe('Security: Authentication & Authorization', () => {
         invitedAt: new Date(), // Will use mocked time
       });
 
-      // 3. Fast-forward 25 hours
-      const futureTime = new Date('2025-01-02T11:00:00Z'); // +25h
+      // 3. Fast-forward past the window — derived, never a literal date.
+      const futureTime = new Date(startTime.getTime() + (INVITATION_EXPIRY_HOURS + 1) * 60 * 60 * 1000);
       vi.setSystemTime(futureTime);
 
       // 4. Attempt activation (use helper with retry for Modulus 11 edge case)

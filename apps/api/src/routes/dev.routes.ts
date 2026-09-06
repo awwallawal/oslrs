@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { INVITATION_EXPIRY_HOURS } from '../config/invitation.js';
 import { EmailService } from '../services/email.service.js';
 
 const router = Router();
@@ -32,7 +33,7 @@ router.get('/email-preview/staff-invitation', (_req: Request, res: Response) => 
     roleName: 'Enumerator',
     lgaName: 'Ibadan North',
     activationUrl: 'http://localhost:5173/activate/sample-token-12345',
-    expiresInHours: 24,
+    expiresInHours: INVITATION_EXPIRY_HOURS,
     email: 'adewale.johnson@example.com',
   };
 
@@ -52,7 +53,7 @@ router.get('/email-preview/staff-invitation/text', (_req: Request, res: Response
     roleName: 'Enumerator',
     lgaName: 'Ibadan North',
     activationUrl: 'http://localhost:5173/activate/sample-token-12345',
-    expiresInHours: 24,
+    expiresInHours: INVITATION_EXPIRY_HOURS,
     email: 'adewale.johnson@example.com',
   };
 
@@ -71,7 +72,7 @@ router.get('/email-preview/staff-invitation/no-lga', (_req: Request, res: Respon
     fullName: 'Fatima Okonkwo',
     roleName: 'Verification Assessor',
     activationUrl: 'http://localhost:5173/activate/sample-token-67890',
-    expiresInHours: 24,
+    expiresInHours: INVITATION_EXPIRY_HOURS,
     email: 'fatima.okonkwo@example.com',
   };
 
