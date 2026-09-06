@@ -6,6 +6,7 @@ import { db } from '../db/index.js';
 import { users, roles } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 import { generateInvitationToken, hashInvitationToken, AppError } from '@oslsr/utils';
+import { INVITATION_EXPIRY_HOURS } from '../config/invitation.js';
 import { PhotoProcessingService } from '../services/photo-processing.service.js';
 import { StaffService } from '../services/staff.service.js';
 import { EmailService } from '../services/email.service.js';
@@ -214,6 +215,86 @@ describe('Auth Activation Integration', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('VALIDATION_ERROR');
+  });
+
+  /*
+   * ⭐ THE WINDOW IS ENFORCED WHERE THE CONSTANT SAYS — both sides of the boundary.
+   *
+   * The invitation lifetime used to be the bare number `24` written in FIVE places:
+   * three that set the text the email PROMISES, two that ENFORCE it. Nothing tied
+   * them together, so changing one made the system lie — an email promising 48h
+   * against a check allowing 24 locks people out while telling them they have time,
+   * and neither direction raises an error. Both groups now import
+   * INVITATION_EXPIRY_HOURS.
+   *
+   * These two tests are parameterised BY that constant rather than by a literal, so
+   * they move with it. If someone re-hardcodes the enforcement in auth.service.ts,
+   * the just-inside case fails — which is the drift that matters, because it is the
+   * one a human only discovers while standing in a room unable to log in.
+   */
+  it(`accepts an invitation just INSIDE the ${INVITATION_EXPIRY_HOURS}h window`, async () => {
+      const newToken = generateInvitationToken();
+      const nin = generateValidNin();
+      const invitedAt = new Date(Date.now() - (INVITATION_EXPIRY_HOURS - 1) * 60 * 60 * 1000);
+
+      await db.insert(users).values({
+          email: `inside-window-${Date.now()}@example.com`,
+          fullName: 'Inside Window',
+          roleId: fieldRoleId,
+          status: 'invited',
+          invitationToken: hashInvitationToken(newToken),
+          invitedAt,
+      });
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({
+            password: 'password123',
+            nin,
+            dateOfBirth: '1990-01-01',
+            homeAddress: '123 Test St, Ibadan',
+            bankName: 'Test Bank',
+            accountNumber: '0123456789',
+            accountName: 'Inside Window',
+            nextOfKinName: 'NOK Test',
+            nextOfKinPhone: '08012345678',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('active');
+  });
+
+  it(`rejects an invitation just OUTSIDE the ${INVITATION_EXPIRY_HOURS}h window`, async () => {
+      const newToken = generateInvitationToken();
+      const invitedAt = new Date(Date.now() - (INVITATION_EXPIRY_HOURS + 1) * 60 * 60 * 1000);
+
+      await db.insert(users).values({
+          email: `outside-window-${Date.now()}@example.com`,
+          fullName: 'Outside Window',
+          roleId: fieldRoleId,
+          status: 'invited',
+          invitationToken: hashInvitationToken(newToken),
+          invitedAt,
+      });
+
+      const res = await request
+        .post(`/api/v1/auth/activate/${newToken}`)
+        .send({
+            password: 'password123',
+            nin: generateValidNin(),
+            dateOfBirth: '1990-01-01',
+            homeAddress: '123 Test St, Ibadan',
+            bankName: 'Test Bank',
+            accountNumber: '0123456789',
+            accountName: 'Outside Window',
+            nextOfKinName: 'NOK Test',
+            nextOfKinPhone: '08012345678',
+        });
+
+      // Expired is an AUTH failure, not a validation one — assert the CODE, because
+      // a 401 for the wrong reason would pass a status-only check.
+      expect(res.status).toBe(401);
+      expect(res.body.code).toBe('AUTH_TOKEN_EXPIRED');
   });
 
   it('should activate account without selfie (backward compatible)', async () => {
@@ -581,9 +662,16 @@ describe('Auth Activation Integration', () => {
       const expiredToken = generateInvitationToken();
       const email = `validate-expired-${Date.now()}@example.com`;
 
-      // Create user with invitedAt 25 hours ago (past 24h expiry)
+      /*
+       * Past the window, expressed RELATIVE to the constant (2026-09-05). This read
+       * "25 hours ago (past 24h expiry)" — a literal that silently became WRONG the
+       * moment the window moved to 48h: 25 hours ago is now comfortably valid, so the
+       * test asserted an expiry that no longer happened. It failed loudly, which is
+       * the good outcome; a hardcoded window in a TEST is the same defect as one in
+       * the code, and it is caught only when someone changes the real value.
+       */
       const expiredDate = new Date();
-      expiredDate.setHours(expiredDate.getHours() - 25);
+      expiredDate.setHours(expiredDate.getHours() - (INVITATION_EXPIRY_HOURS + 1));
 
       await db.insert(users).values({
         email,

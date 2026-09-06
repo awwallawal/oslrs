@@ -31,6 +31,7 @@ import { TokenService } from './token.service.js';
 import { SessionService } from './session.service.js';
 import { PhotoProcessingService } from './photo-processing.service.js';
 import { IDCardService } from './id-card.service.js';
+import { INVITATION_EXPIRY_HOURS } from '../config/invitation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -660,7 +661,7 @@ export class StaffService {
           roleName: user.role?.name || 'Staff',
           lgaName: user.lga?.name,
           activationUrl,
-          expiresInHours: 24,
+          expiresInHours: INVITATION_EXPIRY_HOURS,
         },
         userId
       );
@@ -946,7 +947,7 @@ export class StaffService {
             roleName: roleRecord.name,
             lgaName,
             activationUrl,
-            expiresInHours: 24,
+            expiresInHours: INVITATION_EXPIRY_HOURS,
           },
           newUser.id
         );
@@ -1150,7 +1151,7 @@ export class StaffService {
         roleName: user.role?.name || 'Staff',
         lgaName: user.lga?.name,
         activationUrl,
-        expiresInHours: 24,
+        expiresInHours: INVITATION_EXPIRY_HOURS,
       },
       userId
     );

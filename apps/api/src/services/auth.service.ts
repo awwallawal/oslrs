@@ -21,6 +21,7 @@ import { MagicLinkService } from './magic-link.service.js';
 import { sendActivationComplete } from './staff-activation-notification.js'; // Story 13-59
 import { setReAuthValid, clearReAuth } from '../lib/reauth-grace.js';
 import pino from 'pino';
+import { INVITATION_EXPIRY_HOURS } from '../config/invitation.js';
 
 /**
  * Story 9-13 — `loginStaff` returns one of two shapes:
@@ -133,10 +134,10 @@ export class AuthService {
       return { valid: false, expired: false };
     }
 
-    // Check expiry (24 hours)
+    // Check expiry — window owned by config/invitation.ts, NOT written here.
     if (user.invitedAt) {
       const expiryDate = new Date(user.invitedAt);
-      expiryDate.setHours(expiryDate.getHours() + 24);
+      expiryDate.setHours(expiryDate.getHours() + INVITATION_EXPIRY_HOURS);
       if (new Date() > expiryDate) {
         return { valid: false, expired: true };
       }
@@ -178,10 +179,10 @@ export class AuthService {
         throw new AppError('AUTH_ALREADY_ACTIVATED', 'This account has already been activated.', 400);
     }
 
-    // Check expiry (24 hours)
+    // Check expiry — window owned by config/invitation.ts, NOT written here.
     if (user.invitedAt) {
       const expiryDate = new Date(user.invitedAt);
-      expiryDate.setHours(expiryDate.getHours() + 24);
+      expiryDate.setHours(expiryDate.getHours() + INVITATION_EXPIRY_HOURS);
       if (new Date() > expiryDate) {
         throw new AppError('AUTH_TOKEN_EXPIRED', 'Invitation token has expired.', 401);
       }
