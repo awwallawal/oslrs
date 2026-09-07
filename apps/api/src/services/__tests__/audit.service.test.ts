@@ -236,8 +236,16 @@ describe('AuditService', () => {
       //   person. Currently 0" — but nothing wrote such a row, so that 0 was a zero from a table
       //   that could not contain the thing it watched for. This action is what makes the trigger
       //   falsifiable; it records the COLLIDING RECORD's id, never the NIN.
+      // Story 13-67 R2 (2026-09-07) added 1:
+      //   OPERATOR_ASSOCIATION_VOUCH_ATTACHED ('operator.association_vouch_attached') → 65.
+      //   Awwal ruled that an association vouch attaches to someone who had already
+      //   registered themselves and was then MATCHED by the import dedup. Nothing on those
+      //   12 rows records the link — no import_batch_id, no imported_association source —
+      //   so this audit row and the `association_vouched_by_batch_id` metadata key are the
+      //   only trace that a third party claim was written onto a live citizen record, and
+      //   the only way to undo the run.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(64);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(65);
     });
 
     /**

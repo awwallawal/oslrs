@@ -45,6 +45,13 @@ export interface IngestRespondent {
     normalisation_warnings?: string[];
     imported_email?: string;
     import_extra?: Record<string, string>;
+    /**
+     * Story 13-67 — the vouching body. NOT set here: `planIngest` is pure and
+     * row-shaped, and the association name is a BATCH fact supplied by the operator
+     * at confirm. The service merges it in at the insert. Declared on the type so
+     * that merge is checked rather than cast.
+     */
+    association_name?: string;
   };
 }
 

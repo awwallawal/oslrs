@@ -123,6 +123,38 @@ describe('imports.routes', () => {
     expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({ dryRunToken: 'draft.mac', lawfulBasis: 'ndpa_6_1_e' }));
   });
 
+  /*
+   * Story 13-67 H2 (code review) — the ONLY place the operator's vouching body enters
+   * the system is this HTTP body key, and until this test nothing exercised it: the
+   * 12 association-identity tests call `ImportService.confirm()` directly, so
+   * `association_name` appeared exactly once in the repo (imports.routes.ts:99) and a
+   * rename to `associationName` — or dropping it from the destructure — left all
+   * 4,364 tests green while every future association import silently confirmed with
+   * NO vouching body. That is 8,000 rows that can never carry 13-58's badge, arriving
+   * through the one path an operator actually uses.
+   *
+   * RED-VERIFY: delete `association_name` from the route's destructure. This test must
+   * fail; nothing else in the suite will.
+   */
+  it('POST /confirm forwards association_name → associationName (snake_case body key)', async () => {
+    mockConfirm.mockResolvedValue({ batchId: 'b1', rowsInserted: 2, associationName: 'ASNAT', associationNameMissing: false });
+    const res = await request(buildApp())
+      .post('/admin/imports/confirm')
+      .send({ dry_run_token: 'draft.mac', lawful_basis: 'ndpa_6_1_e', association_name: 'ASNAT' });
+    expect(res.status).toBe(201);
+    expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({ associationName: 'ASNAT' }));
+  });
+
+  it('POST /confirm passes associationName: null when the body omits it — never a guess', async () => {
+    // The absence must survive the route too: no defaulting from the filename or the
+    // draft's source_description, both of which name the association in plain sight.
+    mockConfirm.mockResolvedValue({ batchId: 'b1', rowsInserted: 2, associationName: null, associationNameMissing: true });
+    await request(buildApp())
+      .post('/admin/imports/confirm')
+      .send({ dry_run_token: 'draft.mac', lawful_basis: 'ndpa_6_1_e' });
+    expect(mockConfirm).toHaveBeenCalledWith(expect.objectContaining({ associationName: null }));
+  });
+
   it('maps a service AppError to its HTTP status (DUPLICATE_FILE_HASH → 409)', async () => {
     mockDryRun.mockRejectedValue(new AppError('DUPLICATE_FILE_HASH', 'dup', 409, { existingBatchId: 'b0' }));
     const res = await request(buildApp())

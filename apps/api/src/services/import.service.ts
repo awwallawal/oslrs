@@ -120,6 +120,32 @@ function chunk<T>(arr: T[], size: number): T[][] {
 const VALID_PHONE = /^\+234\d{10}$/;
 const VALID_NIN = /^\d{11}$/;
 
+/**
+ * Story 13-67 — the ONE source for which a vouching body is meaningful.
+ *
+ * Kept as a local literal rather than imported from `import-sources.ts` so the
+ * association-name rules read in one place; the value is checked against the
+ * canonical config by the confirm-path test.
+ *
+ * ⚠️ EXPORTED for that test and for no other reason (code review L3). The drift test
+ * used to assert `getImportSourceConfig('imported_association')` against a hardcoded
+ * literal — the config agreeing with itself, which no drift in THIS constant could
+ * ever break. The assertion is only worth writing if it reads this binding.
+ */
+export const ASSOCIATION_SOURCE = 'imported_association';
+
+/**
+ * Story 13-67 AC4 — normalise an operator-supplied vouching body.
+ *
+ * Whitespace-only is ABSENCE, not a name: an operator who tabs past the field must
+ * not mint a batch whose badge would print an empty string. Returns null for absent.
+ */
+function normaliseAssociationName(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
 export interface DryRunParams {
   buffer: Buffer;
   originalFilename: string;
@@ -148,6 +174,15 @@ export interface ConfirmParams {
   dryRunToken: string;
   lawfulBasis: string;
   lawfulBasisNote?: string | null;
+  /**
+   * Story 13-67 AC4 — the accountable body that vouched for these people, supplied
+   * by the OPERATOR at confirm. Deliberately not inferred from `originalFilename`,
+   * `sourceDescription`, or any cell in the sheet: the badge 13-58 renders makes a
+   * claim on this body's behalf, so a guessed value would be a fabricated voucher.
+   * Only meaningful for `imported_association`; supplying it for any other source
+   * is rejected rather than silently dropped.
+   */
+  associationName?: string | null;
   actorId: string;
   ipAddress?: string;
   userAgent?: string;
@@ -160,6 +195,15 @@ export interface ConfirmResult {
   rowsMatchedExisting: number;
   rowsSkipped: number;
   rowsFailed: number;
+  /** Story 13-67 — what was stored as the vouching body (null when none was given). */
+  associationName: string | null;
+  /**
+   * Story 13-67 AC5 — TRUE when this was an association batch and no name was supplied.
+   * The import is NOT blocked (an association intake is still better on the register
+   * than off it), but the omission must be VISIBLE at the moment it happens rather than
+   * discovered later as 8,000 rows that can never carry a badge.
+   */
+  associationNameMissing: boolean;
 }
 
 export class ImportService {
@@ -284,6 +328,7 @@ export class ImportService {
   /** Commit a dry-run draft into `import_batches` + `respondents` transactionally. */
   static async confirm(params: ConfirmParams): Promise<ConfirmResult> {
     const { dryRunToken, lawfulBasis, lawfulBasisNote, actorId, ipAddress, userAgent } = params;
+    const associationName = normaliseAssociationName(params.associationName);
 
     if (!lawfulBasis || lawfulBasis.trim() === '') {
       throw new AppError('VALIDATION_ERROR', 'lawful_basis is required.', 400);
@@ -333,6 +378,24 @@ export class ImportService {
           existingBatchId: existingBatch[0].id,
         });
       }
+
+      /*
+       * Story 13-67 AC1/AC5 — a vouching body belongs to an ASSOCIATION batch and to
+       * nothing else. Reject rather than silently discard: a super-admin who typed
+       * "AFAN" against an ITF-SUPA upload has misunderstood which batch they are
+       * confirming, and dropping the value on the floor would let them believe the
+       * provenance was recorded when no row carries it. The batch is not yet written
+       * at this point, so the throw leaves nothing behind.
+       */
+      const isAssociationBatch = draft.source === ASSOCIATION_SOURCE;
+      if (associationName && !isAssociationBatch) {
+        throw new AppError(
+          'VALIDATION_ERROR',
+          `association_name applies only to ${ASSOCIATION_SOURCE} batches; this batch is ${draft.source}.`,
+          400,
+        );
+      }
+      const associationNameMissing = isAssociationBatch && associationName === null;
 
       const parsed = draft.parsedResult;
       const parsedRows = parsed.rows.map((r) => ({
@@ -396,6 +459,8 @@ export class ImportService {
           id: batchId,
           source: draft.source,
           sourceDescription: draft.sourceDescription,
+          // Story 13-67 AC1 — the operator's answer, never a guess from the filename.
+          associationName,
           originalFilename: draft.originalFilename,
           fileHash: draft.fileHash,
           fileSizeBytes: draft.fileSizeBytes,
@@ -443,7 +508,27 @@ export class ImportService {
          */
         const ids = plan.toInsert.map(() => uuidv7());
         const values = plan.toInsert.map((c, i) => {
-          const meta = c.respondent.metadata;
+          /*
+           * ⭐ Story 13-67 AC2 — THE VOUCHING BODY TRAVELS TO THE ROW.
+           *
+           * MERGED, never assigned over: `c.respondent.metadata` already carries the R2
+           * identity-ambiguity flags (`normalisation_warnings`), `imported_email`, and
+           * `import_extra.full_name` — the verbatim string R-A6 depends on to recover a
+           * mis-split name. Spreading preserves all of it.
+           *
+           * Written in the SAME transaction as the respondent and its submission,
+           * deliberately: a respondent whose provenance is missing is exactly the
+           * half-state AC3.4 exists to prevent. There is no second pass to fix it.
+           *
+           * Non-association batches contribute nothing here — `associationName` is null
+           * for them by the check above, so their metadata is byte-identical to before.
+           */
+          const meta = associationName
+            ? { ...c.respondent.metadata, association_name: associationName }
+            : c.respondent.metadata;
+          // ⚠️ Computed AFTER the merge. Before 13-67 this read the un-merged object; a
+          // row whose ONLY metadata was the association name would have been stored as
+          // `null` and silently lost its badge.
           const hasMeta = Object.keys(meta).length > 0;
           return {
             id: ids[i],
@@ -543,6 +628,8 @@ export class ImportService {
         details: {
           source: draft.source,
           lawfulBasis,
+          // Story 13-67 — who vouched is part of the compliance trail, not just a column.
+          associationName,
           rowsParsed: parsed.stats.rowsParsed,
           rowsInserted,
           rowsMatchedExisting,
@@ -557,11 +644,29 @@ export class ImportService {
         event: 'import.confirmed',
         batchId,
         source: draft.source,
+        associationName,
         rowsInserted,
         rowsMatchedExisting,
         rowsSkipped,
         rowsFailed,
       });
+
+      /*
+       * Story 13-67 AC5 — a missing name does NOT block the import, but it must be
+       * VISIBLE. An association batch confirmed without a vouching body produces rows
+       * that can never carry 13-58's badge, and at 8,000 rows that is not something to
+       * discover months later from an empty card.
+       */
+      if (associationNameMissing) {
+        logger.warn({
+          event: 'import.association_name_missing',
+          batchId,
+          source: draft.source,
+          rowsInserted,
+          message:
+            'Association batch confirmed with no association_name — these rows cannot render a provenance badge.',
+        });
+      }
 
       return {
         batchId,
@@ -570,6 +675,8 @@ export class ImportService {
         rowsMatchedExisting,
         rowsSkipped,
         rowsFailed,
+        associationName,
+        associationNameMissing,
       };
     });
   }

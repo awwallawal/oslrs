@@ -190,6 +190,42 @@ export interface RespondentMetadata {
    */
   imported_email?: string;
   import_extra?: Record<string, string>;
+  /**
+   * Story 13-67 — the accountable body that VOUCHED for this person, denormalised
+   * from `import_batches.association_name` at insert time (and by the one-shot
+   * `_backfill-association-identity.ts` for the two batches that predate the column).
+   *
+   * This is the READ PATH for 13-58's badge. It lives on the respondent rather than
+   * only on the batch because `registry_unified` — the canonical read every
+   * marketplace/insights surface aggregates over — exposes `metadata` but NOT
+   * `import_batch_id`. A batch-only design would force every badge read into a join
+   * or a change to the canonical view, which has its own governance rules.
+   *
+   * Set ONLY for `source = 'imported_association'`. Its ABSENCE on such a row is
+   * meaningful: nobody named a vouching body, so no badge may be rendered — never
+   * fall back to `sourceDescription`, which is an operator note, or to a bare
+   * "✓ Verified", which R1 locks.
+   *
+   * ⚠️ Written by JSONB MERGE, never by replacing `metadata` — this column also
+   * carries `normalisation_warnings` (the R2 identity-ambiguity flags) and
+   * `import_extra.full_name` (the verbatim string R-A6 needs for name-order recovery).
+   */
+  association_name?: string;
+  /**
+   * Story 13-67 R2 (Awwal 2026-09-07) — the batch whose list vouched for this person,
+   * set ONLY on respondents the import MATCHED instead of inserting.
+   *
+   * Its ABSENCE alongside a present `association_name` means the ordinary case: the row
+   * was written by that batch and `respondents.import_batch_id` already records which.
+   * Its PRESENCE means the opposite — this person registered themselves, the import found
+   * them by phone/NIN dedup, and nothing on their own row would otherwise record the
+   * link. It is the only way to tell a matched vouch from a hand-typed one, and the only
+   * way to undo the one-shot that wrote it.
+   *
+   * ⚠️ Do NOT render this. It is provenance for operators and for `audit_logs`; the badge
+   * reads `association_name`.
+   */
+  association_vouched_by_batch_id?: string;
 }
 
 export const respondents = pgTable('respondents', {

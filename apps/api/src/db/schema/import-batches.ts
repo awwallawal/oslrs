@@ -56,6 +56,26 @@ export const importBatches = pgTable('import_batches', {
   source: text('source').notNull(),
   sourceDescription: text('source_description'),
 
+  /*
+   * Story 13-67 — the ACCOUNTABLE BODY THAT VOUCHED for this batch's people.
+   *
+   * NOT a general "who sent this file" — that is `sourceDescription`, which is an
+   * operator note and reads like one ("ASNAT Tiler Association (Oyo State) - WhatsApp
+   * intake, 56 clean rows of 70..."). A badge cannot say that. This column holds the
+   * name a badge can print: `ASNAT`, `AFAN`.
+   *
+   * Nullable on purpose: `imported_itf_supa` (a public register) and `imported_other`
+   * legitimately have no vouching body, and a NOT NULL here would force operators to
+   * invent one. Absence means "nobody vouched", which is a true and useful statement.
+   *
+   * ⚠️ This column is the SOURCE OF TRUTH; `respondents.metadata.association_name` is a
+   * denormalised copy written at insert. The copy exists because `registry_unified`
+   * exposes `metadata` but NOT `import_batch_id`, so a batch-column-only design would
+   * force every badge read into a join or a change to the canonical view. Keep both in
+   * step: anything that sets this must also write the respondent copy.
+   */
+  associationName: text('association_name'),
+
   // File identity + integrity
   originalFilename: text('original_filename').notNull(),
   fileHash: text('file_hash').notNull().unique(), // SHA-256 hex; prevents duplicate uploads

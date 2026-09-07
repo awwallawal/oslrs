@@ -162,6 +162,19 @@ export const AUDIT_ACTIONS = {
   // surname-first respondent rows after the given/family split).
   OPERATOR_RESPONDENT_NAME_CANONICALIZED: 'operator.respondent_name_canonicalized',
   /**
+   * Story 13-67 R2 (Awwal 2026-09-07) — an operator attached an ASSOCIATION VOUCH to a
+   * respondent the import MATCHED rather than inserted.
+   *
+   * These 12 people registered themselves and were then found on an association list by
+   * phone/NIN dedup, so nothing on their own row records the link — no `import_batch_id`,
+   * no `source = imported_association`. The write annotates a live citizen record with a
+   * THIRD PARTY claim that a marketplace badge will then print in that body name. The
+   * respondent did not ask for it and cannot be reached to confirm it, which is exactly
+   * the shape that earns an audit row (same reasoning as OPERATOR_RESPONDENT_EMAIL_CORRECTED).
+   * The row also carries the vouching batch id, so the run is reversible.
+   */
+  OPERATOR_ASSOCIATION_VOUCH_ATTACHED: 'operator.association_vouch_attached',
+  /**
    * 13-4 (2026-08-06) — an operator corrected a MISTYPED contact email and lifted the bounce
    * suppression it caused. Distinct from RESPONDENT_SELF_UPDATED: the respondent did not ask for
    * this and cannot be reached to confirm it, which is exactly why it must be traceable.

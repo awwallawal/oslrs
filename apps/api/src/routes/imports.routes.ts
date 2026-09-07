@@ -96,7 +96,10 @@ router.post(
 /** POST /api/v1/admin/imports/confirm */
 router.post('/confirm', importConfirmRateLimit, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { dry_run_token, lawful_basis, lawful_basis_note } = req.body as Record<string, string>;
+    const { dry_run_token, lawful_basis, lawful_basis_note, association_name } = req.body as Record<
+      string,
+      string
+    >;
     if (!dry_run_token) {
       throw new AppError('VALIDATION_ERROR', 'dry_run_token is required.', 400);
     }
@@ -105,6 +108,16 @@ router.post('/confirm', importConfirmRateLimit, async (req: Request, res: Respon
       dryRunToken: dry_run_token,
       lawfulBasis: lawful_basis,
       lawfulBasisNote: lawful_basis_note ?? null,
+      /*
+       * Story 13-67 AC4 — the operator's own words, passed through untouched.
+       *
+       * ⛔ Do NOT default this from `req.file.originalname`, the draft's
+       * `source_description`, or anything parsed out of the sheet. The badge 13-58
+       * renders asserts that a NAMED BODY vouched for this person; a value derived
+       * from a filename would put words in that body's mouth. Absent stays absent —
+       * the service records the omission instead of inventing a voucher.
+       */
+      associationName: association_name ?? null,
       actorId,
       ipAddress,
       userAgent,
