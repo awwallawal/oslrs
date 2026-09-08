@@ -1,6 +1,15 @@
 # Story 13.67: Association identity as structured data — the name the badge will say
 
-Status: review
+Status: done
+
+> ✅ **CLOSED AT ADJUDICATION 2026-09-08.** Both backfill phases applied and verified on prod
+> (deploy `9e8235b`): 56 / 8,222 / 11, with the JSONB merge intact. R1 discharged, R2 ruled by
+> Awwal and built as phase 2, R3 ruled here and written into 13-58's AC4. Nothing open.
+>
+> ⛔ **13-58 is now unblocked and owns the next step** — and its AC4 was CORRECTED here: the badge
+> renders on the PRESENCE of `metadata.association_name`, never on `source`, or the 11 people
+> phase 2 vouched for (all `source = public`) would see nothing. Ordering remains binding:
+> **13-58 → then open `PIPELINE_EXCLUDED_STATUSES` (13-2 R-A2)**, never the reverse.
 
 > 🎯 **PICKING THIS UP COLD? READ [§Session Record](#-session-record--code-review--r2-ruling-2026-09-06--2026-09-07) FIRST** (near the bottom, after
 > the Dev Agent Record). Everything below this line is the story AS CARVED on 2026-09-05; the
@@ -207,7 +216,7 @@ Open items this story has NOT discharged. Each names what reopens or closes it �
 
 | ID | Residual | State | Close / reopen trigger |
 |----|----------|-------|------------------------|
-| **R1** — AC3's backfill has not run on prod | The 8,278 live rows still carry no `association_name`. The code is written, rehearsed on `app_test`, and refuses to write against a database that disagrees with the ruling — but a one-shot that has not been fired is a fix that never fires. | **DISCHARGE-ON-DEPLOY — OPEN.** Blocks `done`, not the commit. | Deploy (so `db:push` lands the column), then `pnpm tsx scripts/_backfill-association-identity.ts --dry-run` on the VPS: expect **56 / 8,222**, `alreadyTagged: 0`. Apply, then re-run `--dry-run` and read `alreadyTagged` = **8,278**. Tracked in `docs/runbooks/backfill-operator-residuals.md` §A. |
+| **R1** — AC3's backfill has not run on prod | The 8,278 live rows still carry no `association_name`. The code is written, rehearsed on `app_test`, and refuses to write against a database that disagrees with the ruling — but a one-shot that has not been fired is a fix that never fires. | **✅ DISCHARGED 2026-09-08 on deploy `9e8235b`.** Both phases applied and verified independently from the database, not from the script report: 56 / 8,222 / 11, `association_name` AFAN 8,233 + ASNAT 56, 11 vouch-traces all `source = public`, 11 audit rows, and the JSONB merge intact (8,278 keep `import_extra`). ⭐ The dry-run REFUSED first — ledger 12 vs predicted 11 — and chasing rather than overriding found two sheet rows matching one respondent. Expectation corrected to 11. | Deploy (so `db:push` lands the column), then `pnpm tsx scripts/_backfill-association-identity.ts --dry-run` on the VPS: expect **56 / 8,222**, `alreadyTagged: 0`. Apply, then re-run `--dry-run` and read `alreadyTagged` = **8,278**. Tracked in `docs/runbooks/backfill-operator-residuals.md` §A. |
 | ~~**R2**~~ — the 12 respondents the AFAN import MATCHED rather than inserted | 13-2 records the farming intake as **8,222 inserted / 12 matched**. A matched row keeps its ORIGINAL `import_batch_id`, so neither the confirm-path merge nor phase 1 of the backfill reaches it. Those 12 were on AFAN's list and had already self-registered — the most active cohort in the batch. | ⭐ **RULED 2026-09-07 (Awwal): the vouch ATTACHES** — "yes ⇒ a second small backfill". **BUILT** as phase 2 of the same one-shot, 6 tests. **RESOLVED in code; the write itself rides R1's deploy.** | Closes with R1: the phase-2 probe `SELECT count(*) FROM respondents WHERE metadata ->> 'association_vouched_by_batch_id' IS NOT NULL` must read **12**. ⛔ **Reopens 13-58's AC4** — see R3. |
 | **R3** — 13-58's AC4 now contradicts the R2 ruling | AC4 says the badge renders "ONLY for association sources — never for `public`". The 12 people R2 just vouched for **are `public`**: they registered themselves and the import matched them. A source-keyed render condition shows them nothing, and the ruling becomes a fix that never fires — this project's most-repeated defect class. | **✅ RULED AT ADJUDICATION 2026-09-07 — AC4 CORRECTED, R3 CLOSED HERE.** The escalation was right and so was refusing to edit the AC unilaterally. Ruling: **the badge renders on the PRESENCE of `metadata.association_name`, never on `source`.** AC4's INTENT is unchanged — never badge anyone no association vouched for — but `source` was only ever a PROXY for that, and it fails in the direction that silently drops the twelve. Written into 13-58 AC4 as a struck-and-replaced clause with a two-directional RED-verify (a `public` row WITHOUT the key renders nothing; a `public` row WITH it renders the correct body), plus an explicit warning not to re-add a `source` check "for safety" — that re-introduces the bug and looks correct until someone counts the missing twelve. **13-58 now owns the implementation; nothing further is open on 13-67 for this.** | The condition must key on the PRESENCE of `metadata.association_name`, not on `source`. Written into 13-58 as a dated ⛔ block above its ACs. Closes when 13-58 is built with the name-keyed condition and its RED-verify asserts a `public` row WITHOUT the key renders no badge. |
 
@@ -430,6 +439,55 @@ than the dev report's 401 for the same reason — the concurrent session's scrip
    the service branches on rather than a copy of the literal. Do not re-inline it.
 5. **Phase 1 and phase 2 are different predicates over different people.** Never sum their counts
    into one "rows updated" figure; the CLI reports them separately on purpose.
+
+## ✅ R1 DISCHARGED ON PROD — 2026-09-08, deploy `9e8235b`
+
+Both phases applied and **independently verified**, not read from the script's own report.
+
+| | predicted | updated |
+|---|---|---|
+| phase 1 — ASNAT | 56 | **56** |
+| phase 1 — AFAN | 8,222 | **8,222** |
+| phase 2 — AFAN (matched) | 11 | **11** |
+
+Read back straight from the database afterwards: `association_name` = **AFAN 8,233 / ASNAT 56**;
+`association_vouched_by_batch_id` on **11** rows, **all `source = public`** — exactly the R2 cohort
+and nobody else; **11** `operator.association_vouch_attached` audit rows.
+
+⭐ **THE MERGE HELD, which was the single most destructive thing this could have got wrong.**
+After the write, **8,278** rows still carry `import_extra` and **8,279** still carry
+`normalisation_warnings`. A `SET metadata = '{…}'` would have destroyed the R2 identity-ambiguity
+flags and the verbatim `full_name` that R-A6 depends on for recovery. It did not.
+
+### ⭐ The dry-run refused, and it was RIGHT — the ledger said 12, the truth is 11
+
+Phase 2 predicted **11** against a ledger figure of **12** and the guard refused to write. The
+review's instruction was explicit — *"if any number differs, that IS the finding; do not reach for
+`--accept-count-drift` to make it go away"* — so it was chased, not waved through:
+
+```
+matched dispositions      : 12
+with a hash               : 12
+DISTINCT hashes           : 11   <-- the answer
+hashes that resolve       : 12
+DISTINCT respondent ids   : 11
+people matched more than once: 1  (019e4422… twice)
+```
+
+**Two different rows in the AFAN sheet matched the SAME existing respondent.** The twelfth was never
+a missing person; it was one person counted twice. `willUpdate = 11` was correct all along — the
+resolution code already de-duplicated (`new Set` over the resolved ids); only the *expectation* was
+wrong, inherited from a ledger figure that counts DISPOSITIONS.
+
+⚠️ **This is a SECOND variant of "not every matched disposition is a person", distinct from the
+`nin_match_in_batch` case the review found.** There, a sheet row duplicated an earlier sheet row and
+carried NO hash. Here, two sheet rows each carried a hash and both resolved to one existing
+registrant. **A count that means DISPOSITIONS must never be compared against a count that means
+PEOPLE** — and the guard existed precisely so a human had to notice the difference.
+
+`storyExpectedMatchedRows` corrected 12 → 11 in `association-identity-backfill.ts`, with the
+reasoning at the constant so the next reader does not repeat this investigation, and the refusal
+test re-pointed to 11 (21/21 green).
 
 ## Change Log
 

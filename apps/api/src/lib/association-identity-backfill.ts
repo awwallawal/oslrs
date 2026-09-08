@@ -76,7 +76,27 @@ export const ASSOCIATION_BATCH_IDENTITIES: readonly AssociationBatchIdentity[] =
     batchId: '01a072ae-83e7-7e8f-902d-590f0c589c74',
     associationName: 'AFAN', // All Farmers Association of Nigeria — the farming intake
     storyExpectedRows: 8222,
-    storyExpectedMatchedRows: 12, // 8,222 inserted / 12 matched — Awwal's ruling 2026-09-07
+    /*
+     * ⭐ ELEVEN, not twelve — corrected 2026-09-08 after the prod dry-run, and the
+     * distinction is the whole point of this field.
+     *
+     * 13-2's ledger records **12 matched dispositions**, and this constant was seeded
+     * from that figure. The dry-run then predicted 11 and the guard refused to write,
+     * exactly as designed. Chasing it rather than reaching for --accept-count-drift
+     * found the cause: **12 dispositions, but only 11 DISTINCT hashes** — two different
+     * rows in the AFAN sheet matched the SAME existing respondent (`019e4422…` twice).
+     *
+     * So the twelfth was never a missing person; it was one person counted twice. The
+     * resolution code was already right (`new Set` on the resolved ids); only this
+     * expectation was wrong.
+     *
+     * ⚠️ This is a SECOND variant of "not every matched disposition is a person",
+     * distinct from the `nin_match_in_batch` case the review found: there, a sheet row
+     * duplicated another sheet row and carried NO hash. Here, two sheet rows each
+     * carried a hash and both resolved to one existing registrant. A count that means
+     * DISPOSITIONS must never be compared against a count that means PEOPLE.
+     */
+    storyExpectedMatchedRows: 11, // 8,222 inserted; 12 matched dispositions = 11 distinct people
   },
 ];
 

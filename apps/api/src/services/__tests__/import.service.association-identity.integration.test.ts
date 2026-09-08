@@ -777,11 +777,16 @@ describe('Story 13-67 R2 — the vouch attaches to matched respondents (Awwal 20
     expect(asnat.resolvedRespondentIds).toHaveLength(0);
   });
 
-  it('REFUSES when the resolvable matches disagree with 13-2 ledger figure of 12', async () => {
+  /*
+   * The expectation is 11, not the ledger's 12 — see the constant's comment. 12 matched
+   * DISPOSITIONS in the AFAN batch resolve to 11 distinct PEOPLE, because two sheet rows
+   * matched the same existing respondent. Confirmed on prod 2026-09-08.
+   */
+  it('REFUSES when the resolvable matches disagree with the expected figure of 11', async () => {
     // The fixture has 2 where prod recorded 12 — the same guard phase 1 grew, on the
     // number that can actually fail. `updatedRows === predicted` never could.
     await expect(applyAssociationMatchedBackfill(db)).rejects.toThrow(
-      /reports 2 matched respondent\(s\) with a resolvable hash, but the 13-2 ledger recorded 12/,
+      /reports 2 matched respondent\(s\) with a resolvable hash, but the 13-2 ledger recorded 11/,
     );
     const [, afan] = await predictAssociationMatchedBackfill(db);
     expect(afan.alreadyTagged).toBe(0); // refused BEFORE writing anything
