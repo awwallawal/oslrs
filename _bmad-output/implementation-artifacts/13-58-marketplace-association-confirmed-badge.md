@@ -96,6 +96,56 @@ That is not a scheduling preference — it is the difference between a testable 
 > ⚠️ This is a real AC change and it is **Awwal's to confirm at build time**, not the badge dev's to
 > assume. Flagged here rather than edited into AC4 silently.
 
+## 🔌 The plumbing does NOT exist — scoped at adjudication 2026-09-08
+
+⛔ **This is not a badge component. It is four layers, and the badge is the last one.** Measured on
+prod today, so nobody re-derives it:
+
+| what | state |
+|---|---|
+| `respondents.metadata.association_name` | ✅ **populated** — AFAN 8,233, ASNAT 56 (13-67, deploy `9e8235b`) |
+| `marketplace_profiles` association column | ❌ **does not exist** |
+| `marketplace-extraction.worker.ts` reading `respondents.metadata` | ❌ **never does** |
+| `associationName` in the marketplace service / controller | ❌ **appears nowhere** |
+
+So the name is on the respondent and the marketplace reads the PROFILE. **Nothing connects them.**
+
+### The four layers, in the order they must be built
+
+1. **Extraction** — carry `metadata.association_name` onto the profile as it is built.
+   `verifiedBadge` (`marketplace.schema:55`) is the existing shape to follow: a column on
+   `marketplace_profiles`, set at extraction, read by the service.
+2. **API** — expose it in the search and profile responses. `verifiedBadge` shows the path
+   (`marketplace.service.ts:193, 270`).
+3. **UI** — the badge, beside `GovernmentVerifiedBadge` in `WorkerCard` and
+   `MarketplaceProfilePage`, keyed on **`association_name` presence** (AC4 as corrected).
+4. **THEN** open `PIPELINE_EXCLUDED_STATUSES` — 13-2 R-A2, and only after 1–3 are live.
+
+### ⛔ THE SEQUENCING RISK, stated because the obvious plan gets it wrong
+
+The intuitive order is *"open the gate, then build the badge"*. **That costs a second production
+backfill.** The 8,278 imported respondents have **no marketplace profile at all** today — extraction
+skips them by status. The moment the gate opens, extraction runs and **creates 8,278 profiles**. If
+it is not yet carrying `association_name`, all 8,278 materialise badge-less and need a second
+backfill over live rows to repair.
+
+**Extraction must carry the name BEFORE the gate opens.** Opening the gate is the last action, and
+it is the one that turns 8,278 consenting people into findable ones in a single deploy.
+
+### The number that says why this story matters
+
+| | |
+|---|---|
+| `marketplace_profiles` today | **295** (of 351 `active` respondents) |
+| `imported_unverified` | **8,278** |
+| …of those, with a marketplace profile | **0** |
+| …of those, with `consent_marketplace = true` | **8,278** |
+
+⭐ **Every one of the 8,278 consented to being listed. Not one is.** This is not a data-quality or
+consent problem — the extraction worker checks `PIPELINE_EXCLUDED_STATUSES`, sees
+`imported_unverified`, and skips. One constant stands between 8,278 people and an employer finding
+them.
+
 ## Acceptance Criteria
 
 1. **AC1 — Tier-1 badge.** A card whose respondent is `source = imported_association` and not yet
