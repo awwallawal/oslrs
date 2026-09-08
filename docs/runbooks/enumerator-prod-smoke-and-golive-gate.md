@@ -81,19 +81,31 @@ resend-webhook  resend_webhook.recorded  type=delivered  campaignId=staff-invita
 ⭐ **Grep the logs by `userId`, not by email.** And treat `delivered` from the Resend webhook as the
 proof — `sent` only means Resend accepted it.
 
-### 0.5 ⏰ THE 24-HOUR CLOCK — the constraint that shapes a 20-person rollout
+### 0.5 ⏰ THE 48-HOUR CLOCK — the constraint that shapes a 20-person rollout
 
-`auth.service.ts:136` — the invitation expires **24 hours after `invited_at`**, hard. Not 24 hours
-after first click, not extendable.
+⚠️ **CORRECTED 2026-09-08. This section said 24 hours until now** — the window was raised to 48 on
+2026-09-06 (`INVITATION_EXPIRY_HOURS`, deploy `45cae26`) and this runbook was not updated in the same
+pass. An operator following the stale text would have provisioned a whole cohort a day earlier than
+necessary. [[pattern-a-record-about-the-work-is-not-the-work]], in the document that exists to stop
+exactly that.
 
-**So do NOT bulk-create 20 accounts days ahead of the trial.** Provision them the morning people are
-in the room to activate, or you will spend the first hour on
-`POST /api/v1/staff/:userId/resend-invitation` (itself rate-limited — `RESEND_LIMIT_TTL` is 24h).
+The invitation expires **`INVITATION_EXPIRY_HOURS` after `invited_at`** — currently **48**, hard,
+not from first click and not extendable. ⚠️ **Do not re-type the number into this runbook.** It is
+one constant in `apps/api/src/config/invitation.ts`, deliberately, because it used to be written
+five times across two files: three that set what the email PROMISES and two that ENFORCE it, so
+changing one made the system lie. Read the constant.
+
+**Still do NOT bulk-create a cohort days ahead.** 48 hours covers a weekend, not a week. Provision
+them the morning people are ready to activate, or the trial opens with
+`POST /api/v1/staff/:userId/resend-invitation` calls that are themselves rate-limited
+(`RESEND_LIMIT_TTL` = 24h).
 
 Check who has not activated:
 
 ```sql
-SELECT email, invited_at, invited_at + interval '24 hours' AS expires_at
+-- Interval must match INVITATION_EXPIRY_HOURS. If you edit one, edit both.
+SELECT email, invited_at, invited_at + interval '48 hours' AS expires_at,
+       round(extract(epoch FROM (invited_at + interval '48 hours' - now()))/3600, 1) AS hours_left
 FROM users WHERE status = 'invited' ORDER BY invited_at;
 ```
 
@@ -245,6 +257,60 @@ fresh token and a fresh 48h. It is rate-limited per user (`RESEND_LIMIT_TTL` = 2
 button to lean on for a whole cohort — which is the argument for provisioning the morning people are
 ready, per 0.5.
 
+#### ⛔ 0.9a — THE TEARDOWN CANNOT RUN BLIND. Observed 2026-09-08, 48 hours in.
+
+**The predicate below would have deleted two REAL, CONSENTING registrants.** This is not a
+hypothetical hardening note; it is what the data already looks like.
+
+Two enumerators practised by registering **themselves**, through the correct flow:
+
+| enumerator account | person registered | LGA | when |
+|---|---|---|---|
+| `oladokuncomfort77+test@gmail.com` | **Comfort Oladokun** | Lagelu | 2026-09-06 20:18 |
+| `faaizbadmus+test@gmail.com` | **Faaiz Badmus** | Ibadan North | 2026-09-07 15:20 |
+
+Both match `submitter_id IN (the 18 test ids)` **and** `created_at BETWEEN trial_start AND
+trial_end`. Neither carries the `ZZSMOKE` tag. **Tagged rows: 0. Rows from test accounts: 2.**
+
+⚠️ **Bounding by time AND submitter is NOT sufficient, and it is worth being precise about why.**
+Those two conditions describe *who typed it and when*. What separates practice data from real data
+is **whether a real person consented** — and no column records that. A test account is perfectly
+capable of capturing a genuine registrant, which is exactly what these two did, and it is the
+sensible way to rehearse.
+
+⭐ **So the teardown produces a LIST first, and a human confirms each row is not a real person
+before anything is deleted.** At trial volume that is trivial — 2 rows in 48 hours — and it is
+honest about what the data actually is. Deleting a real registrant to tidy up practice data is a
+far worse outcome than leaving practice data in the register: the first is a person removed from a
+government record they consented to join; the second is a number slightly wrong for a week.
+
+**Run this BEFORE the delete, and read every row:**
+
+```sql
+-- Everything a trial account captured. Read the NAMES. Anyone real stays.
+SELECT r.id, r.first_name, r.last_name, r.lga_id, r.created_at::timestamp(0),
+       u.email AS captured_by,
+       (upper(r.last_name) LIKE '%ZZSMOKE%') AS tagged_as_practice
+FROM respondents r
+JOIN users u ON u.id::text = r.submitter_id
+WHERE u.id IN ( /* the 18 ids */ )
+  AND r.created_at BETWEEN :trial_start AND :trial_end
+ORDER BY r.created_at;
+```
+
+Then delete **by explicit id list**, built from that review — never by re-running the predicate.
+
+⚠️ **Tell the enumerators the rule, and tell them EARLY.** Every untagged row created from here on
+is undecidable after the fact, and the cost of guessing wrong is deleting a real person. The
+message that removes the ambiguity:
+
+> *If you register a real person who agrees to join the register, that is good — tell us, because we
+> KEEP those. If you are inventing someone to practise with, put **ZZSMOKE** as the surname so we can
+> remove it cleanly afterwards.*
+
+Sent to the group 2026-09-08. Anything captured before that message needs the row-by-row review
+above; anything after it should be unambiguous.
+
 #### ⭐ Teardown — child-first, and VERIFIED AS COUNTS BEFORE ANY DELETE
 
 Run the SELECT form first, every time. It is the same predicate as the delete, so a surprising number
@@ -314,7 +380,7 @@ database, and seven people would sit waiting for an email that was never going t
 
 ### 0.8 Handover to §B
 
-The account is `invited`. The person clicks the activation URL **within 24 hours**, sets a password,
+The account is `invited`. The person clicks the activation URL **within the invitation window (48h — see 0.5)**, sets a password,
 and lands as `active`. From there §B's test-data protocol applies unchanged — and it should be read
 BEFORE the first submission, not after.
 
