@@ -983,34 +983,79 @@ dominated by one association and distort browse. Decide it once real query patte
 | ~~**R7**~~ | ✅ **RULED 2026-09-09 — widen the extraction backfill script's `source` predicate, not an import-time enqueue.** See §5a. | Still BLOCKS 13-2 R-A2, but the *mechanism* is no longer an open question — R-A2 executes it. |
 | ~~**Task 5**~~ | ✅ **RULED 2026-09-09 — KEEP.** | The dev's "revert it if you disagree" offer is closed. |
 
-### §7 — If I were adjudicating this, here is where I would push
+### §7 — WHERE ADJUDICATION SHOULD PUSH
 
-1. **Discharge R7 before R1.** R7 is the only finding that changes another story's plan. The cheapest
-   proof is a prod `SELECT` — imported respondents with `consent_marketplace = true` and no
-   `marketplace_profiles` row — followed by tracing which code path could ever create one. If that
-   trace comes back empty, R-A2 is not a one-line change and its story needs rewriting **before**
-   anyone schedules it.
-2. **Treat H3 as a process finding, not a prose fix.** The false claim was copied into four files
-   because it was *plausible* and nobody traced it to where it executes. That is
-   [[pattern-ship-a-fix-that-never-fires]] wearing a different hat — the fix here being a *plan*.
-   Worth a line in the handoff's playbook: **a sequencing argument is a claim about executed code and
-   needs the same trace a fix does.**
-3. **The H1 class is under-guarded and this story only closed one instance.** R1 is enforced by
-   per-component tests, but the breach was in *page chrome around* the components. Grep the app for
-   other blanket trust language (`/\bverified\b/i` outside the badges) before the gate opens — the
-   marketplace is about to gain 8,278 cards the old copy was never written for. A single suite-level
-   guard over public marketplace surfaces would be worth more than three more per-badge assertions.
-4. **Re-run the gates on a machine above 3 GB free.** Everything here is green, but the web suite's
-   one red was environmental-by-isolation rather than environmental-by-proof, and this session never
-   met the documented preflight.
-5. **Sharding should probably be the documented default**, not a workaround I reached for. Four API
-   shards finish in ~5 minutes total where the unsharded run exceeds a 10-minute cap. If the pre-push
-   hook takes 8–15 minutes, that number may be movable.
+> ⚠️ **UPDATED 2026-09-11, after the close-out pass (commit `27423ff`).** The list below was
+> written by the reviewer on 2026-09-08/09, before the session crashed. **Four of its five items
+> have since been acted on**, so it is re-issued rather than left standing — an adjudication agent
+> reading the original would re-walk closed ground and, worse, would trust item 3's description of
+> a guard that has since been rebuilt. The original items are kept with their outcomes, because
+> *what they turned out to be worth* is the useful part.
+
+#### What the pre-crash list asked for, and what happened
+
+| # | The ask | Outcome |
+|---|---|---|
+| 1 | **Discharge R7 before R1** — prove by prod `SELECT` + a code trace that opening the gate creates zero profiles | **Trace DONE at review (H3); the prod `SELECT` is still owed.** The mechanism was then ruled by Awwal (widen the backfill predicate) and **13-2's R-A2 was corrected in place**, so the wrong instruction is no longer sitting in the next story. ⚠️ Still open: R7 is *ruled*, not *implemented* — see below. |
+| 2 | **Treat H3 as a process finding** — a sequencing argument is a claim about executed code | **STANDS, and is now stronger.** Still owed a line in the handoff playbook. |
+| 3 | **The H1 class is under-guarded; grep for other blanket trust language; a suite-level guard would be worth more than three more per-badge assertions** | ✅ **DONE, and the reviewer was right about the size of it.** The grep found **five more live public pages** and a **third** test pinning the claim. The suite-level guard exists: `trust-claims.app-wide.test.ts`. |
+| 4 | **Re-run the gates above 3 GB free** | ✅ **DONE** — 3.7 GB, all 8 shards, zero failures. The route-resolution flake did not recur (third independent non-recurrence). |
+| 5 | **Sharding should probably be the documented default** | **STANDS, unactioned.** Four-way shards finish comfortably; two unsharded runs were killed at the 600 s cap. Still a playbook edit nobody has made. |
+
+#### What is actually live for adjudication now
+
+1. ⛔ **R7 is RULED but NOT IMPLEMENTED, and it is inert by design — which is exactly how it gets
+   lost.** Widening `_backfill-marketplace-extraction.ts`'s `source` predicate does nothing until
+   the gate opens, so there is no test that can fail and no symptom to notice. The only thing
+   standing between this and a silent drop is the corrected **13-2 R-A2** text.
+   **Verify the correction is really there** (`git show 27423ff -- ...13-2-...md`) rather than
+   trusting this paragraph — that is the whole lesson of the thing being corrected.
+   → [[pattern-ship-a-fix-that-never-fires]]
+2. **R2 is the one with a number to get right.** Before running the card-fields backfill, predict
+   **how many of the ELEVEN hold a marketplace profile today** — measured from prod, not inferred —
+   then compare. Eleven PEOPLE, twelve DISPOSITIONS (M4); predicting twelve and measuring eleven
+   would read as a defect in the backfill rather than as two sheet rows naming one man. Read the
+   rows back; **do not** accept the script's own report as the evidence.
+   → [[pattern-predict-then-compare]]
+3. **R1 discharges on deploy — by EXECUTION, not by deploy log.** The column arrives via `db:push`.
+   Prove the badge renders by exercising the deployed read path for a respondent that carries
+   `metadata.association_name`, not by confirming the migration ran.
+4. ⭐ **The finding most worth carrying out of this story is not about copy at all.**
+   The same false claim was fixed in three rounds across five months, and **round 2 shipped a guard
+   that did not prevent round 3** — because the guard was imported by exactly the two test files for
+   the two pages just fixed. It policed **where the fix landed, not where the claim lives**.
+   The generalisation, which is not marketplace-specific:
+   **a guard wired in at the site of an instance is not a guard on the class.**
+   → [[pattern-census-counts-sites-not-callers]], [[pattern-ship-a-fix-that-never-fires]]
+   Corollary, from **H8**: the same per-page scoping also hid a defect *in the guard itself* — it
+   flagged this story's own honest copy. **Narrow scope hides both the misses and the false
+   positives**, and the false positives are the ones that get a guard deleted.
+5. **The guard's scope is `apps/web`, and that is currently sufficient BY MEASUREMENT, not by
+   construction.** Checked 2026-09-11: `apps/api` and `packages` carry **zero** instances of the
+   claim class (email templates, the PDF ID card, notification copy — all clean). But nothing
+   *stops* a claim being written there, and the ID card in particular is a document that asserts
+   provenance. If a trust claim ever moves server-side, the guard does not follow it.
+   **Not carved as a residual** — there is nothing to fix today, and a residual for a hypothetical
+   is noise. Recorded so the next person knows the boundary was chosen, not assumed.
+6. **Two numbers this session could not reconcile, offered as a decision rather than a defect.**
+   Measured totals exceed the pre-crash record by **+4 web** (beyond this session's counted +6) and
+   **+7 on an API suite this session did not touch**, with skipped moving 8 → 9. The likeliest cause
+   is environment-conditional collection. **Adjudication's call:** chase it to a deterministic
+   explanation, or accept "zero failures across 8 shards" as the gate and stop quoting totals
+   across session boundaries. The reviewer's lean is the second — but it should be a decision, not
+   a drift. → [[pattern-falsifiable-number-is-a-live-artefact]]
+7. **R5 and R4 are Awwal's, not adjudication's.** R5 (searchable vs merely disclosed) has a
+   recommendation on record and no urgency; R4 (tier-2 substrate) now carries its carve trigger.
+   Neither should be resolved by an agent to tidy the residual table.
+
+⚠️ **Do NOT flip this story to `done` at adjudication while R2/R4/R5/R6/R7 are open** — the
+story-residual drift guard reds on done-with-open-residuals, and correctly. Same call as 13-59.
 
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-09-11 | **§7 (the adjudication note) RE-ISSUED.** It was written pre-crash and four of its five items had since been acted on — including item 3, which described a guard that has since been rebuilt, so an adjudication agent reading the original would have re-walked closed ground and trusted a stale description. Outcomes recorded against the original five (item 3 was right about the size of it: the grep it asked for found FIVE more live pages and a THIRD pinned test), and a live list put in their place: R7 is ruled-but-unimplemented and **inert by design, which is how it gets lost**; R2's prediction is ELEVEN people not twelve; R1 discharges by EXECUTION, not by deploy log; the class-not-instance guard lesson; the guard's `apps/web` boundary is sufficient **by measurement** (api + packages verified clean today), not by construction; and the unreconciled suite totals are offered as a decision, not a defect. The `git show` command §7 tells the adjudicator to run was itself executed before being written down. |
 | 2026-09-11 | **R1 SWEEP ROUND THREE — five more live public pages were still carrying the false identity claim** (`FAQPage`, `GuideSearchMarketplacePage`, `EmployersPage` — two arrays plus an FAQ answer — `WorkersPage`, `PrivacyPage`). Round 2 fixed two pages and shipped a guard; the guard was imported by exactly the two test files for those two pages, so it policed where the fix landed rather than where the claim lives. `EmployersPage` now renders the canonical lists; the rest were rewritten against `lib/trust-claims.ts`. **H6/H7.** |
 | 2026-09-11 | **The guard was flagging the story's own honest copy (H8).** Its identity pattern excused a negation only AFTER the verb, so it matched AC3's disclosure "Identity not independently verified". Invisible under per-page scoping; surfaced the instant the scan went app-wide. Negation is now excused on both sides. |
 | 2026-09-11 | **App-wide honesty guard added (M5)** — `trust-claims.app-wide.test.ts` scans every `.ts`/`.tsx` under `apps/web/src`, comments stripped, failing with file:line. RED-VERIFIED with a planted breach that produced two hits and cleared when removed, so the WALK is proven, not just the patterns. A third test pinning the false claim (`EmployersPage.test.tsx`) was re-pointed at the canonical arrays. |
