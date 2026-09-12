@@ -941,6 +941,89 @@ sends someone to rebuild a working safety net, while a wrong "the guard is fine"
 Both directions are expensive, which is why §2ae's rule — *invoke it the wrong way and check it
 complains* — has to be executed carefully enough that the invocation itself is valid.
 
+### 2ah. ⭐⭐ AN UNEXPLAINED TEST-COUNT DELTA IS UNRECORDED WORK UNTIL PROVEN OTHERWISE
+*Added 2026-09-12, adjudicating 13-58. The story offered to stop collecting the signal that found
+a whole feature.*
+
+**The rule: when a suite total moves and you cannot say which tests moved it, that is a finding,
+not noise. Name the tests before you reach for an explanation.**
+
+13-58's close-out re-ran the gates honestly and reported, without smoothing, that totals exceeded
+the record by **+7 API** — *"in a package this session did not touch at all"* — and **+4 web**. It
+offered adjudication a choice: chase it, or accept "zero failures across 8 shards" and stop quoting
+totals across session boundaries. Its own lean was the second. The likeliest cause was given as
+*"environment-conditional collection"*.
+
+**It was eleven tests belonging to an entire unrecorded feature.** R5 (`association_name` into the
+FTS vector + an `?association=` filter) had been built in a pass that crashed before recording
+itself. The residual table said *"not built"*, §5a said *"NOT RULED"*, §6 listed it as an open
+policy question, §7 told the adjudicator to leave it to Awwal, and the File List omitted all five
+files — while the code sat in the very commit that said so, one push from a public search surface.
+
+- ⭐ **The cheapest check was never made, and it costs one command:** `git show <commit> -- <test
+  file> | grep "^+.*it("` — *read what the new tests are called.* Four were named
+  "filters to a named association…"; three, "finds a vouched worker … through real FTS". The
+  feature announces itself in its own test names.
+- ✅ **Then make it falsifiable:** predict the per-file counts from those names and run the files.
+  Predicted service 61 → 65 and smoke 14 → 17 (164 → **171**); measured exactly that. A delta you
+  can predict is explained; one you can only rationalise is not.
+- ⚠️ **"Environment-conditional collection" is a hypothesis, and it is the comfortable one** — it
+  explains a number without anyone having to look at code. Here it was half-right in the least
+  useful way: the *skip* count really did wobble 8 ↔ 9 on a DB affordance, and that grain of truth
+  is exactly what made the wrong conclusion plausible for the other eleven.
+- ⛔ **The instruction "leave R5 to Awwal" was what would have buried it.** An adjudicator obeying
+  §7 item 7 would never have opened R5's code. **A record that tells you where NOT to look is
+  still a claim about the tree, and it can be wrong like any other.**
+- Sibling of §2af (a suspicious count is a prompt to go and look at the DATA) and §2ag (suspect
+  the instrument). This is the third face: **suspect the accounting.**
+
+### 2ai. ⭐ SPLITTING A COMMIT AT ADJUDICATION — two properties, and a boundary you can falsify
+*Added 2026-09-12, from splitting 13-58's `27423ff` on Awwal's ruling.*
+
+Nothing is shipped until it is pushed (§2y), so an unpushed commit is still cheap to restructure.
+When one commit carries two separable concerns — here a badge and a public search-behaviour change
+— splitting it is worth doing, **but only if both of these hold:**
+
+1. **The record must be TRUE AT EVERY COMMIT, not just the last one.** Cut the boundary so the
+   earlier commit's record is honest as it stands. Here commit 1's *"R5 — not built, open policy
+   call"* is a correct statement at that point in history, and commit 3 makes it a shipped one.
+   That retires a false record instead of back-dating a true one.
+2. **The intermediate commit must independently build and pass.** *A bisect that lands on a commit
+   failing for an unrelated reason is worse than no split at all.* Commit 1 was measured on its
+   own — tsc, lint + drift guards, and BOTH full suites — because CI will only ever test the
+   pushed tip, so that is the single opportunity to prove it.
+
+⭐ **Make the boundary falsifiable BEFORE cutting it.** State what the earlier commit must measure
+if the boundary is exactly right, then check. Here: commit 1 must equal the final totals **minus
+exactly the eleven tests being lifted out**, and must reproduce the pre-crash reviewer's run shard
+for shard. It did — **4,419 API** (1,204 / 983 / 1,075 / 1,157, identical) and **3,088 web**, with
+the five story API files restored to service 61 / smoke 14. A boundary that lands on a prior run's
+numbers to the test is not a judgement call.
+
+✅ **And prove the rewrite lost nothing:** `git diff <backup-branch> HEAD --name-only -- apps
+packages` must list only the files you deliberately changed. Branch the pre-split tip first; that
+one command is the difference between a split and a silent edit.
+
+⚠️ **Mechanics that mattered:** hunk-level surgery was needed in 5 of 10 files (one service holds
+both the badge projection and the filter clause), `tsc` catches every dangling reference the
+surgery creates, and a cherry-pick preserves a well-argued intermediate commit's own message rather
+than folding it into a neighbour.
+
+### 2aj. Two standing asks from 13-58's §7, recorded so they stop being re-derived
+
+- **A SEQUENCING ARGUMENT IS A CLAIM ABOUT EXECUTED CODE, and needs the same trace a fix does.**
+  13-58 H3: *"the moment the gate opens, extraction creates 8,278 profiles"* was copied into four
+  files — a story, a test comment, a service docstring and an operator script header — because it
+  was *plausible*. Opening the constant alone creates **zero**: the import path never enqueues the
+  worker. The ordering conclusion survived; its stated reason did not, and a plan that is right by
+  luck fails the next time it is reused. → [[pattern-ship-a-fix-that-never-fires]]
+- **SHARDING IS THE DOCUMENTED DEFAULT for a local full suite, not a workaround.**
+  `pnpm vitest run --shard=n/4`, api then web, **sequentially, never through turbo**. Each API
+  shard runs ~60–110 s and each web shard ~230 s, so four finish comfortably; two unsharded
+  attempts were killed at exactly **600 s** by the runner's execution cap, mid-run, on passing
+  lines. ⛔ **A truncated run has NO `Test Files` summary line and is not a red** — reading exit
+  255 as a failure is how a green tree gets debugged for an hour.
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 

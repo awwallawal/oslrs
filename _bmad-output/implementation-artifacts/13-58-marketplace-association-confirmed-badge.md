@@ -1187,6 +1187,36 @@ different script.
 ⚠️ Also confirmed on prod: `marketplace_profiles.association_name` **does not exist there yet**
 (the query errored on the column), which is R1's premise holding exactly as written.
 
+### The PRE-DEPLOY control, captured before anything shipped
+
+A prediction is only falsifiable against a control that reproduces today's live behaviour (§2z —
+reproduce the WHOLE predicate). Captured on prod at 2026-09-12, before the deploy:
+
+| query against `/api/v1/marketplace/search` | `totalItems` today |
+|---|---|
+| unfiltered | **297** |
+| `?association=AFAN` | **297** — the parameter is **silently ignored**, not rejected |
+| `?q=AFAN` | **0** |
+
+Two things are worth naming in that table.
+
+1. **`?association=AFAN` returning the FULL 297 is §2x's permissive failure, live.** An unknown
+   query param is dropped by the zod schema without a 400, so the filter reads as "working" and
+   quietly returns everything. It is harmless today only because nothing links to it.
+2. ⭐ **`?q=AFAN` returning ZERO *is* the defect R5 fixes, stated as a number.** The card says
+   "AFAN — confirmed member" and the search box cannot find AFAN, because matching is a hard
+   `search_vector @@ plainto_tsquery` WHERE — a term absent from the vector is unfindable, not
+   merely ranked low. The badge creates an expectation the search box then denies.
+
+**So the post-deploy prediction, written before the run:** after the deploy applies the trigger and
+the R2 catch-up writes the ten rows, `?association=AFAN` must fall **297 → 10** and `?q=AFAN` must
+rise **0 → 10**. Both are single `curl`s, and either one missing its number is a real finding
+rather than a rounding difference.
+
+⚠️ Note `totalItems` moved 296 → 297 between the DB count and this control, minutes apart: the
+registry is live and the denominator moves under you (§2n). The ten is a count of *vouched*
+profiles and is not affected by new self-registrations.
+
 ## Change Log
 
 | Date | Change |
