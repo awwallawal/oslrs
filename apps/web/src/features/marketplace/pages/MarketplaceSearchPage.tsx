@@ -94,8 +94,25 @@ export default function MarketplaceSearchPage() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Skills Marketplace</h1>
+        {/*
+          ⚠️ [AI-Review][High] 2026-09-08 (Story 13-58) — this line used to read
+          "Find VERIFIED skilled workers in Oyo State". R1 forbids a bare "verified"
+          claim for an association import, and AC3 says NO SURFACE may make one —
+          this is a surface, and it is the first thing an employer reads, sitting
+          directly above the grid.
+
+          It was defensible while every card was a self-registered worker. It stops
+          being true the moment an association-vouched card appears in the grid
+          below: a named body listed those people as members, nobody verified them,
+          and 8,278 of them are queued behind `PIPELINE_EXCLUDED_STATUSES`. A
+          page-level promise cannot be walked back by a per-card badge, and the R1
+          test on `WorkerCard` is scoped to the card so it could never see this.
+
+          The trust claim now lives ONLY on the badges, where each one names its own
+          authority.
+        */}
         <p className="text-muted-foreground mt-1">
-          Find verified skilled workers in Oyo State
+          Find skilled workers in Oyo State
         </p>
       </div>
 

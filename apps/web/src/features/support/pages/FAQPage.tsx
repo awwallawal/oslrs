@@ -58,7 +58,14 @@ const faqsByCategory: Record<string, FAQItem[]> = {
     },
     {
       question: 'What does "Government Verified" mean?',
-      answer: 'The "Government Verified" badge means your identity has been confirmed through NIN verification by the Oyo State government. It confirms who you are, not your skill level or work quality. Employers should still conduct their own assessments.',
+      // ⚠️ [AI-Review][High] 2026-09-11, Story 13-58 R1 sweep. This answer used to read
+      // "your identity has been confirmed through NIN verification by the Oyo State government" —
+      // the SAME false claim corrected on the badge (2026-08-18) and on two support pages
+      // (2026-09-09), surviving here in a third place. There is no NIMC path and NIN validation is
+      // FORMAT-ONLY. Substance now matches `lib/trust-claims.ts`; the NIMC sentence is byte-identical
+      // to GOVERNMENT_VERIFICATION_DOES_NOT_MEAN[0].
+      answer:
+        'The "Government Verified" badge means a State Assessor reviewed this registration and approved it, that it was checked for duplicate and fraudulent entries, and that an 11-digit NIN is on file. We have not confirmed this identity with NIMC — the NIN is format-checked only. It says nothing about skill level or work quality, so employers should still conduct their own assessments.',
     },
     {
       question: 'Will I get an ID card?',

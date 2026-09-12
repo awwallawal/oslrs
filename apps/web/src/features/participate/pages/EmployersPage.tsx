@@ -14,6 +14,10 @@ import {
   XCircle,
 } from 'lucide-react';
 import { supportEmail } from '../../../config/site';
+import {
+  GOVERNMENT_VERIFICATION_MEANS,
+  GOVERNMENT_VERIFICATION_DOES_NOT_MEAN,
+} from '../../../lib/trust-claims';
 import { BenefitCard } from '../../about/components/BenefitCard';
 import { AboutCallout } from '../../about/components/AboutCallout';
 import { FAQAccordion, VisibilityTable } from '../components';
@@ -66,23 +70,20 @@ const howItWorksSteps = [
 ];
 
 /**
- * What verification means
+ * What verification means / does NOT mean.
+ *
+ * ⚠️ [AI-Review][High] 2026-09-11, Story 13-58 R1 sweep. These were TWO LOCAL COPIES and the
+ * "means" half was false: it read 'Identity confirmed through NIN verification' and 'Badge
+ * indicates trustworthy identity'. There is no NIMC path and NIN validation is FORMAT-ONLY.
+ * The "does NOT mean" half was worse by omission — it listed skill / work-history / due-diligence
+ * caveats and never said the one thing that matters: that the identity is unconfirmed.
+ *
+ * This page has the same MEANS / DOES-NOT-MEAN shape as `GovernmentVerifiedBadge`, so it now
+ * renders the canonical lists instead of its own. A change to what the platform actually checks
+ * moves every surface at once. → `lib/trust-claims.ts`
  */
-const verificationMeans = [
-  'Identity confirmed through NIN verification',
-  'Worker voluntarily registered their skills',
-  'Government oversight ensures data accuracy',
-  'Badge indicates trustworthy identity',
-];
-
-/**
- * What verification does NOT mean
- */
-const verificationDisclaimer = [
-  'Does not guarantee skill proficiency',
-  'Does not verify work history claims',
-  'Does not replace your own due diligence',
-];
+const verificationMeans = GOVERNMENT_VERIFICATION_MEANS;
+const verificationDisclaimer = GOVERNMENT_VERIFICATION_DOES_NOT_MEAN;
 
 /**
  * FAQ items for employers
@@ -106,7 +107,10 @@ const employerFAQs: FAQItem[] = [
   },
   {
     question: 'Does the government guarantee worker quality?',
-    answer: 'No. Verification confirms a worker\'s identity, not their skill level or quality of work. The government badge means their NIN was verified, not that their work is guaranteed. Always conduct your own assessment before hiring.',
+    // ⚠️ [AI-Review][High] 2026-09-11, 13-58 R1 sweep — was "Verification confirms a
+    // worker's identity" and "their NIN was verified". Both false: format-check only, no NIMC path.
+    answer:
+      "No. The badge means a State Assessor reviewed and approved the registration — not that the worker's skill level or quality of work was assessed. We have not confirmed this identity with NIMC — the NIN is format-checked only. Always conduct your own assessment before hiring.",
   },
 ];
 

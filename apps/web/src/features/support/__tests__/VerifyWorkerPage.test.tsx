@@ -5,6 +5,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import VerifyWorkerPage from '../pages/VerifyWorkerPage';
+import {
+  GOVERNMENT_VERIFICATION_MEANS,
+  GOVERNMENT_VERIFICATION_DOES_NOT_MEAN,
+  FORBIDDEN_IDENTITY_CLAIMS,
+} from '../../../lib/trust-claims';
 
 afterEach(() => {
   cleanup();
@@ -40,7 +45,7 @@ describe('VerifyWorkerPage', () => {
 
   it('renders subheading explaining the purpose', () => {
     renderWithRouter(<VerifyWorkerPage />);
-    expect(screen.getByText(/Check if a worker is registered and verified/)).toBeInTheDocument();
+    expect(screen.getByText(/Check whether a worker is registered/)).toBeInTheDocument();
   });
 
   it('renders Verification Lookup section with input', () => {
@@ -81,18 +86,43 @@ describe('VerifyWorkerPage', () => {
     expect(screen.getByText('What It Does NOT Confirm')).toBeInTheDocument();
   });
 
+  /**
+   * ⚠️ [AI-Review][High] 2026-09-09 (Story 13-58) — THESE TESTS USED TO PIN THE
+   * FALSE COPY. They asserted, word for word:
+   *
+   *   'NIN (National Identification Number) has been validated'
+   *   "Worker's identity has been confirmed by the government"
+   *
+   * Neither is true — NIN validation is FORMAT-ONLY and there is no NIMC path —
+   * and `GovernmentVerifiedBadge` had already been corrected away from exactly
+   * that claim on 2026-08-18. So the lie was not merely present on a public page,
+   * it was GUARDED: a green suite made it look deliberate, and anyone who fixed
+   * the page would have been met by a failing test telling them to put it back.
+   *
+   * Both lists now render from `lib/trust-claims.ts`, so these assert the
+   * canonical claims rather than a local copy of them.
+   */
   it('displays verification positive points', () => {
     renderWithRouter(<VerifyWorkerPage />);
-    expect(screen.getByText('Worker is registered in the OSLSR system')).toBeInTheDocument();
-    expect(screen.getByText('NIN (National Identification Number) has been validated')).toBeInTheDocument();
-    expect(screen.getByText("Worker's identity has been confirmed by the government")).toBeInTheDocument();
+    for (const claim of GOVERNMENT_VERIFICATION_MEANS) {
+      expect(screen.getByText(claim)).toBeInTheDocument();
+    }
   });
 
   it('displays verification disclaimers', () => {
     renderWithRouter(<VerifyWorkerPage />);
-    expect(screen.getByText("Worker's skill level or proficiency")).toBeInTheDocument();
-    expect(screen.getByText('Quality of previous work')).toBeInTheDocument();
-    expect(screen.getByText('Employment history or references')).toBeInTheDocument();
+    for (const claim of GOVERNMENT_VERIFICATION_DOES_NOT_MEAN) {
+      expect(screen.getByText(claim)).toBeInTheDocument();
+    }
+  });
+
+  /** R1 — the page must not claim an identity check anywhere in its copy. */
+  it('makes no identity claim the system cannot back (R1)', () => {
+    const { container } = renderWithRouter(<VerifyWorkerPage />);
+
+    for (const { pattern, why } of FORBIDDEN_IDENTITY_CLAIMS) {
+      expect(pattern.test(container.textContent ?? ''), why).toBe(false);
+    }
   });
 
   it('renders Important Reminder callout', () => {

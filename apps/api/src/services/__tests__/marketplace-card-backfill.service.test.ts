@@ -20,6 +20,10 @@ interface RowInput {
   id?: string;
   experience_level?: string | null;
   business_name?: string | null;
+  /** Story 13-58 — what the PROFILE currently holds. */
+  association_name?: string | null;
+  /** Story 13-58 — what the RESPONDENT's metadata says (13-67's write). */
+  respondent_association_name?: string | null;
   raw_data?: Record<string, unknown> | null;
   adopted_draft_answers?: Record<string, unknown> | null;
   first_name?: string | null;
@@ -31,6 +35,8 @@ function makeRow(overrides: RowInput = {}) {
     id: '018e1234-5678-7000-8000-000000000001',
     experience_level: null,
     business_name: null,
+    association_name: null,
+    respondent_association_name: null,
     raw_data: { years_experience: 'over_10' },
     adopted_draft_answers: null,
     first_name: null,
@@ -58,6 +64,19 @@ function sqlTextOf(callIndex: number): string {
     return '';
   };
   return flatten(mockExecute.mock.calls[callIndex]?.[0]);
+}
+
+/**
+ * The whole Nth execute() call serialised — SQL text AND bound values.
+ *
+ * [AI-Review][Low] 2026-09-08 — added because asserting on the SQL TEXT alone
+ * cannot distinguish "wrote the stored value back" from "blanked it": the UPDATE
+ * names all three columns either way. Bound values appear only here, so a stored
+ * value showing up in this string is real evidence it was preserved. Same
+ * technique the marketplace service test uses on its own queries.
+ */
+function sqlPayloadOf(callIndex: number): string {
+  return JSON.stringify(mockExecute.mock.calls[callIndex]?.[0]);
 }
 
 /** First execute() = the candidate SELECT; every later one = an UPDATE. */
@@ -441,6 +460,184 @@ describe('backfillMarketplaceCardFields', () => {
       await backfillMarketplaceCardFields({ profileIds: ['018e1234-5678-7000-8000-00000000000a'] });
 
       expect(sqlTextOf(0)).toContain('WHERE mp.id IN');
+    });
+  });
+
+  /**
+   * Story 13-58 — the profiles that already exist.
+   *
+   * The extraction worker is the go-forward write path for `association_name`, but it
+   * only fires on a submission. Anyone who ALREADY holds a marketplace profile never
+   * revisits it, so on prod today the eleven people the AFAN import matched carry the
+   * vouch on their respondent row and a badge-less card — the fix would ship and fire
+   * for nobody. This is the same catch-up this service already performs for the two
+   * 13-38 fields, and for the same reason.
+   */
+  describe('association name catch-up (Story 13-58)', () => {
+    it('adds the association name to a profile that has none', async () => {
+      primeDb([makeRow({ id: 'a', association_name: null, respondent_association_name: 'AFAN' })]);
+
+      const result = await backfillMarketplaceCardFields({ apply: true, profileIds: ['a'] });
+
+      expect(result.associationNameChanged).toBe(1);
+      expect(updateCallCount()).toBe(1);
+    });
+
+    it('counts nothing when the stored name already matches', async () => {
+      primeDb([makeRow({ id: 'a', association_name: 'AFAN', respondent_association_name: 'AFAN' })]);
+
+      const result = await backfillMarketplaceCardFields({ apply: true, profileIds: ['a'] });
+
+      expect(result.associationNameChanged).toBe(0);
+    });
+
+    /**
+     * ADD or CORRECT, never subtract — the rule this whole service is built on. A
+     * respondent with no resolvable name must not blank a vouch already on the card:
+     * the association made its claim, and this one-shot's silence is not a retraction.
+     */
+    it('never blanks a stored vouch when the respondent resolves no name', async () => {
+      // `experience_level` matches its answer on purpose: with any other field
+      // differing the row updates anyway, and this test would pass while proving
+      // nothing about the vouch.
+      primeDb([makeRow({
+        id: 'a',
+        experience_level: 'over_10',
+        association_name: 'ASNAT',
+        respondent_association_name: null,
+      })]);
+
+      const result = await backfillMarketplaceCardFields({ apply: true, profileIds: ['a'] });
+
+      expect(result.associationNameChanged).toBe(0);
+      expect(updateCallCount()).toBe(0);
+    });
+
+    it('treats a whitespace-only respondent name as no name at all', async () => {
+      primeDb([makeRow({
+        id: 'a',
+        experience_level: 'over_10',
+        association_name: null,
+        respondent_association_name: '   ',
+      })]);
+
+      const result = await backfillMarketplaceCardFields({ apply: true, profileIds: ['a'] });
+
+      expect(result.associationNameChanged).toBe(0);
+      expect(updateCallCount()).toBe(0);
+    });
+
+    it('writes nothing in dry-run, the default', async () => {
+      primeDb([makeRow({ id: 'a', association_name: null, respondent_association_name: 'AFAN' })]);
+
+      const result = await backfillMarketplaceCardFields({ profileIds: ['a'] });
+
+      expect(result.dryRun).toBe(true);
+      expect(result.associationNameChanged).toBe(1);
+      expect(result.updated).toBe(0);
+      expect(updateCallCount()).toBe(0);
+    });
+
+    /**
+     * The name is read from the RESPONDENT's metadata, which is where 13-67 wrote it —
+     * not from `import_batches`, whose `source_description` is an operator note
+     * ("...WhatsApp intake, 56 clean rows of 70"), and never from a source column.
+     */
+    it('reads the name from respondent metadata, not from the import batch', async () => {
+      primeDb([makeRow({ id: 'a', association_name: null, respondent_association_name: 'AFAN' })]);
+
+      await backfillMarketplaceCardFields({ profileIds: ['a'] });
+
+      const selectSql = sqlTextOf(0);
+      expect(selectSql).toContain('association_name');
+      expect(selectSql).not.toContain('import_batches');
+      expect(selectSql).not.toContain('source_description');
+    });
+
+    /**
+     * A row picked up ONLY for its association name must not have its other two
+     * columns rewritten from a recomputed value — the same per-field discipline the
+     * experience/business-name pair already enforces on each other.
+     */
+    it('does not disturb experience or business name when only the vouch changes', async () => {
+      primeDb([
+        makeRow({
+          id: 'a',
+          experience_level: 'over_10',
+          business_name: 'Bola Motors',
+          association_name: null,
+          respondent_association_name: 'AFAN',
+          raw_data: { years_experience: 'over_10', business_name: 'Bola Motors' },
+        }),
+      ]);
+
+      const result = await backfillMarketplaceCardFields({ apply: true, profileIds: ['a'] });
+
+      expect(result.associationNameChanged).toBe(1);
+      expect(result.experienceChanged).toBe(0);
+      expect(result.businessNameChanged).toBe(0);
+      // [AI-Review][Low] 2026-09-08 — this used to assert the UPDATE text CONTAINS
+      // 'association_name', which passes unconditionally: the statement names all
+      // three columns on every write. Assert the BOUND VALUES instead — that the
+      // two untouched columns carry their STORED values back, which is the actual
+      // no-blanking claim and the thing that would break if the per-field ternaries
+      // were replaced by the recomputed value.
+      const updatePayload = sqlPayloadOf(1);
+      expect(updatePayload).toContain('AFAN');
+      expect(updatePayload).toContain('over_10');
+      expect(updatePayload).toContain('Bola Motors');
+    });
+
+    /**
+     * ⚠️ [AI-Review][High] 2026-09-08 — THE VOUCH DOES NOT DEPEND ON ANSWERS.
+     *
+     * The association block used to sit BELOW `if (!answers) { noAnswerSource++;
+     * continue; }`, so a profile whose respondent has no submission raw_data and no
+     * adopted answers had its vouch silently dropped — and not even counted, so the
+     * operator's dry-run printed `association_name add/fixed 0` and read as a clean
+     * sweep. `experience_level` and `business_name` are derived FROM answers;
+     * `association_name` is read from the respondent's own metadata and is not.
+     *
+     * These rows are real: the import path wrote only the respondent until Story
+     * 13-2 AC3.4 added the submission row (`import.service.ts:555-573`), so batches
+     * predating that change carry a vouch and no answers at all.
+     */
+    it('backfills the vouch on a row with NO answer source at all', async () => {
+      primeDb([makeRow({
+        id: 'a',
+        association_name: null,
+        respondent_association_name: 'AFAN',
+        raw_data: null,
+        adopted_draft_answers: null,
+      })]);
+
+      const result = await backfillMarketplaceCardFields({ apply: true, profileIds: ['a'] });
+
+      expect(result.associationNameChanged).toBe(1);
+      expect(result.updated).toBe(1);
+      // Still reported as answer-less: the guard was not deleted, it was moved
+      // below the one field that never needed it.
+      expect(result.noAnswerSource).toBe(1);
+      // ...and the answer-derived fields stay untouched, because there was nothing
+      // to derive them from.
+      expect(result.experienceChanged).toBe(0);
+      expect(result.businessNameChanged).toBe(0);
+    });
+
+    it('still skips an answer-less row that has no vouch either', async () => {
+      primeDb([makeRow({
+        id: 'a',
+        association_name: null,
+        respondent_association_name: null,
+        raw_data: null,
+        adopted_draft_answers: null,
+      })]);
+
+      const result = await backfillMarketplaceCardFields({ apply: true, profileIds: ['a'] });
+
+      expect(result.noAnswerSource).toBe(1);
+      expect(result.needsUpdate).toBe(0);
+      expect(updateCallCount()).toBe(0);
     });
   });
 });

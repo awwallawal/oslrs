@@ -5,6 +5,7 @@ import { useDeviceFingerprint } from '../../../hooks/useDeviceFingerprint';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { GovernmentVerifiedBadge } from '../components/GovernmentVerifiedBadge';
+import { AssociationConfirmedBadge } from '../components/AssociationConfirmedBadge';
 import { MarketplaceProfileSkeleton } from '../components/MarketplaceProfileSkeleton';
 import { useMarketplaceProfile, useRevealContact, useRequestRevealStepUp, useVerifyRevealStepUp, marketplaceKeys } from '../hooks/useMarketplace';
 import { useAuth } from '../../auth/context/AuthContext';
@@ -223,7 +224,28 @@ export default function MarketplaceProfilePage() {
               </p>
             )}
           </div>
-          {profile.verifiedBadge && <GovernmentVerifiedBadge />}
+          {/*
+            Story 13-58 — the two trust claims stack, they do not compete. The
+            government pill attests an Assessor's approval; the association pill
+            attests that a NAMED body listed this person as a member and nothing
+            more. Keyed on the stored name's PRESENCE and on nothing else (AC4 as
+            corrected 2026-09-07) — no `source` check, because eleven self-registered
+            people carry a genuine AFAN vouch and a source predicate renders them
+            nothing while looking correct.
+          */}
+          {/*
+            [AI-Review][Low] 2026-09-08 — the wrapper is conditional so a profile
+            with neither claim renders nothing at all, as it did before 13-58,
+            rather than an empty flex container in the header row.
+          */}
+          {(profile.verifiedBadge || profile.associationName?.trim()) && (
+            <div className="flex shrink-0 flex-wrap items-start gap-2">
+              {profile.verifiedBadge && <GovernmentVerifiedBadge />}
+              {profile.associationName?.trim() && (
+                <AssociationConfirmedBadge associationName={profile.associationName.trim()} />
+              )}
+            </div>
+          )}
         </div>
       </div>
 

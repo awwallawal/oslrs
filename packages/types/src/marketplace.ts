@@ -55,6 +55,12 @@ export interface MarketplaceProfileDetail {
    * card links to does not drop the identity line the card led with.
    */
   businessName: string | null;
+  /**
+   * Story 13-58 — same field and same rules as
+   * `MarketplaceSearchResultItem.associationName`. Present here so the profile page
+   * a badged card links to does not silently drop the provenance the card asserted.
+   */
+  associationName: string | null;
   createdAt: string;
 }
 
@@ -90,6 +96,16 @@ export interface MarketplaceSearchResultItem {
    * reconstructed from firstname/surname — see MARKETPLACE_BUSINESS_NAME_MAX_LEN.
    */
   businessName: string | null;
+  /**
+   * Story 13-58 — the accountable body that vouched for this worker, when one did.
+   * Renders as "{associationName} — confirmed member".
+   *
+   * ⚠️ PRESENCE IS THE BADGE'S ONLY PRECONDITION (AC4, corrected 2026-09-07). Never
+   * cross-check it against a source field: eleven people carry an AFAN vouch while
+   * their own `source` is `public`, because the import matched them rather than
+   * inserting them.
+   */
+  associationName: string | null;
 }
 
 // ============================================================================
@@ -260,6 +276,37 @@ export function normaliseBusinessName(raw: unknown): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
   return trimmed.slice(0, MARKETPLACE_BUSINESS_NAME_MAX_LEN);
+}
+
+// ============================================================================
+// Association Provenance (Story 13-58)
+// ============================================================================
+
+/**
+ * Storage cap for `marketplace_profiles.association_name` (Story 13-58 AC1). The
+ * value is an accountable body's name ("AFAN", "ASNAT"), not free prose, so this is
+ * a sanity bound rather than a display budget — but the badge sits in a grid cell,
+ * and an unbounded string there would deform every card in the row.
+ */
+export const MARKETPLACE_ASSOCIATION_NAME_MAX_LEN = 60;
+
+/**
+ * Trim + cap a raw `respondents.metadata.association_name` value (Story 13-58).
+ * Returns null for absent/blank/non-string input.
+ *
+ * ⚠️ A WHITESPACE-ONLY NAME MUST NORMALISE TO NULL, not to an empty badge. The
+ * badge's whole claim is that a NAMED body vouched; rendering "  — confirmed
+ * member" would assert a vouch while naming nobody, which is the overstatement R1
+ * locks against. Absent and blank are the same thing here: no badge.
+ *
+ * ⚠️ There is deliberately NO fallback — never to `import_batches.source_description`
+ * (an operator note) and never to a bare "Verified".
+ */
+export function normaliseAssociationName(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, MARKETPLACE_ASSOCIATION_NAME_MAX_LEN);
 }
 
 // ============================================================================

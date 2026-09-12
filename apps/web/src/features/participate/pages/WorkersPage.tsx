@@ -188,9 +188,16 @@ function WorkersPage() {
 
             <AboutCallout variant="success" title="What the Verified Badge Means">
               <p>
+                {/*
+                  ⚠️ [AI-Review][High] 2026-09-11, Story 13-58 R1 sweep. Used to end "...tells
+                  employers that your identity has been confirmed through NIN verification". False:
+                  NIN validation is FORMAT-ONLY and there is no NIMC path anywhere in this system.
+                  Wording below tracks `lib/trust-claims.ts`.
+                */}
                 When you complete registration and verification, you receive a government-verified badge
-                that appears on your marketplace profile. This badge tells employers that your identity
-                has been confirmed through NIN verification, making you a more trustworthy candidate.
+                that appears on your marketplace profile. This badge tells employers that a State
+                Assessor reviewed and approved your registration, and that an 11-digit NIN is on file.
+                It does not claim your identity was checked against NIMC records.
               </p>
             </AboutCallout>
           </div>

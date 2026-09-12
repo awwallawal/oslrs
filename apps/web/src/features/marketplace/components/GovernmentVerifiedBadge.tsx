@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { BadgeCheck, Info } from 'lucide-react';
+import {
+  GOVERNMENT_VERIFICATION_MEANS,
+  GOVERNMENT_VERIFICATION_DOES_NOT_MEAN,
+} from '../../../lib/trust-claims';
 
 /**
  * [AI-Review][Low] 2026-08-18 — `compact` is meaningless in interactive mode (the
@@ -80,18 +84,26 @@ export function GovernmentVerifiedBadge({
             what it now says. Overstating here burns the same credibility that
             13-58's association tiers will need. Copy is Paige's to refine.
           */}
+          {/*
+            [AI-Review][High] 2026-09-09 — these lists MOVED to
+            `lib/trust-claims.ts` and are rendered from there. The strings are
+            byte-identical to what this panel already said; nothing was reworded.
+            The point is that `VerifyWorkerPage` and `GuideVerifyWorkerPage` were
+            still telling the public "Identity verified by government" long after
+            this panel stopped, and a second copy of a corrected claim is a third
+            copy waiting to happen.
+          */}
           <p className="font-medium">This badge means:</p>
           <ul className="list-disc list-inside space-y-0.5 text-green-700">
-            <li>A State Assessor reviewed this registration and approved it</li>
-            <li>It was checked for duplicate and fraudulent entries</li>
-            <li>An 11-digit NIN is on file</li>
+            {GOVERNMENT_VERIFICATION_MEANS.map((claim) => (
+              <li key={claim}>{claim}</li>
+            ))}
           </ul>
           <p className="font-medium mt-2">What it does NOT mean:</p>
           <ul className="list-disc list-inside space-y-0.5 text-green-700">
-            <li>We have not confirmed this identity with NIMC — the NIN is format-checked only</li>
-            <li>We have not tested their skills directly</li>
-            <li>We do not guarantee work quality</li>
-            <li>We are not responsible for employment disputes</li>
+            {GOVERNMENT_VERIFICATION_DOES_NOT_MEAN.map((claim) => (
+              <li key={claim}>{claim}</li>
+            ))}
           </ul>
         </div>
       )}

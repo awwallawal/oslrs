@@ -1,12 +1,18 @@
 /**
- * Story 13-38 (AC7 + AC8) — re-derive the two card fields on the marketplace
- * profiles that already exist.
+ * Story 13-38 (AC7 + AC8) + Story 13-58 — re-derive the card fields on the
+ * marketplace profiles that already exist.
  *
  *  - `experience_level`: the pre-13-38 normaliser matched a canon no form ever
  *    emitted, so the questionnaire's real `less_1`/`over_10` answers stored NULL
  *    and `7_10` collapsed into `4-7` (`docs/questionnaire_schema.md:134-141`).
- *  - `business_name`: the column is new in this story, so every existing row is
+ *  - `business_name`: the column was new in 13-38, so every row predating it is
  *    NULL even where the person volunteered a trading name.
+ *  - `association_name` (Story 13-58): the column is new in that story, and the
+ *    live write path is the extraction worker — which only fires on a submission.
+ *    A respondent who ALREADY holds a profile therefore never revisits it. On prod
+ *    that is the eleven people the AFAN import MATCHED rather than inserted: the
+ *    vouch is on their respondent row (13-67) and their card has no badge. Without
+ *    this run the badge is live and renders for nobody who exists today.
  *
  * All logic lives in `src/services/marketplace-card-backfill.service.ts` (inside
  * tsconfig, and unit-tested — including a test that proves dry-run writes nothing).
@@ -38,8 +44,9 @@ export const KNOWN_FLAGS: ReadonlySet<string> = new Set([
 ]);
 
 const HELP_TEXT = `
-Story 13-38 (AC7 + AC8) — re-derive experience_level + business_name on existing
-marketplace_profiles rows from each respondent's latest submission answers.
+Story 13-38 (AC7 + AC8) + Story 13-58 — re-derive experience_level, business_name
+and association_name on existing marketplace_profiles rows, from each respondent's
+latest submission answers and (for the vouch) their own metadata.
 
   --dry-run                          Preview: counts only, writes nothing (run this first).
   --apply                            Switch to apply mode (still PREVIEW unless confirmed).
@@ -95,6 +102,9 @@ export function formatSummary(result: MarketplaceCardBackfillResult): string {
     // value, so a non-zero count here can't mean data was removed.
     `  experience_level set/fixed ${result.experienceChanged}   (never blanked)`,
     `  business_name added/fixed  ${result.businessNameChanged}   (never blanked)`,
+    // Story 13-58 — the association vouch, for rows that already had a profile when
+    // 13-67 wrote the name onto their respondent record.
+    `  association_name add/fixed ${result.associationNameChanged}   (never blanked)`,
     `  rows needing update ..... ${result.needsUpdate}`,
     `  rows WRITTEN ............ ${result.updated}`,
     `  answers from adopted set  ${result.fromAdoptedAnswers}`,

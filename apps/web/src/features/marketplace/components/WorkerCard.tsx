@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Card } from '../../../components/ui/card';
 import { MapPin, ArrowRight, Star } from 'lucide-react';
 import { GovernmentVerifiedBadge } from './GovernmentVerifiedBadge';
+import { AssociationConfirmedBadge } from './AssociationConfirmedBadge';
 import { TradeAvatar } from '../../../components/common/TradeAvatar';
 import {
   experienceStatFor,
@@ -24,9 +25,10 @@ const MAX_CARD_SKILLS = 3;
  *  - NO display name, NO photo. `/marketplace` browse is public and
  *    unauthenticated; the full profile + contact sit behind employer login. Warmth
  *    comes from the trade-glyph avatar, not initials.
- *  - ONE verification pill, top-right (AC5's trust slot). The association
- *    provenance line is Story 13-58's — it is gated on 13-2, which has written zero
- *    `imported_association` rows, so nothing here renders it.
+ *  - The trust slot is top-right (AC5). It now holds up to TWO pills: the
+ *    government check and, from Story 13-58, the association provenance badge.
+ *    They are different claims from different authorities and stack rather than
+ *    compete — see `AssociationConfirmedBadge` for why neither may read "Verified".
  *  - Experience is a HERO STAT, not a quiet meta row — but see AC7 below.
  *  - Every optional block degrades to nothing: a sparse profile (one skill, no bio,
  *    no experience) must still look intentional, never broken.
@@ -60,6 +62,14 @@ export function WorkerCard({ profile }: WorkerCardProps) {
   // what was typed" — a >80-char signboard is already truncated before it reaches
   // this component, and no card can recover what the column does not store.
   const businessName = profile.businessName?.trim() || null;
+
+  // Story 13-58 AC4 (as corrected 2026-09-07) — the badge is keyed on the PRESENCE
+  // of a stored association name and on nothing else. There is deliberately no
+  // `source` check to go with it: eleven people on prod carry an AFAN vouch while
+  // their own source is `public`, because the import matched them instead of
+  // inserting them, and a second condition here would render them nothing while
+  // looking perfectly correct. A blank name is no vouch, not an unnamed badge.
+  const associationName = profile.associationName?.trim() || null;
   const professionLabel = profile.profession || 'Unknown Profession';
   const identityLine = businessName ?? professionLabel;
   const subLine = businessName ? professionLabel : null;
@@ -96,8 +106,22 @@ export function WorkerCard({ profile }: WorkerCardProps) {
               </div>
             )}
           </div>
-          {profile.verifiedBadge && (
-            <GovernmentVerifiedBadge interactive={false} compact />
+          {(profile.verifiedBadge || associationName) && (
+            // `max-w-[45%]` bounds the trust slot: the identity line owns the rest
+            // of the row, and a long association name ellipsizes rather than
+            // squeezing the trading name it sits beside.
+            <div className="flex min-w-0 max-w-[45%] flex-col items-end gap-1">
+              {profile.verifiedBadge && (
+                <GovernmentVerifiedBadge interactive={false} compact />
+              )}
+              {associationName && (
+                <AssociationConfirmedBadge
+                  associationName={associationName}
+                  interactive={false}
+                  compact
+                />
+              )}
+            </div>
           )}
         </div>
 

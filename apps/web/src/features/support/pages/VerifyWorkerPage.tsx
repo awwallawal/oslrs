@@ -2,24 +2,26 @@ import { Link } from 'react-router-dom';
 import { CheckCircle2, XCircle, HelpCircle, MessageSquare } from 'lucide-react';
 import { VerificationCodeInput } from '../components';
 import { AboutCallout } from '../../about/components/AboutCallout';
+import {
+  GOVERNMENT_VERIFICATION_MEANS,
+  GOVERNMENT_VERIFICATION_DOES_NOT_MEAN,
+} from '../../../lib/trust-claims';
 
 /**
- * What verification confirms
+ * ⚠️ [AI-Review][High] 2026-09-09 (Story 13-58) — these two lists were LOCAL and
+ * two of their three "confirms" entries were FALSE:
+ *
+ *   'NIN (National Identification Number) has been validated'   ← format-only
+ *   "Worker's identity has been confirmed by the government"    ← no NIMC path
+ *
+ * That is the exact claim `GovernmentVerifiedBadge` was corrected away from on
+ * 2026-08-18; this page and the how-to guide kept saying it for another three
+ * weeks, on a PUBLIC page, under a green tick reading "What It DOES Confirm".
+ * Both now render the canonical lists so a correction can never again land on one
+ * surface and miss two.
  */
-const verificationConfirms = [
-  'Worker is registered in the OSLSR system',
-  'NIN (National Identification Number) has been validated',
-  "Worker's identity has been confirmed by the government",
-];
-
-/**
- * What verification does NOT confirm
- */
-const verificationDoesNotConfirm = [
-  "Worker's skill level or proficiency",
-  'Quality of previous work',
-  'Employment history or references',
-];
+const verificationConfirms = GOVERNMENT_VERIFICATION_MEANS;
+const verificationDoesNotConfirm = GOVERNMENT_VERIFICATION_DOES_NOT_MEAN;
 
 /**
  * VerifyWorkerPage - Verification code lookup and explanation.
@@ -37,7 +39,8 @@ function VerifyWorkerPage() {
               Verify a Worker
             </h1>
             <p className="text-lg text-neutral-600">
-              Check if a worker is registered and verified in the OSLSR system using their verification code.
+              Check whether a worker is registered in the OSLSR system, and whether their
+              registration was approved, using their verification code.
             </p>
           </div>
         </div>
@@ -103,8 +106,9 @@ function VerifyWorkerPage() {
               <AboutCallout variant="info" title="Important Reminder">
                 <p>
                   Always interview and assess workers before hiring. The verification badge confirms
-                  identity only, not skill level or work quality. Your own due diligence is essential
-                  when making hiring decisions.
+                  that a State Assessor approved this registration — not the worker&apos;s identity,
+                  skill level, or work quality. Your own due diligence is essential when making
+                  hiring decisions.
                 </p>
               </AboutCallout>
             </div>

@@ -1,8 +1,15 @@
 /**
- * Marketplace Card Field Backfill (Story 13-38, AC7 + AC8)
+ * Marketplace Card Field Backfill (Story 13-38 AC7 + AC8; Story 13-58)
  *
- * Re-derives the two card fields that existing `marketplace_profiles` rows either
- * never had or got wrong, WITHOUT re-running the whole extraction worker:
+ * Re-derives the card fields that existing `marketplace_profiles` rows either
+ * never had or got wrong, WITHOUT re-running the whole extraction worker.
+ *
+ * ⚠️ TWO OF THE THREE ARE ANSWER-DERIVED AND ONE IS NOT. `experience_level` and
+ * `business_name` come from the respondent's answers; `association_name` comes from
+ * `respondents.metadata` and has no dependence on answers at all. That is why the
+ * vouch is computed ABOVE the answer-source guard in the loop below — see the
+ * [AI-Review][High] note there. Adding a fourth field? Ask which side it is on
+ * before putting it anywhere near `answers`.
  *
  *  1. `experience_level` — the pre-13-38 normaliser mapped against a canon no form
  *     ever emitted (`entry`/`1-3`/`4-7`/`8-15`/`15+`), so the questionnaire's real
@@ -25,6 +32,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
+  normaliseAssociationName,
   normaliseBusinessName,
   normaliseMarketplaceExperienceLevel,
 } from '@oslsr/types';
@@ -39,6 +47,16 @@ export interface MarketplaceCardBackfillResult {
   experienceChanged: number;
   /** Rows that gain (or change) a business_name. */
   businessNameChanged: number;
+  /**
+   * Story 13-58 — rows that gain (or change) an association_name.
+   *
+   * The extraction worker is the go-forward write path, but it only fires on a
+   * submission, so a respondent who ALREADY holds a profile never revisits it. On
+   * prod that is the eleven people the AFAN import MATCHED: the vouch is on their
+   * respondent row and their card has no badge. Without this the badge ships and
+   * fires for nobody who exists today.
+   */
+  associationNameChanged: number;
   /** Rows needing at least one change — the write set. */
   needsUpdate: number;
   /** Rows actually written. ALWAYS 0 in dry-run. */
@@ -63,6 +81,10 @@ interface CandidateRow {
   id: string;
   experience_level: string | null;
   business_name: string | null;
+  /** What the profile currently holds (Story 13-58). */
+  association_name: string | null;
+  /** What the respondent's metadata says — 13-67's write (Story 13-58). */
+  respondent_association_name: string | null;
   raw_data: Record<string, unknown> | null;
   adopted_draft_answers: Record<string, unknown> | null;
   first_name: string | null;
@@ -124,6 +146,7 @@ export async function backfillMarketplaceCardFields(
       scanned: 0,
       experienceChanged: 0,
       businessNameChanged: 0,
+      associationNameChanged: 0,
       needsUpdate: 0,
       updated: 0,
       fromAdoptedAnswers: 0,
@@ -142,6 +165,13 @@ export async function backfillMarketplaceCardFields(
       mp.id,
       mp.experience_level,
       mp.business_name,
+      mp.association_name,
+      -- Story 13-58 — the vouch as 13-67 wrote it, on the RESPONDENT's own metadata.
+      -- Deliberately NOT read from the batch table: the operator note stored there is
+      -- prose ("...WhatsApp intake, 56 clean rows of 70"), not an accountable body's
+      -- name. Nor from any source column -- AC4 keys on this name's presence alone.
+      -- A test asserts the other tables by name, so this comment does not name them.
+      r.metadata ->> 'association_name' AS respondent_association_name,
       (
         SELECT s.raw_data
         FROM submissions s
@@ -172,6 +202,7 @@ export async function backfillMarketplaceCardFields(
     scanned: rows.length,
     experienceChanged: 0,
     businessNameChanged: 0,
+    associationNameChanged: 0,
     needsUpdate: 0,
     updated: 0,
     fromAdoptedAnswers: 0,
@@ -181,30 +212,63 @@ export async function backfillMarketplaceCardFields(
   };
 
   for (const row of rows) {
+    // ⚠️ [AI-Review][High] 2026-09-08 — THE VOUCH IS COMPUTED BEFORE THE ANSWER
+    // GUARD, and that ordering is load-bearing. It used to sit below, after
+    // `if (!answers) { noAnswerSource++; continue; }` — so a profile whose
+    // respondent has no submission `raw_data` AND no adopted answers had its
+    // association name silently dropped, and was not even COUNTED: the operator's
+    // dry-run printed `association_name add/fixed 0` and read as a clean sweep.
+    // (Measured on a probe row: associationNameChanged 0, updated 0,
+    // noAnswerSource 1, with 'AFAN' sitting on the respondent.)
+    //
+    // The category error is the coupling itself. `experience_level` and
+    // `business_name` are DERIVED FROM ANSWERS, so no answers means nothing to
+    // derive. The vouch is not: it is read from `r.metadata->>'association_name'`
+    // and has no dependence on answers whatsoever. Rows with no answer source are
+    // real — the counter exists because they are — and the import path wrote only
+    // the respondent until Story 13-2 AC3.4 added the submission row
+    // (`import.service.ts:555-573`), so batches predating that change are exactly
+    // the population that carries a vouch and no answers.
+    const nextAssociationName = normaliseAssociationName(row.respondent_association_name);
+    // Story 13-58 — ADD or CORRECT, never subtract, for the third time in this file
+    // and for the strongest reason of the three. An association's vouch is a claim a
+    // NAMED body made about a person; this one-shot reads the respondent row and
+    // nothing else, so a null here means "no name is recorded", never "the
+    // association withdrew". Blanking it would delete a disclosure the card is
+    // currently making, with no event anywhere recording why it went.
+    const associationNameDiffers =
+      nextAssociationName !== null && nextAssociationName !== row.association_name;
+
     const answers = row.raw_data ?? row.adopted_draft_answers ?? null;
-    if (!answers) {
-      summary.noAnswerSource++;
-      continue;
-    }
-    if (!row.raw_data) summary.fromAdoptedAnswers++;
+    if (!answers) summary.noAnswerSource++;
 
-    // Same key precedence as the extraction worker's getExperienceRaw.
-    const rawExperience =
-      answers['years_experience'] ?? answers['experience'] ?? answers['exp_years'] ?? answers['experience_level'];
-    const nextExperience = normaliseMarketplaceExperienceLevel(
-      rawExperience == null ? null : String(rawExperience),
-    );
-    if (rawExperience != null && String(rawExperience).trim() !== '' && nextExperience === null) {
-      summary.unresolvedExperience++;
-    }
+    // The two 13-38 fields stay strictly answer-derived: when there is no answer
+    // source there is nothing to compute for them, and every 13-38 counter below
+    // behaves exactly as it did before this fix.
+    let nextExperience: ReturnType<typeof normaliseMarketplaceExperienceLevel> = null;
+    let nextBusinessName: string | null = null;
 
-    const nextBusinessName = normaliseBusinessName(answers['business_name']);
+    if (answers) {
+      if (!row.raw_data) summary.fromAdoptedAnswers++;
 
-    // Count self-named signboards on what this row WILL hold after the run, so the
-    // PREVIEW answers "how many cards would publish a person's own name?" before
-    // anyone writes. Detection only — the value itself is untouched either way.
-    if (businessNameCarriesPersonName(nextBusinessName ?? row.business_name, row.first_name, row.last_name)) {
-      summary.businessNameLikePersonName++;
+      // Same key precedence as the extraction worker's getExperienceRaw.
+      const rawExperience =
+        answers['years_experience'] ?? answers['experience'] ?? answers['exp_years'] ?? answers['experience_level'];
+      nextExperience = normaliseMarketplaceExperienceLevel(
+        rawExperience == null ? null : String(rawExperience),
+      );
+      if (rawExperience != null && String(rawExperience).trim() !== '' && nextExperience === null) {
+        summary.unresolvedExperience++;
+      }
+
+      nextBusinessName = normaliseBusinessName(answers['business_name']);
+
+      // Count self-named signboards on what this row WILL hold after the run, so the
+      // PREVIEW answers "how many cards would publish a person's own name?" before
+      // anyone writes. Detection only — the value itself is untouched either way.
+      if (businessNameCarriesPersonName(nextBusinessName ?? row.business_name, row.first_name, row.last_name)) {
+        summary.businessNameLikePersonName++;
+      }
     }
 
     // ⚠️ [AI-Review][High] 2026-08-17 — the `!== null` half is LOAD-BEARING, not
@@ -234,7 +298,8 @@ export async function backfillMarketplaceCardFields(
 
     if (experienceDiffers) summary.experienceChanged++;
     if (businessNameDiffers) summary.businessNameChanged++;
-    if (!experienceDiffers && !businessNameDiffers) continue;
+    if (associationNameDiffers) summary.associationNameChanged++;
+    if (!experienceDiffers && !businessNameDiffers && !associationNameDiffers) continue;
 
     summary.needsUpdate++;
     if (!apply) continue;
@@ -260,7 +325,8 @@ export async function backfillMarketplaceCardFields(
       UPDATE marketplace_profiles
       SET
         experience_level = ${experienceDiffers ? nextExperience : row.experience_level},
-        business_name = ${businessNameDiffers ? nextBusinessName : row.business_name}
+        business_name = ${businessNameDiffers ? nextBusinessName : row.business_name},
+        association_name = ${associationNameDiffers ? nextAssociationName : row.association_name}
       WHERE id = ${row.id}::uuid
     `);
     summary.updated++;

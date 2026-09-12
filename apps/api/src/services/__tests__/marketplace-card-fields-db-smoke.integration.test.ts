@@ -38,17 +38,21 @@ const PROFESSION = `${TAG}profession`;
 const withBusinessRespondentId = uuidv7();
 const noBusinessRespondentId = uuidv7();
 const legacyBucketRespondentId = uuidv7();
+/** Story 13-58 — a self-registered worker an association vouched for (the eleven). */
+const vouchedRespondentId = uuidv7();
 
 const withBusinessSubId = uuidv7();
 const noBusinessSubId = uuidv7();
 const legacyBucketSubId = uuidv7();
+const vouchedSubId = uuidv7();
 
 const withBusinessProfileId = uuidv7();
 const noBusinessProfileId = uuidv7();
 const legacyBucketProfileId = uuidv7();
+const vouchedProfileId = uuidv7();
 
-const ourRespondentIds = [withBusinessRespondentId, noBusinessRespondentId, legacyBucketRespondentId];
-const ourProfileIds = [withBusinessProfileId, noBusinessProfileId, legacyBucketProfileId];
+const ourRespondentIds = [withBusinessRespondentId, noBusinessRespondentId, legacyBucketRespondentId, vouchedRespondentId];
+const ourProfileIds = [withBusinessProfileId, noBusinessProfileId, legacyBucketProfileId, vouchedProfileId];
 
 const BUSINESS_NAME = 'Bola Motors & Sons Autoworks';
 
@@ -60,6 +64,10 @@ async function seedPerson(opts: {
   rawData: Record<string, unknown>;
   experienceLevel: string | null;
   businessName: string | null;
+  /** Story 13-58 — what the PROFILE starts with. */
+  associationName?: string | null;
+  /** Story 13-58 — the vouch on the RESPONDENT, as 13-67 writes it. */
+  respondentMetadata?: Record<string, unknown> | null;
 }) {
   await db.insert(respondents).values({
     id: opts.respondentId,
@@ -67,9 +75,14 @@ async function seedPerson(opts: {
     firstName: 'Adekemi',
     lastName: 'Ogunlade',
     status: 'active',
+    // Story 13-58 — every person seeded here is `public`, INCLUDING the one an
+    // association vouched for. That is not a shortcut: it is the shape of the eleven
+    // people the AFAN import MATCHED, and a source-keyed badge passes every other
+    // test in this file while rendering them nothing.
     source: 'public',
     referenceCode: opts.ref,
     consentMarketplace: true,
+    metadata: opts.respondentMetadata ?? null,
   });
   await db.insert(submissions).values({
     id: opts.submissionId,
@@ -89,6 +102,7 @@ async function seedPerson(opts: {
     lgaName: 'Ibadan North',
     experienceLevel: opts.experienceLevel,
     businessName: opts.businessName,
+    associationName: opts.associationName ?? null,
     verifiedBadge: false,
     consentEnriched: false,
     bio: null,
@@ -131,6 +145,28 @@ describe('Story 13-38 card fields — real-DB smoke (raw-SQL ↔ schema parity)'
       rawData: { years_experience: 'over_10', business_name: 'Iya Basira Foods' },
       experienceLevel: null,
       businessName: null,
+    });
+
+    // D (Story 13-58) — THE ELEVEN. A worker who registered themselves (source
+    // `public`) and whom the AFAN import MATCHED rather than inserted; 13-67 wrote
+    // the vouch onto their respondent metadata, and their marketplace profile
+    // predates the column, so it starts NULL. This row is the whole reason AC4 was
+    // corrected away from a source predicate.
+    await seedPerson({
+      respondentId: vouchedRespondentId,
+      submissionId: vouchedSubId,
+      profileId: vouchedProfileId,
+      // NOT `${TAG}D` — a later test seeds its own person under that reference and
+      // the unique index on reference_code reds the whole file.
+      ref: `${TAG}VOUCH`,
+      rawData: { years_experience: '4_6' },
+      experienceLevel: '4_6',
+      businessName: null,
+      associationName: null,
+      respondentMetadata: {
+        association_name: 'AFAN',
+        association_vouched_by_batch_id: '01a072ae-0000-7000-8000-000000000000',
+      },
     });
   });
 
@@ -199,8 +235,14 @@ describe('Story 13-38 card fields — real-DB smoke (raw-SQL ↔ schema parity)'
 
     expect(preview.dryRun).toBe(true);
     // Scoped, so these are EXACT now rather than ">= 3 of whatever else is here".
-    expect(preview.scanned).toBe(3);
-    expect(preview.needsUpdate).toBe(1);
+    // 4 since Story 13-58 added the vouched person (D) to the seed set.
+    expect(preview.scanned).toBe(4);
+    // 2 since Story 13-58: row C still needs its experience bucket, and row D needs
+    // the vouch its profile predates. Broken out below rather than left as a bumped
+    // total, so a future change that moves the number has to say which half moved.
+    expect(preview.needsUpdate).toBe(2);
+    expect(preview.experienceChanged).toBe(1);
+    expect(preview.associationNameChanged).toBe(1);
 
     // Dry-run must not have touched row C.
     const [rowC] = await db
@@ -319,5 +361,90 @@ describe('Story 13-38 card fields — real-DB smoke (raw-SQL ↔ schema parity)'
       await db.delete(submissions).where(eq(submissions.respondentId, respondentId));
       await db.delete(respondents).where(eq(respondents.id, respondentId));
     }
+  });
+
+  /**
+   * Story 13-58 — the raw-SQL half of the badge.
+   *
+   * `searchProfiles` and `getProfileById` are `db.execute(sql\`…\`)` and are NOT
+   * type-checked against the schema, so their mocked unit tests pass whether or not
+   * `mp.association_name` is in the SELECT list or the column was ever pushed. These
+   * are the only assertions in the story that fail if either is missing.
+   */
+  describe('association provenance (Story 13-58)', () => {
+    it('projects association_name out of the real search SQL', async () => {
+      await db
+        .update(marketplaceProfiles)
+        .set({ associationName: 'AFAN' })
+        .where(eq(marketplaceProfiles.id, vouchedProfileId));
+
+      const result = await MarketplaceService.searchProfiles({ profession: PROFESSION });
+
+      const vouched = result.data.find((p) => p.id === vouchedProfileId);
+      expect(vouched).toBeDefined();
+      expect(vouched!.associationName).toBe('AFAN');
+    });
+
+    it('returns associationName null for a worker no association vouched for', async () => {
+      const result = await MarketplaceService.searchProfiles({ profession: PROFESSION });
+
+      const ordinary = result.data.find((p) => p.id === noBusinessProfileId);
+      expect(ordinary).toBeDefined();
+      expect(ordinary!.associationName).toBeNull();
+    });
+
+    it('projects association_name out of the real profile-detail SQL', async () => {
+      await db
+        .update(marketplaceProfiles)
+        .set({ associationName: 'AFAN' })
+        .where(eq(marketplaceProfiles.id, vouchedProfileId));
+
+      const detail = await MarketplaceService.getProfileById(vouchedProfileId);
+
+      expect(detail).not.toBeNull();
+      expect(detail!.associationName).toBe('AFAN');
+    });
+
+    /**
+     * The catch-up, end to end against a real row: the vouch is on the respondent's
+     * metadata and the profile is NULL, which is precisely prod's state for the
+     * eleven. If the backfill's `r.metadata ->> 'association_name'` were wrong (the
+     * `adopted_draft_answers` bug in this same file's history was exactly that shape
+     * — 42703, invisible to a mocked test), this reds.
+     */
+    it('backfills the vouch onto a profile that predates the column', async () => {
+      await db
+        .update(marketplaceProfiles)
+        .set({ associationName: null })
+        .where(eq(marketplaceProfiles.id, vouchedProfileId));
+
+      const result = await backfillMarketplaceCardFields({
+        apply: true,
+        profileIds: [vouchedProfileId],
+      });
+
+      expect(result.associationNameChanged).toBe(1);
+
+      const [row] = await db
+        .select({ associationName: marketplaceProfiles.associationName })
+        .from(marketplaceProfiles)
+        .where(eq(marketplaceProfiles.id, vouchedProfileId));
+      expect(row.associationName).toBe('AFAN');
+    });
+
+    it('leaves a profile alone when its respondent carries no vouch', async () => {
+      const result = await backfillMarketplaceCardFields({
+        apply: true,
+        profileIds: [noBusinessProfileId],
+      });
+
+      expect(result.associationNameChanged).toBe(0);
+
+      const [row] = await db
+        .select({ associationName: marketplaceProfiles.associationName })
+        .from(marketplaceProfiles)
+        .where(eq(marketplaceProfiles.id, noBusinessProfileId));
+      expect(row.associationName).toBeNull();
+    });
   });
 });

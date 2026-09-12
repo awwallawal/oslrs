@@ -5,6 +5,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import EmployersPage from '../pages/EmployersPage';
+import {
+  GOVERNMENT_VERIFICATION_MEANS,
+  GOVERNMENT_VERIFICATION_DOES_NOT_MEAN,
+  FORBIDDEN_IDENTITY_CLAIMS,
+} from '../../../lib/trust-claims';
 
 afterEach(() => {
   cleanup();
@@ -57,19 +62,36 @@ describe('EmployersPage', () => {
     expect(screen.getByText('What It Does NOT Mean')).toBeInTheDocument();
   });
 
-  it('displays verification positive points', () => {
+  /**
+   * ⚠️ [AI-Review][High] 2026-09-11, Story 13-58 R1 sweep. This block used to assert
+   * 'Identity confirmed through NIN verification' and 'Badge indicates trustworthy identity'
+   * WORD FOR WORD — so the false claim had a defender, and anyone who fixed the page would
+   * have been met by a failing test telling them to put it back. Third instance of that shape
+   * in this story. → [[pattern-test-that-passes-over-a-hole]]
+   *
+   * Now asserts the CANONICAL lists, so the test tracks `lib/trust-claims.ts` and can never
+   * again disagree with the badge about what the platform checks.
+   */
+  it('displays verification positive points — from the canonical trust claims', () => {
     renderWithRouter(<EmployersPage />);
-    expect(screen.getByText('Identity confirmed through NIN verification')).toBeInTheDocument();
-    expect(screen.getByText('Worker voluntarily registered their skills')).toBeInTheDocument();
-    expect(screen.getByText('Government oversight ensures data accuracy')).toBeInTheDocument();
-    expect(screen.getByText('Badge indicates trustworthy identity')).toBeInTheDocument();
+    for (const claim of GOVERNMENT_VERIFICATION_MEANS) {
+      expect(screen.getByText(claim)).toBeInTheDocument();
+    }
   });
 
-  it('displays verification disclaimers', () => {
+  it('displays verification disclaimers — from the canonical trust claims', () => {
     renderWithRouter(<EmployersPage />);
-    expect(screen.getByText('Does not guarantee skill proficiency')).toBeInTheDocument();
-    expect(screen.getByText('Does not verify work history claims')).toBeInTheDocument();
-    expect(screen.getByText('Does not replace your own due diligence')).toBeInTheDocument();
+    for (const claim of GOVERNMENT_VERIFICATION_DOES_NOT_MEAN) {
+      expect(screen.getByText(claim)).toBeInTheDocument();
+    }
+  });
+
+  it('makes no identity claim the platform cannot support (R1)', () => {
+    const { container } = renderWithRouter(<EmployersPage />);
+    const text = container.textContent ?? '';
+    for (const { pattern, why } of FORBIDDEN_IDENTITY_CLAIMS) {
+      expect(pattern.test(text), `EmployersPage must not claim: ${why}`).toBe(false);
+    }
   });
 
   it('renders Visibility Table section', () => {

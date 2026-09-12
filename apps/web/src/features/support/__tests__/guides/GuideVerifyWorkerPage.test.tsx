@@ -5,6 +5,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
 import GuideVerifyWorkerPage from '../../pages/guides/GuideVerifyWorkerPage';
+import {
+  GOVERNMENT_VERIFICATION_MEANS,
+  GOVERNMENT_VERIFICATION_DOES_NOT_MEAN,
+  FORBIDDEN_IDENTITY_CLAIMS,
+} from '../../../../lib/trust-claims';
 
 afterEach(() => {
   cleanup();
@@ -29,13 +34,32 @@ describe('GuideVerifyWorkerPage', () => {
     expect(screen.getByText(/1 minute/)).toBeInTheDocument();
   });
 
+  /**
+   * ⚠️ [AI-Review][High] 2026-09-09 (Story 13-58) — the list this asserts used to
+   * contain "NIN has been validated" and "Identity verified by government", both
+   * false, on a public page under a green tick. It now renders the canonical
+   * claims from `lib/trust-claims.ts`.
+   */
   it('renders What Verification Confirms section', () => {
     renderWithRouter(<GuideVerifyWorkerPage />);
     expect(screen.getByText('What Verification Confirms')).toBeInTheDocument();
     expect(screen.getByText('What It DOES Confirm')).toBeInTheDocument();
     expect(screen.getByText('What It Does NOT Confirm')).toBeInTheDocument();
-    expect(screen.getByText('Worker is registered in OSLSR')).toBeInTheDocument();
-    expect(screen.getByText(/Worker's skill level/)).toBeInTheDocument();
+    for (const claim of GOVERNMENT_VERIFICATION_MEANS) {
+      expect(screen.getByText(claim)).toBeInTheDocument();
+    }
+    for (const claim of GOVERNMENT_VERIFICATION_DOES_NOT_MEAN) {
+      expect(screen.getByText(claim)).toBeInTheDocument();
+    }
+  });
+
+  /** R1 — no identity claim anywhere in this guide's copy, steps included. */
+  it('makes no identity claim the system cannot back (R1)', () => {
+    const { container } = renderWithRouter(<GuideVerifyWorkerPage />);
+
+    for (const { pattern, why } of FORBIDDEN_IDENTITY_CLAIMS) {
+      expect(pattern.test(container.textContent ?? ''), why).toBe(false);
+    }
   });
 
   it('renders 5 steps', () => {

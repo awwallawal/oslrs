@@ -46,7 +46,9 @@ const workerGuides = [
 const employerGuides = [
   {
     title: 'How to Search the Marketplace',
-    description: 'Find verified skilled workers by profession, location, or experience level.',
+    // [AI-Review][High] 2026-09-09 (Story 13-58) — was "Find verified skilled
+    // workers": the same blanket claim removed from the marketplace strapline (H1).
+    description: 'Find skilled workers by profession, location, or experience level.',
     icon: Search,
     href: '/support/guides/search-marketplace',
   },

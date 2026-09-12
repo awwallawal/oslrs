@@ -2,6 +2,10 @@ import { Link } from 'react-router-dom';
 import { CheckCircle, XCircle, Shield } from 'lucide-react';
 import { GuidePageLayout, StepList, TipCard } from '../../components';
 import { siteEmail } from '../../../../config/site';
+import {
+  GOVERNMENT_VERIFICATION_MEANS,
+  GOVERNMENT_VERIFICATION_DOES_NOT_MEAN,
+} from '../../../../lib/trust-claims';
 
 const steps = [
   {
@@ -22,7 +26,9 @@ const steps = [
   },
   {
     title: 'Understand what results mean',
-    description: 'A verified status confirms the worker is registered in OSLSR and their NIN has been validated. This does not guarantee skill level or work quality.',
+    // [AI-Review][High] 2026-09-09 — was "their NIN has been validated". It is
+    // format-checked, never validated against any registry.
+    description: 'A verified status confirms the worker is registered in OSLSR and that a State Assessor approved the registration. This does not confirm their identity, and does not guarantee skill level or work quality.',
   },
 ];
 
@@ -30,12 +36,15 @@ const relatedGuides = [
   {
     href: '/support/guides/search-marketplace',
     title: 'How to Search the Marketplace',
-    description: 'Find verified workers through the marketplace.',
+    // [AI-Review][High] 2026-09-09 — "verified workers" is the same blanket claim
+    // removed from the marketplace strapline (H1); the grid is about to carry
+    // association-vouched cards that no one verified.
+    description: 'Find skilled workers through the marketplace.',
   },
   {
     href: '/support/guides/employer-account',
     title: 'Setting Up an Employer Account',
-    description: 'Create an account to contact verified workers.',
+    description: 'Create an account to contact workers.',
   },
 ];
 
@@ -64,11 +73,16 @@ function GuideVerifyWorkerPage() {
                 <CheckCircle className="w-5 h-5" />
                 What It DOES Confirm
               </h3>
+              {/*
+                ⚠️ [AI-Review][High] 2026-09-09 (Story 13-58) — this list read
+                "NIN has been validated" and "Identity verified by government"
+                under a green tick. Both are false: NIN validation is FORMAT-ONLY
+                and there is no NIMC path. Now rendered from the canonical source.
+              */}
               <ul className="space-y-1 text-sm text-neutral-700">
-                <li>Worker is registered in OSLSR</li>
-                <li>NIN has been validated</li>
-                <li>Identity verified by government</li>
-                <li>Profile is active and current</li>
+                {GOVERNMENT_VERIFICATION_MEANS.map((claim) => (
+                  <li key={claim}>{claim}</li>
+                ))}
               </ul>
             </div>
             <div>
@@ -77,10 +91,9 @@ function GuideVerifyWorkerPage() {
                 What It Does NOT Confirm
               </h3>
               <ul className="space-y-1 text-sm text-neutral-700">
-                <li>Worker's skill level or proficiency</li>
-                <li>Quality of previous work</li>
-                <li>Employment history</li>
-                <li>Character references</li>
+                {GOVERNMENT_VERIFICATION_DOES_NOT_MEAN.map((claim) => (
+                  <li key={claim}>{claim}</li>
+                ))}
               </ul>
             </div>
           </div>
@@ -98,8 +111,12 @@ function GuideVerifyWorkerPage() {
               <CheckCircle className="w-6 h-6 text-success-600 flex-shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-semibold text-success-800">Verified</h3>
+                {/*
+                  [AI-Review][High] 2026-09-09 — was "their identity has been
+                  confirmed through NIN verification". No such check exists.
+                */}
                 <p className="text-sm text-success-700">
-                  The worker is registered in OSLSR and their identity has been confirmed through NIN verification.
+                  The worker is registered in OSLSR and a State Assessor reviewed and approved their registration.
                 </p>
               </div>
             </div>
@@ -121,7 +138,8 @@ function GuideVerifyWorkerPage() {
             <TipCard title="Verification is just one step" variant="warning">
               <p>
                 Always conduct your own interview and assessment of workers before hiring.
-                Verification confirms identity, not skill level or work quality.
+                Verification confirms an approved registration — not identity, skill level,
+                or work quality.
               </p>
             </TipCard>
             <TipCard title="Report suspicious activity" variant="info">

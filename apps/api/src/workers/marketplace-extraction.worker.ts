@@ -21,6 +21,7 @@ import { sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { extractSelectMultipleValues } from '../lib/skills-extraction.js';
 import {
+  normaliseAssociationName,
   normaliseBusinessName,
   normaliseMarketplaceExperienceLevel,
   type MarketplaceExperienceLevel,
@@ -187,7 +188,10 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
     // 2. Load respondent
     const respondent = await db.query.respondents.findFirst({
       where: eq(respondents.id, respondentId),
-      columns: { id: true, status: true, consentMarketplace: true, consentEnriched: true, lgaId: true },
+      // Story 13-58 — `metadata` joins this query for the association vouch only.
+      // NOTE there is deliberately no `source` column here: AC4 (corrected
+      // 2026-09-07) keys the badge on the PRESENCE of a name, never on the source.
+      columns: { id: true, status: true, consentMarketplace: true, consentEnriched: true, lgaId: true, metadata: true },
     });
 
     if (!respondent) {
@@ -233,6 +237,17 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
     // which would print a person's name on an anonymous-by-consent card.
     const businessName = normaliseBusinessName(rawData['business_name']);
 
+    // Story 13-58 — the accountable body that vouched for this person, denormalised
+    // onto the profile so the public marketplace read never has to touch the PII
+    // table. Written by 13-67 at import (and by its one-shot backfill for the two
+    // batches that predate the field).
+    //
+    // Read from the RESPONDENT, not from `rawData`: the vouch is a property of the
+    // person's provenance, not an answer they gave. And keyed on nothing else --
+    // AC4 was corrected on 2026-09-07 precisely because a `source` predicate drops
+    // the eleven people the AFAN import MATCHED, whose own source is `public`.
+    const associationName = normaliseAssociationName(respondent.metadata?.association_name);
+
     // 5. Resolve LGA name
     const { lgaId: resolvedLgaId, lgaName } = await resolveLgaName(respondent.lgaId);
 
@@ -258,6 +273,7 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
         bio,
         portfolioUrl,
         businessName,
+        associationName,
       })
       .onConflictDoUpdate({
         target: marketplaceProfiles.respondentId,
@@ -291,6 +307,19 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
           // it. An experience bucket is not retractable by omission — the
           // questionnaire simply may not have asked.
           experienceLevel: experienceLevel ?? sql`${marketplaceProfiles.experienceLevel}`,
+          // Story 13-58 — ADD or CORRECT, never subtract. Same rule and same shape
+          // as `experienceLevel` above, for a stronger reason: an association's
+          // vouch is a claim a named body MADE, not an answer the worker restates.
+          // This upsert re-runs on every resubmission, and a supplemental submission
+          // says nothing about provenance — so writing the derived null here would
+          // silently retract a vouch nobody withdrew, and the card would lose its
+          // badge with no event anywhere recording why.
+          //
+          // A real correction still lands: when the respondent DOES resolve a name,
+          // that name is written, including over a different stored one (13-67's own
+          // backfill refuses to overwrite one body's claim with another, so a change
+          // reaching here is a deliberate operator repair, not a collision).
+          associationName: associationName ?? sql`${marketplaceProfiles.associationName}`,
           updatedAt: sql`now()`,
         },
       });

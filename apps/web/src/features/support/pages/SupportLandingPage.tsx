@@ -101,7 +101,7 @@ function SupportLandingPage() {
             {/* Verify Worker - Full Width */}
             <SupportCard
               title="Verify a Worker"
-              description="Check if a worker is registered and verified in the OSLSR system using their verification code."
+              description="Check whether a worker is registered in the OSLSR system, and whether their registration was approved, using their verification code."
               icon={UserCheck}
               href="/support/verify-worker"
               fullWidth

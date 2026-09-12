@@ -14,8 +14,13 @@ Status: done
 > 🎯 **PICKING THIS UP COLD? READ [§Session Record](#-session-record--code-review--r2-ruling-2026-09-06--2026-09-07) FIRST** (near the bottom, after
 > the Dev Agent Record). Everything below this line is the story AS CARVED on 2026-09-05; the
 > Session Record is what actually happened when it was built, reviewed and ruled on — including
-> the two residuals still open (**R1** the unrun prod backfill, **R3** an AC change in 13-58 that
-> is adjudication's to make) and the five-step running order for whoever goes next.
+> what were then two open residuals — **R1** the unrun prod backfill and **R3** an AC change in
+> 13-58 — and the five-step running order for whoever goes next.
+>
+> ✅ **BOTH ARE NOW CLOSED** (banner corrected 2026-09-11, Story 13-58's sweep): R1 applied on prod
+> at `e681851`, R3 ruled at adjudication 2026-09-07 and written into 13-58's AC4. This paragraph read
+> "still open" after the story went `done`, which would have sent a cold reader hunting closed work.
+> → [[pattern-a-record-about-the-work-is-not-the-work]]
 
 <!--
   CARVED 2026-09-05 at adjudication, deliberately NOT as an amendment to 13-2.

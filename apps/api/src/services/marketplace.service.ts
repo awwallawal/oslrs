@@ -168,6 +168,12 @@ export class MarketplaceService {
         mp.verified_badge,
         mp.bio,
         mp.business_name,
+        -- Story 13-58 — the association vouch, denormalised onto the profile by the
+        -- extraction worker. Deliberately read from THIS row and no other table: the
+        -- name is already here, and reaching into the PII table to fetch it would put
+        -- that table into an unauthenticated query for nothing. A test asserts the
+        -- absence of that join by table name, so this comment does not name it either.
+        mp.association_name,
         ${rankSelect} as relevance_score,
         mp.updated_at
       FROM marketplace_profiles mp
@@ -195,6 +201,10 @@ export class MarketplaceService {
       relevanceScore: row.relevance_score != null ? parseFloat(String(row.relevance_score)) : null,
       // Story 13-38 AC8 — additive read on the same row; no new registry read.
       businessName: row.business_name ? String(row.business_name) : null,
+      // Story 13-58 — same row, same read. Presence is what the card keys the badge
+      // on, so an empty string must arrive as null rather than as a badge naming
+      // nobody (the worker already normalises blanks away; this is the second belt).
+      associationName: row.association_name ? String(row.association_name) : null,
     }));
 
     // Build next cursor
@@ -250,6 +260,9 @@ export class MarketplaceService {
         -- Story 13-38 AC8 / [AI-Review][Medium] 2026-08-18 — the card leads with the
         -- trading name, so the page it links to must not silently drop it.
         mp.business_name,
+        -- Story 13-58 — the card asserted a named body vouched; the page it links
+        -- to must be able to say the same thing.
+        mp.association_name,
         mp.created_at
       FROM marketplace_profiles mp
       LEFT JOIN lgas l ON mp.lga_id = l.code
@@ -271,6 +284,7 @@ export class MarketplaceService {
       bio: row.bio ? String(row.bio) : null,
       portfolioUrl: row.portfolio_url ? String(row.portfolio_url) : null,
       businessName: row.business_name ? String(row.business_name) : null,
+      associationName: row.association_name ? String(row.association_name) : null,
       createdAt: new Date(row.created_at as string).toISOString(),
     };
   }

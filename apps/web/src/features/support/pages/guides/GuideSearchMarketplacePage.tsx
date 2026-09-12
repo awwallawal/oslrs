@@ -72,8 +72,16 @@ function GuideSearchMarketplacePage() {
             </TipCard>
             <TipCard title="Check verification badges" variant="info">
               <p>
-                Look for the government verification badge on worker profiles. This indicates their
-                NIN has been validated and identity confirmed.
+                {/*
+                  ⚠️ [AI-Review][High] 2026-09-11, Story 13-58 R1 sweep. Used to read "their NIN
+                  has been validated and identity confirmed" — verbatim the claim corrected on the
+                  badge (2026-08-18) and on two support pages (2026-09-09). NIN validation is
+                  FORMAT-ONLY and there is no NIMC path. Second sentence is byte-identical to
+                  GOVERNMENT_VERIFICATION_DOES_NOT_MEAN[0] in `lib/trust-claims.ts`.
+                */}
+                Look for the government verification badge on worker profiles. It means a State
+                Assessor reviewed and approved the registration. We have not confirmed this identity
+                with NIMC — the NIN is format-checked only.
               </p>
             </TipCard>
             <TipCard title="Respect worker privacy" variant="warning">

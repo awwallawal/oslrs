@@ -22,6 +22,7 @@ function makeProfile(overrides: Partial<MarketplaceSearchResultItem> = {}): Mark
     bio: 'Experienced electrician.',
     relevanceScore: null,
     businessName: null,
+    associationName: null,
     ...overrides,
   };
 }
@@ -96,7 +97,15 @@ describe('WorkerCard — Story 13-38 AC5 redesign', () => {
     expect(screen.queryByTestId('government-verified-badge')).not.toBeInTheDocument();
   });
 
-  it('renders NO association provenance line — that is Story 13-58, gated on 13-2', () => {
+  /**
+   * Retitled when Story 13-58 landed. The assertion is unchanged and still correct:
+   * a profile no association vouched for renders no provenance line. What changed is
+   * the REASON — it is no longer "13-58 is not built", it is "this worker has no
+   * vouch". `Member-verified` (tier 2) stays absent on purpose: it has no substrate
+   * (no member_confirmed column, no SMS loop, no Assessor queue), and 13-58 shipped
+   * with AC2 explicitly left open rather than faking a tier that cannot be earned.
+   */
+  it('renders NO association provenance line when no association vouched', () => {
     renderCard(makeProfile({ verifiedBadge: true }));
 
     expect(screen.queryByText(/confirmed member/i)).not.toBeInTheDocument();
@@ -227,5 +236,103 @@ describe('WorkerCard — Story 13-38 AC8 business name', () => {
     const card = screen.getByTestId('worker-card');
     expect(card.textContent).not.toMatch(/Adekemi|Ogunlade/);
     expect(screen.getByTestId('worker-card-identity')).toHaveTextContent('Tailoring/Sewing');
+  });
+});
+
+/**
+ * Story 13-58 — the association provenance badge on the card.
+ *
+ * ⭐ AC4's RED-verify is the point of this block, and it has to run in BOTH
+ * directions, because "no badge appeared" is also exactly what a broken conditional
+ * produces. A source-keyed implementation passes the negative case and fails the
+ * eleven people the 2026-09-07 ruling was made for.
+ */
+describe('WorkerCard — Story 13-58 association badge', () => {
+  it('renders the badge naming the body that vouched (AC1)', () => {
+    renderCard(makeProfile({ associationName: 'AFAN' }));
+
+    expect(screen.getByTestId('association-confirmed-badge')).toHaveTextContent(
+      'AFAN — confirmed member',
+    );
+  });
+
+  it('renders NO badge when no association vouched (AC4, direction 1)', () => {
+    renderCard(makeProfile({ associationName: null }));
+
+    expect(screen.queryByTestId('association-confirmed-badge')).not.toBeInTheDocument();
+  });
+
+  /**
+   * AC4, direction 2 — THE DISCRIMINATING CASE. This profile is indistinguishable
+   * from an ordinary self-registered worker except that a named association put them
+   * on its member list; the import MATCHED them rather than inserting them, so
+   * nothing about their own record says "imported". Eleven real people on prod are
+   * in exactly this position. Keyed on source, this test fails; keyed on the stored
+   * name, it passes.
+   */
+  it('renders the badge for a self-registered worker an association vouched for (AC4, direction 2)', () => {
+    renderCard(makeProfile({ associationName: 'AFAN', verifiedBadge: false }));
+
+    expect(screen.getByTestId('association-confirmed-badge')).toHaveTextContent('AFAN');
+  });
+
+  it('treats a blank association name as no vouch, not as an unnamed badge', () => {
+    renderCard(makeProfile({ associationName: '   ' }));
+
+    expect(screen.queryByTestId('association-confirmed-badge')).not.toBeInTheDocument();
+  });
+
+  // AC5 — the two trust signals coexist without either being mistaken for the other.
+  it('renders alongside the government badge when both apply (AC5)', () => {
+    renderCard(makeProfile({ associationName: 'ASNAT', verifiedBadge: true }));
+
+    expect(screen.getByTestId('government-verified-badge')).toBeInTheDocument();
+    expect(screen.getByTestId('association-confirmed-badge')).toBeInTheDocument();
+  });
+
+  /**
+   * R1 LOCKED — an association row must never present as a bare "Verified".
+   *
+   * [AI-Review][Low] 2026-09-08 — rescoped from `container.textContent` to the TRUST
+   * CLAIM, for the same reason the profile-page twin was rescoped in this story: a
+   * card-wide match reds on any unrelated copy that happens to contain the word (a
+   * bio, a future strapline), and a guard that fails for the wrong reason teaches
+   * the next dev to delete it rather than trust it. What R1 actually forbids is the
+   * platform ASSERTING a verification it never performed, so assert on the thing
+   * that makes assertions.
+   */
+  it('never renders a bare "Verified" for an association-only card (R1)', () => {
+    renderCard(makeProfile({ associationName: 'AFAN', verifiedBadge: false }));
+
+    // No government pill, because no Assessor approved this registration...
+    expect(screen.queryByTestId('government-verified-badge')).not.toBeInTheDocument();
+    // ...and the claim that IS made names the body instead of asserting a check.
+    const badge = screen.getByTestId('association-confirmed-badge');
+    expect(badge.textContent).not.toMatch(/\bverified\b/i);
+    expect(badge.textContent).toContain('AFAN — confirmed member');
+  });
+
+  /**
+   * Mirrors the AC8.3 signboard test above, for the same reason: the trust slot sits
+   * beside the identity line in a fixed grid cell, so an unbounded body name deforms
+   * the whole row. The full string stays reachable on hover and to a screen reader.
+   *
+   * [AI-Review][High] 2026-09-08 — this reached the tree asserting
+   * `badge.querySelector('.truncate')`, which is an eslint ERROR under Team
+   * Agreement A3 (no CSS selectors in tests): `pnpm --filter @oslsr/web lint` was
+   * red, while the story's gate table recorded it as clean. Rewritten to query the
+   * label by test id, so the assertion survives a class rename and the gate is
+   * honestly green.
+   */
+  it('keeps a long association name inside the card and reachable on hover', () => {
+    const longName = 'Association of Tilers and Allied Craftsmen of Oyo State';
+    renderCard(makeProfile({ associationName: longName }));
+
+    const badge = screen.getByTestId('association-confirmed-badge');
+    expect(badge).toHaveAttribute(
+      'title',
+      `Confirmed as a member by ${longName}. Identity not independently verified.`,
+    );
+    expect(screen.getByTestId('association-confirmed-badge-label')).toHaveClass('truncate');
   });
 });

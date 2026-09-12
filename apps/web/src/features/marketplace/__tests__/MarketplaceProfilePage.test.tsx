@@ -103,6 +103,9 @@ vi.mock('lucide-react', () => ({
   ShieldCheck: () => <svg data-testid="shield-check-icon" />,
   Send: () => <svg data-testid="send-icon" />,
   FileText: () => <svg data-testid="file-text-icon" />,
+  // Story 13-58 — the association badge's icon. This mock is exhaustive (no
+  // ...actual spread), so a missing entry is an undefined component, not a fallback.
+  Users: () => <svg data-testid="users-icon" />,
 }));
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -119,6 +122,7 @@ const sampleProfile = {
   bio: 'Experienced electrician specializing in residential wiring.',
   portfolioUrl: 'https://example.com/portfolio',
   businessName: null,
+  associationName: null,
   createdAt: '2026-03-01T12:00:00.000Z',
 };
 
@@ -451,6 +455,90 @@ describe('MarketplaceProfilePage', () => {
 
       expect(screen.getByTestId('profile-identity')).toHaveTextContent('Tailoring/Sewing');
       expect(document.body.textContent).not.toMatch(/Adekemi|Ogunlade/);
+    });
+  });
+
+  /**
+   * Story 13-58 — the provenance the card asserted must survive the click. A badge
+   * that appears on a card and vanishes on the page it links to reads as a mistake
+   * on one of the two surfaces, and the employer cannot tell which.
+   */
+  describe('association provenance badge (13-58)', () => {
+    it('names the body that vouched (AC1)', () => {
+      mockProfileReturn = {
+        data: { ...sampleProfile, associationName: 'AFAN' },
+        isLoading: false,
+        error: null,
+      };
+      renderProfilePage();
+
+      expect(screen.getByTestId('association-confirmed-badge')).toHaveTextContent(
+        'AFAN — confirmed member',
+      );
+    });
+
+    it('renders no badge when no association vouched (AC4, direction 1)', () => {
+      mockProfileReturn = {
+        data: { ...sampleProfile, associationName: null },
+        isLoading: false,
+        error: null,
+      };
+      renderProfilePage();
+
+      expect(screen.queryByTestId('association-confirmed-badge')).not.toBeInTheDocument();
+    });
+
+    /**
+     * AC4, direction 2 — the eleven. A self-registered worker the AFAN import
+     * MATCHED: nothing on their own record says "imported", and only the stored name
+     * carries the vouch.
+     */
+    it('renders the badge for a self-registered worker an association vouched for (AC4, direction 2)', () => {
+      mockProfileReturn = {
+        data: { ...sampleProfile, verifiedBadge: false, associationName: 'AFAN' },
+        isLoading: false,
+        error: null,
+      };
+      renderProfilePage();
+
+      expect(screen.getByTestId('association-confirmed-badge')).toHaveTextContent('AFAN');
+    });
+
+    it('exposes the AC3 disclosure without requiring a click', () => {
+      mockProfileReturn = {
+        data: { ...sampleProfile, associationName: 'ASNAT' },
+        isLoading: false,
+        error: null,
+      };
+      renderProfilePage();
+
+      expect(screen.getByTestId('association-confirmed-badge')).toHaveAttribute(
+        'aria-label',
+        'Confirmed as a member by ASNAT. Identity not independently verified.',
+      );
+    });
+
+    /**
+     * R1 LOCKED. Scoped to the TRUST CLAIM, not to the whole page: the reveal panel
+     * says "registered users who have verified their identity", which is about the
+     * VIEWER's account and is unrelated to what the platform asserts about this
+     * worker. A body-wide match reds on that sentence and would teach the next dev
+     * to delete the guard rather than trust it.
+     */
+    it('never presents an association-only profile as bare "Verified" (R1)', () => {
+      mockProfileReturn = {
+        data: { ...sampleProfile, verifiedBadge: false, associationName: 'AFAN' },
+        isLoading: false,
+        error: null,
+      };
+      renderProfilePage();
+
+      // No government pill, because no Assessor approved this registration...
+      expect(screen.queryByTestId('government-verified-badge')).not.toBeInTheDocument();
+      // ...and the claim that IS made names the body instead of asserting a check.
+      const badge = screen.getByTestId('association-confirmed-badge');
+      expect(badge.textContent).not.toMatch(/\bverified\b/i);
+      expect(badge.textContent).toContain('AFAN — confirmed member');
     });
   });
 

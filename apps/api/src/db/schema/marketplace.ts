@@ -54,6 +54,25 @@ export const marketplaceProfiles = pgTable('marketplace_profiles', {
   // Government verification badge
   verifiedBadge: boolean('verified_badge').notNull().default(false),
 
+  /**
+   * Story 13-58 — the accountable body that VOUCHED for this worker, denormalised
+   * from `respondents.metadata.association_name` (Story 13-67) by the extraction
+   * worker. Nullable: almost every profile has none, and the card is exactly as it
+   * was when it is null.
+   *
+   * ⚠️ ITS PRESENCE IS THE BADGE'S ONLY PRECONDITION. Do NOT gate the badge on
+   * `respondents.source` — AC4 was corrected at adjudication on 2026-09-07 for
+   * exactly that reason. The AFAN import MATCHED eleven people who had already
+   * registered themselves, so their `source` is `public` while a named association
+   * genuinely vouched for them; a source-keyed condition renders them nothing and
+   * turns Awwal's ruling into a fix that never fires.
+   *
+   * ⚠️ NEVER populate this from `import_batches.source_description`. That is an
+   * operator note ("ASNAT Tiler Association (Oyo State) - WhatsApp intake, 56 clean
+   * rows of 70…"), not an accountable body's name.
+   */
+  associationName: text('association_name'),
+
   // Self-enrichment fields (editable via edit token — Story 7-5)
   bio: text('bio'),
   portfolioUrl: text('portfolio_url'),

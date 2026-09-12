@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   MARKETPLACE_EXPERIENCE_LEVELS,
   MARKETPLACE_BUSINESS_NAME_MAX_LEN,
+  MARKETPLACE_ASSOCIATION_NAME_MAX_LEN,
   experienceStatFor,
   experienceLabelFor,
   normaliseMarketplaceExperienceLevel,
   normaliseBusinessName,
+  normaliseAssociationName,
 } from '../marketplace.js';
 
 /**
@@ -136,6 +138,44 @@ describe('normaliseBusinessName — Story 13-38 AC8', () => {
     // so anything that is not a string answer yields no business name at all.
     for (const input of [null, undefined, 42, {}, [], true, { firstname: 'Adekemi' }]) {
       expect(normaliseBusinessName(input)).toBeNull();
+    }
+  });
+});
+
+/**
+ * Story 13-58. Same reason this file exists for the 13-38 helpers: this normaliser is
+ * the single source of truth the extraction worker, the card backfill and the card
+ * itself all read, so a change here moves the badge on every surface at once.
+ */
+describe('normaliseAssociationName — Story 13-58', () => {
+  it('trims a padded body name', () => {
+    expect(normaliseAssociationName('  AFAN  ')).toBe('AFAN');
+    expect(normaliseAssociationName('ASNAT')).toBe('ASNAT');
+  });
+
+  /**
+   * The load-bearing case. A blank name must be indistinguishable from no name: the
+   * badge's entire claim is that a NAMED body vouched, and "— confirmed member" with
+   * nothing in front of it asserts a vouch while naming nobody. That is exactly the
+   * overstatement R1 locks against, and it would render as a badge, not as an error.
+   */
+  it('treats blank and whitespace-only as no vouch at all', () => {
+    expect(normaliseAssociationName('   ')).toBeNull();
+    expect(normaliseAssociationName('')).toBeNull();
+    expect(normaliseAssociationName('\t\n ')).toBeNull();
+  });
+
+  it('caps at the storage limit', () => {
+    const long = 'A'.repeat(MARKETPLACE_ASSOCIATION_NAME_MAX_LEN + 25);
+    expect(normaliseAssociationName(long)).toHaveLength(MARKETPLACE_ASSOCIATION_NAME_MAX_LEN);
+  });
+
+  it('returns null for every non-string input rather than coercing', () => {
+    // Structural, like the business-name rule: there is ONE source key
+    // (respondents.metadata.association_name) and no fallback anywhere, so a
+    // non-string yields no vouch instead of a stringified object on a card.
+    for (const input of [null, undefined, 42, {}, [], true, { association_name: 'AFAN' }]) {
+      expect(normaliseAssociationName(input)).toBeNull();
     }
   });
 });

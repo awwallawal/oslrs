@@ -15,7 +15,10 @@ import { AboutPageWrapper, AboutCallout } from '../components';
  */
 const tldrPoints = [
   'We only collect data necessary for workforce planning',
-  'Your NIN is verified locally and not stored publicly',
+  // ⚠️ [AI-Review][High] 2026-09-11, Story 13-58 R1 sweep — was 'Your NIN is verified
+  // locally and not stored publicly'. "Verified" overstates it: the check is `^\d{11}$`,
+  // a format check, and nothing validates a NIN against a registry.
+  'Your NIN is format-checked only and never shown publicly',
   'You control your marketplace visibility',
   'We never sell or share your data with third parties',
   'All data is encrypted and securely stored',

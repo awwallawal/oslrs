@@ -127,7 +127,28 @@ describe('MarketplaceSearchPage', () => {
   it('renders page title and subtitle', () => {
     renderPage();
     expect(screen.getByText('Skills Marketplace')).toBeInTheDocument();
-    expect(screen.getByText('Find verified skilled workers in Oyo State')).toBeInTheDocument();
+    expect(screen.getByText('Find skilled workers in Oyo State')).toBeInTheDocument();
+  });
+
+  /**
+   * R1 LOCKED, at PAGE level — [AI-Review][High] 2026-09-08 (Story 13-58).
+   *
+   * The strapline read "Find VERIFIED skilled workers in Oyo State" until this
+   * story. AC3 says no surface may make a bare "verified" claim for an association
+   * import, and this is the surface an employer reads first — directly above the
+   * grid that will carry association-vouched cards once
+   * `PIPELINE_EXCLUDED_STATUSES` opens for 8,278 people.
+   *
+   * The badge-level R1 tests could never catch this: they are scoped to a card, and
+   * this claim is made by the page around them. A per-card badge cannot walk back a
+   * promise the page already made.
+   */
+  it('makes no blanket "verified" claim over the results grid (R1)', () => {
+    renderPage();
+
+    const heading = screen.getByText('Skills Marketplace');
+    const header = heading.parentElement!;
+    expect(header.textContent).not.toMatch(/\bverified\b/i);
   });
 
   it('renders search bar', () => {

@@ -102,6 +102,7 @@ function makeProfile(overrides: Record<string, unknown> = {}) {
     verified_badge: true,
     bio: 'Experienced electrician.',
     business_name: null,
+    association_name: null,
     relevance_score: 0.0607,
     updated_at: '2026-03-01T12:00:00.000Z',
     ...overrides,
@@ -153,6 +154,41 @@ describe('MarketplaceService', () => {
       const result = await MarketplaceService.searchProfiles({});
 
       expect(result.data[0].businessName).toBeNull();
+    });
+
+    // Story 13-58 — layer 2 of four. The badge is a card change only if the name
+    // actually arrives from the read; without this the UI renders for nobody.
+    it('surfaces association_name as associationName when the row carries one', async () => {
+      setupDbMock([makeProfile({ association_name: 'AFAN' })], 1);
+
+      const result = await MarketplaceService.searchProfiles({});
+
+      expect(result.data[0].associationName).toBe('AFAN');
+    });
+
+    it('maps an absent association_name to null (no badge on an ordinary card)', async () => {
+      setupDbMock([makeProfile({ association_name: null })], 1);
+
+      const result = await MarketplaceService.searchProfiles({});
+
+      expect(result.data[0].associationName).toBeNull();
+    });
+
+    /**
+     * The read path must stay free of `respondents`. That table holds the PII this
+     * service exists to keep out of the public payload, and the association name is
+     * denormalised onto the profile at extraction precisely so no join is needed.
+     * Assert the SQL, because a join added "just to fetch the name" is the change
+     * that would quietly put a PII table in an unauthenticated query.
+     */
+    it('does not join respondents to obtain the association name', async () => {
+      setupDbMock([makeProfile({ association_name: 'ASNAT' })], 1);
+
+      await MarketplaceService.searchProfiles({});
+
+      const dataQuery = JSON.stringify(mockDbExecute.mock.calls[0][0]);
+      expect(dataQuery).toContain('association_name');
+      expect(dataQuery).not.toContain('respondents');
     });
 
     it('should execute two queries (data + count) for search', async () => {
@@ -418,6 +454,7 @@ describe('MarketplaceService', () => {
         verified_badge: true,
         bio: 'Experienced electrician specializing in residential wiring.',
         portfolio_url: 'https://example.com/portfolio',
+        association_name: null,
         created_at: '2026-03-01T12:00:00.000Z',
         ...overrides,
       };
@@ -461,6 +498,24 @@ describe('MarketplaceService', () => {
       const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
 
       expect(result!.verifiedBadge).toBe(false);
+    });
+
+    // Story 13-58 — the profile page a badged card links to must not drop the
+    // provenance the card asserted.
+    it('surfaces association_name as associationName on the detail view', async () => {
+      mockDbExecute.mockResolvedValueOnce({ rows: [makeDetailProfile({ association_name: 'ASNAT' })] });
+
+      const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
+
+      expect(result!.associationName).toBe('ASNAT');
+    });
+
+    it('maps an absent association_name to null on the detail view', async () => {
+      mockDbExecute.mockResolvedValueOnce({ rows: [makeDetailProfile({ association_name: null })] });
+
+      const result = await MarketplaceService.getProfileById('018e1234-5678-7000-8000-000000000001');
+
+      expect(result!.associationName).toBeNull();
     });
 
     it('should handle null optional fields gracefully', async () => {

@@ -683,4 +683,225 @@ describe('marketplace-extraction worker', () => {
       }));
     });
   });
+
+  // ── Story 13-58 — association provenance ────────────────────────────────
+  //
+  // The worker is the go-forward write path for
+  // `marketplace_profiles.association_name` (the 13-38 card backfill is the other).
+  // Layer 1 of four: the name must be on the profile before any imported respondent
+  // is extracted, or those rows materialise badge-less and need a second production
+  // backfill over live rows.
+  //
+  // ⚠️ [AI-Review][High] 2026-09-08 — this comment used to say the 8,278 materialise
+  // "the instant extraction runs for them" once `PIPELINE_EXCLUDED_STATUSES` opens.
+  // That is NOT what the code does, and the claim was repeated in four places. The
+  // import path never enqueues this worker (`import.service.ts` holds no reference
+  // to the queue; the worker's own note at :206-210 says the primary gate is
+  // by-construction), and the only production enqueue is
+  // `submission-processing.service.ts:1349-1353`, which the importer does not call.
+  // Opening the status gate alone therefore creates ZERO profiles. See the story's
+  // R7.
+  //
+  // ⚠️ Cohort coverage: every test in this block seeds `status: 'active'`. The
+  // cohort is `imported_unverified`, which returns at the gate before the
+  // derivation is ever reached — that case is pinned in
+  // `marketplace-extraction.worker.gate-open.test.ts`.
+  describe('association provenance (Story 13-58)', () => {
+    it('carries respondents.metadata.association_name onto the profile', async () => {
+      const mocks = setupDbMocks({
+        submission: { id: 'sub-001', rawData: { skills_possessed: 'farming' } },
+        respondent: {
+          id: 'resp-001',
+          status: 'active',
+          consentMarketplace: true,
+          consentEnriched: false,
+          lgaId: null,
+          metadata: { association_name: 'AFAN' },
+        },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        associationName: 'AFAN',
+      }));
+    });
+
+    it('writes null when the respondent carries no association_name', async () => {
+      const mocks = setupDbMocks({
+        submission: { id: 'sub-001', rawData: { skills_possessed: 'welding' } },
+        respondent: {
+          id: 'resp-001',
+          status: 'active',
+          consentMarketplace: true,
+          consentEnriched: false,
+          lgaId: null,
+          metadata: { normalisation_warnings: ['phone_reformatted'] },
+        },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        associationName: null,
+      }));
+    });
+
+    it('writes null when metadata is absent entirely', async () => {
+      const mocks = setupDbMocks({
+        submission: { id: 'sub-001', rawData: { skills_possessed: 'welding' } },
+        respondent: {
+          id: 'resp-001',
+          status: 'active',
+          consentMarketplace: true,
+          consentEnriched: false,
+          lgaId: null,
+          metadata: null,
+        },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        associationName: null,
+      }));
+    });
+
+    /**
+     * AC4 AS CORRECTED (2026-09-07). This is the case the ORIGINAL AC4 excluded and
+     * the reason it was rewritten: the AFAN import MATCHED eleven people who had
+     * already registered themselves, so `source = 'public'` while a named association
+     * genuinely vouched for them. A worker that filtered on `source` would drop
+     * exactly these eleven — the ruling silently unimplemented.
+     *
+     * RED-verify note: the sibling test above ("writes null when the respondent
+     * carries no association_name") is what makes this one discriminating. Without
+     * it, a worker that wrote null unconditionally would also pass "no badge for
+     * ordinary public rows".
+     */
+    it('carries the name for a source=public respondent the import MATCHED', async () => {
+      const mocks = setupDbMocks({
+        submission: { id: 'sub-001', rawData: { skills_possessed: 'farming' } },
+        respondent: {
+          id: 'resp-001',
+          status: 'active',
+          source: 'public',
+          consentMarketplace: true,
+          consentEnriched: false,
+          lgaId: null,
+          metadata: {
+            association_name: 'AFAN',
+            association_vouched_by_batch_id: '01a072ae-0000-7000-8000-000000000000',
+          },
+        },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        associationName: 'AFAN',
+      }));
+    });
+
+    /**
+     * A whitespace-only name asserts a vouch while naming nobody — an em-dash badge
+     * with no body in front of it is precisely the overstatement R1 locks against.
+     * Blank and absent must be the same thing: no badge.
+     */
+    it('normalises a whitespace-only association_name to null', async () => {
+      const mocks = setupDbMocks({
+        submission: { id: 'sub-001', rawData: { skills_possessed: 'farming' } },
+        respondent: {
+          id: 'resp-001',
+          status: 'active',
+          consentMarketplace: true,
+          consentEnriched: false,
+          lgaId: null,
+          metadata: { association_name: '   ' },
+        },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        associationName: null,
+      }));
+    });
+
+    it('trims a padded association_name', async () => {
+      const mocks = setupDbMocks({
+        submission: { id: 'sub-001', rawData: { skills_possessed: 'tiling' } },
+        respondent: {
+          id: 'resp-001',
+          status: 'active',
+          consentMarketplace: true,
+          consentEnriched: false,
+          lgaId: null,
+          metadata: { association_name: '  ASNAT  ' },
+        },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      expect(mocks.valuesFn).toHaveBeenCalledWith(expect.objectContaining({
+        associationName: 'ASNAT',
+      }));
+    });
+
+    /**
+     * ADD-or-CORRECT, never subtract — the same rule the `experienceLevel` review fix
+     * established. A re-extraction (any resubmission re-runs this upsert) whose
+     * respondent metadata no longer resolves a name must NOT blank a stored vouch:
+     * the association made its claim once, and a later submission that simply says
+     * nothing about it is not a retraction.
+     */
+    it('does not blank a stored vouch on re-extraction when the name is absent', async () => {
+      const mocks = setupDbMocks({
+        submission: { id: 'sub-001', rawData: { skills_possessed: 'farming' } },
+        respondent: {
+          id: 'resp-001',
+          status: 'active',
+          consentMarketplace: true,
+          consentEnriched: false,
+          lgaId: null,
+          metadata: {},
+        },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      const conflictArg = mocks.onConflictFn.mock.calls[0][0] as { set: Record<string, unknown> };
+      // Not null — the SET must carry the column value back (a SQL self-reference),
+      // exactly as `experienceLevel` does.
+      expect(conflictArg.set.associationName).not.toBeNull();
+      expect(conflictArg.set.associationName).toBeDefined();
+    });
+
+    it('CORRECTS a stored vouch when the respondent now resolves a name', async () => {
+      const mocks = setupDbMocks({
+        submission: { id: 'sub-001', rawData: { skills_possessed: 'farming' } },
+        respondent: {
+          id: 'resp-001',
+          status: 'active',
+          consentMarketplace: true,
+          consentEnriched: false,
+          lgaId: null,
+          metadata: { association_name: 'AFAN' },
+        },
+        fraudDetections: [],
+      });
+
+      await processorFn(makeJob({ submissionId: 'sub-001', respondentId: 'resp-001' }));
+
+      const conflictArg = mocks.onConflictFn.mock.calls[0][0] as { set: Record<string, unknown> };
+      expect(conflictArg.set.associationName).toBe('AFAN');
+    });
+  });
 });
