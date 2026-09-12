@@ -798,8 +798,8 @@ as contaminated (the test was reverted, the page was not) and both files restore
 
 | # | What | State |
 |---|---|---|
-| **R1** | **A new column must reach prod with the deploy.** `marketplace_profiles.association_name` is pushed by `db:push` at deploy; the badge renders for nobody until it lands. Same deploy dependency 13-38 carried for `business_name`. | OPEN — discharges on deploy |
-| **R2** | **The catch-up must actually be RUN.** `_backfill-marketplace-card-fields.ts --dry-run` then `--apply --confirm-i-am-not-dry-running`. Until then the eleven matched respondents keep a badge-less card. **PREDICT BEFORE RUNNING:** `associationNameChanged` should equal the number of the eleven who hold a marketplace profile — measure that from prod first and compare, per [[pattern-predict-then-compare]]. Do not read the script's own report as the evidence; read the rows back. | OPEN — operator action |
+| ~~**R1**~~ | ✅ **DISCHARGED ON PROD 2026-09-12 BY EXECUTION, not by a deploy log.** Deployed `590cdbc`, health 200. The column exists (`information_schema` = 1) and — the part that actually matters — **the deployed READ PATH carries it**: `GET /api/v1/marketplace/search` now returns `"associationName": null` on an ordinary row, a key that was **absent** in the pre-deploy control captured hours earlier. §7 item 3 asked for exactly this distinction and it was honoured: the migration running is not evidence that the badge can render. | **CLOSED 2026-09-12** |
+| ~~**R2**~~ | ✅ **RUN AND VERIFIED ON PROD 2026-09-12 — predicted 10, wrote 10.** Dry-run first: `association_name add/fixed 10`, `rows needing update 10`, `rows WRITTEN 0`; then applied: **`rows WRITTEN 10`**. ⭐ **The report was NOT accepted as the evidence** — the rows were read back: 10 profiles carry a name, **all 10 AFAN** (correct: ASNAT's 56 were all INSERTED, so none held a prior profile), **`updated_at` touched today = 0** (so the repair cannot reorder the public browse — a claim verified rather than trusted), and **`search_vector` carries the name on 10/10**, which proves the trigger fired on the backfill's own UPDATEs exactly as the ordering argument predicted. Public execution proof: `?association=AFAN` **0 → 10** and `?q=AFAN` **0 → 10**. A live card reads `"associationName":"AFAN"` with `verifiedBadge:false` — **AC4-as-corrected proven on real data**, since those people's own `source` is `public` and a source-keyed build would render them nothing. ⚠️ `experience_level` and `business_name` both moved **0**, confirming 13-38's backfill had already run and this is idempotent for them. | **CLOSED 2026-09-12** | ~~ORIGINAL: **The catch-up must actually be RUN.** `_backfill-marketplace-card-fields.ts --dry-run` then `--apply --confirm-i-am-not-dry-running`. Until then the eleven matched respondents keep a badge-less card. **PREDICT BEFORE RUNNING:** `associationNameChanged` should equal the number of the eleven who hold a marketplace profile — measure that from prod first and compare, per [[pattern-predict-then-compare]]. Do not read the script's own report as the evidence; read the rows back.~~ |
 | ~~**R3**~~ | ✅ **RULED 2026-09-11 (Awwal): WITHDRAW the degrade path.** AC1's fallback ("Trade association — confirmed member") is unreachable under AC4-as-corrected and is now struck from AC1 with the reasoning, rather than left as dead copy for the next reader to "fix" by re-keying the branch on `source`. **The ruling moved the ACs, not just the ledger:** AC1 re-keyed onto the name's presence, and **AC6 corrected** — it required "no badge for non-association sources", which contradicted AC4 and would have been PASSED by the source-keyed build AC4 exists to prevent and FAILED by the correct one. No code change: the shipped behaviour was already AC4-as-corrected. | **CLOSED 2026-09-11** |
 | **R4** | **AC2 (tier-2) has no substrate and stays open.** Carve the member-side check as its own story before any "Member-verified" copy ships. ⚖️ **CARVE TRIGGER recorded 2026-09-11 — so this is a scoped story when someone picks it up, not a rediscovery.** Tier-2 needs THREE things that do not exist: a `member_confirmed` column on the taxonomy substrate (never a badge-local re-derivation, per AC2); an SMS confirmation loop, which is blocked on **Termii not being cleared**; and an Assessor callback queue. ⛔ Do not ship "Member-verified" copy before all three — a tier that cannot be earned is a badge that never changes, and the existing `WorkerCard` test asserting it NEVER renders is the guard holding that line. | OPEN — by design, trigger recorded |
 | ~~**R5**~~ | ✅ **RULED + SHIPPED — and the record said the opposite until adjudication found the code (2026-09-12).** `association_name` joins `search_vector` at **weight D**, plus a structured `?association=` filter (controller → service → web API → URL state → a filter input). ⛔ **THE FINDING IS NOT THE FEATURE, IT IS THE RECORD.** R5 was built in the pre-crash pass, citing a 2026-09-09 ruling, and then **every record artefact said it did not exist**: this row read *"not built"*, §5a read *"NOT RULED"*, §6 listed it as an open policy question, §7 told adjudication to leave it to Awwal, the File List omitted all five of its files, and `sprint-status` never mentioned it. The code was one push from prod with its own record recommending against it. Awwal ruled 2026-09-12: **KEEP, fix the record, and split the commit.** Weight D is deliberate — an association name is a DISCLOSURE, not a headline, so at weight A/B a body whose name contains a trade word would outrank real practitioners. Ordering is load-bearing: the trigger recomputes only on INSERT/UPDATE and the R2 catch-up is idempotent, so landing the trigger AFTER R2 would leave those vectors permanently stale (13-38 R8's exact shape). Guarded now by `REQUIRED_FTS_COLUMNS` in `migrate-custom-sql-init.ts`, which hard-fails the deploy if the DEPLOYED definition loses a column. **[superseded text kept below so the severity is visible]** ~~An employer cannot find AFAN members by searching "AFAN". Not an AC, not built.~~ Flagged because 13-38's R8 was exactly this shape — the FTS trigger gaining a column with no deploy step — and because whether association membership should be SEARCHABLE (rather than merely disclosed) is a policy call, not a dev one.~~ ⚠️ The "dominated result set" worry that justified deferring is **latent, not live**: the gate is shut, so only 10 vouched profiles exist today, and both stored values are acronyms (AFAN, ASNAT) carrying no trade word. It becomes real only when layer 4 opens — re-read it then. | **CLOSED 2026-09-12 — shipped, recorded, and split into its own commit** |
@@ -1217,10 +1217,78 @@ rather than a rounding difference.
 registry is live and the denominator moves under you (§2n). The ten is a count of *vouched*
 profiles and is not affected by new self-registrations.
 
+### POST-DEPLOY — what actually happened on prod, 2026-09-12
+
+Deployed **`590cdbc`**, VPS SHA confirmed, health 200, CI **all 10 jobs green**.
+
+⛔ **THE DEPLOY WAS BLOCKED FIRST, AND NOT BY THIS STORY.** `lint-and-build` failed on the
+BLOCKING production-scope OSV gate, so `test-api`, `test-web`, `smoke-e2e` and `deploy` were all
+**skipped** — the §2y lesson in miniature: the commits were pushed and nothing had shipped. Three
+advisories against untouched deps (§2e's recurring pattern):
+
+| dep | → | advisories |
+|---|---|---|
+| `csv-parse` 6.1.0 | **7.0.2** | GHSA-8cw4-87c7-c6xx |
+| `multer` 2.2.0 | **2.3.0** | GHSA-535w-7cp7-47q4, -qfvm-cv95-jqjf, -qvfw-j98x-7q72, -wc9g-mqfw-jrwm |
+| `sharp` 0.35.3 | **0.35.4** | GHSA-rgj7-g3m4-5g8c |
+
+⭐ **The csv-parse one is REACHABLE here, not theoretical** — *"prototype replacement reachable via
+the columns path"*, and **both** call sites pass `columns` while parsing operator-uploaded files:
+`import/parsers/csv.parser.ts` (the association intake that landed 8,222 rows) and
+`staff.service.ts`. A spreadsheet header row does not look like attacker-influenced input, and is.
+Fixed by DIRECT dep bumps, because §2e's "never cross a major" governs **overrides** (pinning
+transitive copies), not deliberate bumps — and csv-parse's own changelog says **7.0.0 "was
+published by mistake, there is no breaking changes"**, checked rather than assumed. `multer` and
+`sharp`'s ranges already permitted the fix: only the lockfile was stale, and the manifest floors
+were raised so it cannot silently regress.
+
+#### The three numbers that were predicted, then measured
+
+| check | before | predicted | measured |
+|---|---|---|---|
+| `?association=AFAN` | **297** (param silently ignored) | 10 | ✅ **10** (via 0 immediately post-deploy, pre-backfill) |
+| `?q=AFAN` | **0** | 10 | ✅ **10** |
+| backfill `association_name add/fixed` | 0 profiles carried a name | 10 | ✅ **10 written** |
+
+⭐ **`?q=AFAN` going 0 → 10 is the whole story in one number.** The card said "AFAN — confirmed
+member" and the search box could not find AFAN, because matching is a hard
+`search_vector @@ plainto_tsquery` WHERE. It now agrees with the badge.
+
+#### Read back, because a script's own report is not evidence
+
+`profiles_with_association_name` **10**, all **AFAN** (correct — ASNAT's 56 were all INSERTED, so
+none held a prior profile); **`updated_at` touched today = 0**, so the repair cannot reorder the
+public browse — a *claim* verified rather than trusted; and **`search_vector` carries the name on
+10/10**, which proves the trigger fired on the backfill's own UPDATEs *exactly as the ordering
+argument in the SQL predicted*. That ordering claim is now executed rather than merely reasoned.
+
+A live card reads `"associationName":"AFAN"` with `"verifiedBadge":false` — **AC4-as-corrected
+proven on production data.** Those people's own `source` is `public`; a source-keyed build passes
+every unit test and renders them nothing.
+
+#### The new FTS gate's first real run (§2a2 — read a new gate's output once, even when green)
+
+```
+[migrate-custom-sql-init] ✓ FTS trigger installed and current;
+  indexes business_name, profession, skills, lga_name, experience_level, association_name.
+```
+It asserted all six columns instead of printing a boolean, on the deploy that made
+`association_name` load-bearing.
+
+⚠️ **Two process notes worth carrying.** The first push was **killed by the OS for low memory**
+mid-suite (`route-resolution /login` at 14.7 s against its 15 s timeout); nothing partial reached
+the remote, verified by `git ls-remote` rather than by an exit code. The retry with
+`TURBO_CONCURRENCY=1 VITEST_MAX_THREADS=1` passed in 23m44s — the pre-push hook is *structurally*
+two concurrent vitest processes (§2aa.2), and serialising is the fix, not a timeout raise. A later
+push then died on `send-pack: unexpected disconnect` while its **task notification read exit 0**,
+because the chain ended in `echo` — §2y(c), caught only because the remote ref was checked.
+
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-09-12 | ✅ **DEPLOYED `590cdbc` — R1 and R2 BOTH DISCHARGED ON PROD.** R1 by EXECUTION (the deployed read path returns `associationName`, a key absent in the pre-deploy control), not by a migration log. R2 predicted **10** from prod and wrote **10**, then the rows were READ BACK rather than the report believed: 10 carry a name, all AFAN, `updated_at` untouched (0 today, so the browse order cannot shift), `search_vector` carries the name on 10/10. Public proof: `?association=AFAN` 297 (ignored) → 0 (live) → **10**; `?q=AFAN` **0 → 10**. A live card shows `associationName AFAN` with `verifiedBadge false` — **AC4-as-corrected proven on real data**, on people whose own `source` is `public`. |
+| 2026-09-12 | ⛔ **THE DEPLOY WAS BLOCKED BY THE OSV GATE FIRST — and one advisory was REACHABLE here.** `lint-and-build` red ⇒ test-api/test-web/smoke-e2e/deploy all SKIPPED, so the pushed commits had shipped nothing (§2y). csv-parse 6.1.0 → 7.0.2 (prototype replacement via the **columns** path — and both call sites pass `columns` over operator-uploaded files, including the intake that landed 8,222 rows), multer 2.2.0 → 2.3.0 (3 high), sharp 0.35.3 → 0.35.4. Direct bumps, not overrides: the no-crossing-a-major rule governs overrides, and csv-parse's changelog states 7.0.0 was **published by mistake with no breaking changes**. `engines.node` checked FIRST; 13 import/parser/staff suites (101 tests) and 36 upload/photo suites (369 tests) green on the new majors. |
 | 2026-09-12 | ⚖️ **ADJUDICATED. The finding: R5 was BUILT and every record artefact said it was not** — residual table *"not built"*, §5a *"NOT RULED"*, §6 an open policy question, §7 *"leave it to Awwal"*, and five files missing from the File List. Found by chasing the unreconciled suite deltas §7 item 6 offered to stop collecting: **+7 API / +4 web were exactly R5's eleven tests**, predicted from the test names and then measured (the five story API files 164 → 171). **Awwal ruled: KEEP, fix the record, split the commit.** |
 | 2026-09-12 | **SPLIT into three commits** — badge + honesty sweep · the §7 re-issue (cherry-picked unchanged) · R5. The record is now true at every commit rather than back-dated, and the intermediate commit was verified to build and pass **on its own** (a bisect landing on a broken commit is worse than no split). Boundary proven falsifiable: commit 1 measured **4,419 API / 3,088 web**, the final totals minus exactly eleven tests, reproducing the pre-crash reviewer's run shard for shard. |
 | 2026-09-12 | 🛡️ **The FTS deploy check became a gate.** `migrate-custom-sql-init.ts` printed `indexes business_name: true/false` and exited 0 regardless — a check that could not fail, on the one artefact R5's promise depends on (13-38 R8's shape). Now `REQUIRED_FTS_COLUMNS` hard-fails naming the missing column. RED-verified by degrading the `.sql`: it threw, and its **real exit code was 1** (measured without a pipe, §2y(c)). |

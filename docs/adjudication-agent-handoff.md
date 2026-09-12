@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-08-23 · ⚠️ **TWO WORKTREES — parallel streams, read §1a** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-09-12 · ⚠️ **TWO STALE WORKTREES — `wt-13-50` + `wt-13-66`, both fully merged (0 unmerged commits), awaiting Awwal's go to remove per §1a** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1029,7 +1029,63 @@ than folding it into a neighbour.
 
 ---
 
-## 3. Current state (2026-08-31) — READ THIS ONE
+## 3. Current state (2026-09-12) — READ THIS ONE
+
+**Prod `590cdbc`**, health 200, CI all 10 jobs green. `marketplace_profiles` **297**, of which
+**10 now carry an association vouch**. Registry: **8,289** respondents carry
+`metadata.association_name` (AFAN 8,233 · ASNAT 56). **No prod SHA is kept in the header — D6.**
+
+- ✅ **13-58 ADJUDICATED AND DEPLOYED.** The badge ships, the R1 honesty sweep is finally complete
+  across **seven** public pages over three rounds, R5 ships searchable provenance, and **R1/R2/R3
+  are CLOSED**. Still `review`, not `done` — R4/R6/R7 are open by design and the residual guard
+  correctly reds on done-with-open-residuals.
+- ⛔ **THE FINDING OF THE SESSION: a whole feature shipped with NO record.** R5
+  (`association_name` in `search_vector` + an `?association=` filter) was built in the pre-crash
+  pass and committed inside `27423ff` — whose own residual table said *"not built"*, §5a said
+  *"NOT RULED"*, §6 called it an open policy question, §7 told the adjudicator to **leave it to
+  Awwal**, and the File List omitted all five files. Its code comments cite *"Awwal's ruling
+  2026-09-09"*, the same date §5a says it was not ruled. **It was one push from a public search
+  surface with its own record recommending against it.**
+- ⭐ **It was found by chasing the signal the record proposed to STOP collecting.** §7 offered
+  "chase the unreconciled +7 API / +4 web tests, or accept zero-failures and stop quoting totals
+  across sessions". The deltas were **exactly R5's eleven tests**. → new playbook **§2ah**: an
+  unexplained test-count delta is UNRECORDED WORK until proven otherwise.
+- ⚖️ **Awwal ruled (09-12): keep R5, fix the record, split the commit.** Now three commits —
+  badge+sweep `4573805`, §7 re-issue `285fe78`, R5 `8c0a211` — with the record **true at every
+  commit** rather than back-dated, and commit 1 verified to build and pass on its own
+  (4,419 API / 3,088 web = the final totals minus exactly eleven tests, reproducing the pre-crash
+  run shard for shard). → new playbook **§2ai**.
+- 🛡️ **`migrate-custom-sql-init.ts` now HARD-FAILS on a stale FTS definition.** It used to *print*
+  `indexes business_name: true/false` and exit 0 — a check that could not fail, guarding the one
+  artefact R5's promise depends on (13-38 R8's shape). RED-verified by degrading the `.sql`; real
+  exit code **1**. Its first prod run asserted all six columns.
+- ⛔ **THE DEPLOY WAS BLOCKED BY THE OSV GATE, and one advisory was REACHABLE here.** csv-parse
+  6.1.0 → **7.0.2** (prototype replacement via the **columns** path — and both call sites pass
+  `columns` over operator-uploaded files, including the intake that landed 8,222 rows), multer →
+  **2.3.0** (3 high), sharp → **0.35.4**. Direct bumps, not overrides: the no-crossing-a-major rule
+  governs *overrides*, and csv-parse's changelog says **7.0.0 was published by mistake with no
+  breaking changes**. ⚠️ `lint-and-build` red ⇒ every downstream job SKIPPED — pushed is not
+  shipped (§2y).
+- ⭐ **`?q=AFAN` went 0 → 10 on prod.** The card said "AFAN — confirmed member" and the search box
+  could not find AFAN, because matching is a hard WHERE. It now agrees with the badge. And a live
+  card reads `associationName AFAN` with `verifiedBadge false` — **AC4-as-corrected proven on real
+  data**, on people whose own `source` is `public`.
+- ⚠️ **THIS MACHINE KILLED A PUSH FOR MEMORY.** The first attempt died mid-suite (OS OOM), the
+  second died on `send-pack: unexpected disconnect` **while its task notification read exit 0**
+  (the chain ended in `echo` — §2y(c)). Both caught only by checking `git ls-remote`.
+  ✅ **`TURBO_CONCURRENCY=1 VITEST_MAX_THREADS=1` is now the proven recipe for a local push here**
+  (23m44s, clean) — the pre-push hook is structurally two concurrent vitest processes.
+
+### Open after 13-58 (nothing blocks a deploy)
+| item | state |
+|---|---|
+| **R6 + R7 → 13-2 R-A2** | The gate is still shut: **8,278 consenting people remain invisible to the marketplace**. R-A2 is now correctly written as **(a)** open `PIPELINE_EXCLUDED_STATUSES` **and (b)** widen `_backfill-marketplace-extraction.ts`'s `source` predicate. **(a) alone creates ZERO profiles.** Mechanism ruled; not implemented; **inert until the gate opens, which is exactly how it gets lost.** |
+| **R4** | Tier-2 "Member-verified" has no substrate (no column, Termii not cleared, no Assessor queue). Carve trigger recorded. Awwal's, not an agent's. |
+| **The eleventh person** | 11 respondents carry an AFAN vouch and `source='public'`; **10** held a profile and were repaired. The eleventh has **no marketplace profile at all**, so the card-fields backfill cannot reach them — they need **R7's** create-profiles widening. Not a defect. |
+| **8 self-named signboards** | `business_name` contains the person's own name on 8 cards. **Ruled fine by Awwal 2026-09-12.** |
+| **Two stale worktrees** | `wt-13-50` (13-50 closed 09-06) and `wt-13-66`, both **0 unmerged commits vs main**. §1a says discard at merge; a leftover worktree is what `robocopy /MIR` was aimed at. Removal not done — awaiting Awwal. |
+
+## 3-old5. Current state (2026-08-31) — superseded by §3 above
 
 **Register 375** (was a five-day flat **327** before the radio campaign), health 200. **No prod SHA
 here — D6.** Run the two header commands in §0.
