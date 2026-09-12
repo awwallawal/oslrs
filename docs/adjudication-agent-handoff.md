@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-09-12 · ⚠️ **TWO STALE WORKTREES — `wt-13-50` + `wt-13-66`, both fully merged (0 unmerged commits), awaiting Awwal's go to remove per §1a** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-09-12 · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1035,10 +1035,27 @@ than folding it into a neighbour.
 **10 now carry an association vouch**. Registry: **8,289** respondents carry
 `metadata.association_name` (AFAN 8,233 · ASNAT 56). **No prod SHA is kept in the header — D6.**
 
-- ✅ **13-58 ADJUDICATED AND DEPLOYED.** The badge ships, the R1 honesty sweep is finally complete
-  across **seven** public pages over three rounds, R5 ships searchable provenance, and **R1/R2/R3
-  are CLOSED**. Still `review`, not `done` — R4/R6/R7 are open by design and the residual guard
-  correctly reds on done-with-open-residuals.
+- ✅ **13-58 ADJUDICATED, DEPLOYED AND `done`.** The badge ships, the R1 honesty sweep is finally
+  complete across **seven** public pages over three rounds, R5 ships searchable provenance, and
+  **all seven residuals are resolved.** The last three closed on substance:
+  - **R6 → handed to 13-2 R-A2.** ⭐ It was never 13-58's debt — it recorded that *another* story
+    had not run, so it could never be discharged here and would have held `done` hostage forever.
+    **A residual that says "another story must do X" is a HAND-OFF, not debt**, and the guard's own
+    failure message sanctions that exit.
+  - **R7 → discharged**, its job being to correct the next story's plan — verified by *reading*
+    13-2's R-A2. ⭐ **And the warning was moved into the CODE**, directly above
+    `PIPELINE_EXCLUDED_STATUSES`: removing a status from it creates **ZERO** profiles on its own.
+    The dev who opens the gate is editing that constant; the instruction used to live only in a
+    story file, and a warning you must choose to read is the same class as a fix that never fires.
+  - **R4 → the AC MOVED, the row did not close.** ⭐⭐ **You do not close an unbuilt AC with a
+    residual — a story is `done` when its ACs are met.** AC2 (tier-2 "Member-verified") was struck
+    and handed to **13-40**, which has specified *"promote tier-1→tier-2"* since 2026-07-20 — so
+    **nothing was carved and nothing duplicated** (the §2a1 check paying off: look for the existing
+    owner before minting a story). Leaving it would have reproduced 13-2's AC3.3 failure, where the
+    AC instructs a dev to contradict the story it sits in.
+  ⚠️ **Known limit of the guard, found while using it:** `isOpenState` clears a row that merely
+  *contains* `CLOSED`/`✅`/`RESOLVED`/`DISCHARGED`, so it cannot tell a real discharge from a tick.
+  It was still RED-verified here (a planted `R99 | OPEN` row fired it, naming the story, exit 1).
 - ⛔ **THE FINDING OF THE SESSION: a whole feature shipped with NO record.** R5
   (`association_name` in `search_vector` + an `?association=` filter) was built in the pre-crash
   pass and committed inside `27423ff` — whose own residual table said *"not built"*, §5a said
@@ -1079,11 +1096,11 @@ than folding it into a neighbour.
 ### Open after 13-58 (nothing blocks a deploy)
 | item | state |
 |---|---|
-| **R6 + R7 → 13-2 R-A2** | The gate is still shut: **8,278 consenting people remain invisible to the marketplace**. R-A2 is now correctly written as **(a)** open `PIPELINE_EXCLUDED_STATUSES` **and (b)** widen `_backfill-marketplace-extraction.ts`'s `source` predicate. **(a) alone creates ZERO profiles.** Mechanism ruled; not implemented; **inert until the gate opens, which is exactly how it gets lost.** |
-| **R4** | Tier-2 "Member-verified" has no substrate (no column, Termii not cleared, no Assessor queue). Carve trigger recorded. Awwal's, not an agent's. |
+| ⏭️ **13-2 R-A2 — THE NEXT STORY** | 13-2 is **`review`**, not done, and R-A2 is what remains of it. The gate is still shut: **8,278 consenting people remain invisible to the marketplace.** R-A2 reads correctly now — **(a)** open `PIPELINE_EXCLUDED_STATUSES` **and (b)** widen `_backfill-marketplace-extraction.ts`'s `source` predicate; **(a) alone creates ZERO profiles**, and that warning now also sits in the code above the constant. ⚖️ **Awwal ruled 2026-09-12: BOTH HALVES AS ONE STORY** — adjudication had recommended taking the fraud half first (no public surface, and it closes a live anti-roll-padding gap for the source most exposed to padded rolls), and the trade is recorded in R-A2 so it is not re-litigated: one review and one adjudication over a change that publishes up to 8,278 people, rather than a safety fix queued behind a publicity event. ⛔ **The marketplace half is a PUBLIC PUBLISH with no staging step (R-A3)** — dry-run + predict-then-compare is mandatory, and the fraud half must not be quietly dropped because the marketplace half is the interesting one. |
+| **Tier-2 → 13-40** | 13-58's AC2 now lives in `13-40-assessor-verify-imported-rows-queue` (backlog). **The render half is already live on prod**; what is missing is a `member_confirmed` marker and a writer for it (SMS = 13-2, blocked on **Termii**; Assessor callback = 13-40). ⛔ Do not derive tier-2 in the badge, and do not ship "Member-verified" copy before the marker exists — `WorkerCard.test.tsx` asserts it never renders, and deleting that assertion is the signal the substrate landed. |
 | **The eleventh person** | 11 respondents carry an AFAN vouch and `source='public'`; **10** held a profile and were repaired. The eleventh has **no marketplace profile at all**, so the card-fields backfill cannot reach them — they need **R7's** create-profiles widening. Not a defect. |
 | **8 self-named signboards** | `business_name` contains the person's own name on 8 cards. **Ruled fine by Awwal 2026-09-12.** |
-| **Two stale worktrees** | `wt-13-50` (13-50 closed 09-06) and `wt-13-66`, both **0 unmerged commits vs main**. §1a says discard at merge; a leftover worktree is what `robocopy /MIR` was aimed at. Removal not done — awaiting Awwal. |
+| ~~Two stale worktrees~~ | ✅ **REMOVED 2026-09-12** per §1a's sequence: 0 unmerged commits vs `main` *and* `origin/main`, clean trees, **4,935 reparse points each with ZERO pointing outside the worktree**, `git worktree remove` → `rmdir /S /Q` (deletes junctions, does not follow them). Main repo verified intact after: 2,878 tracked files, clean status, `HEAD == origin`, `node_modules` present. **Both story branches survive** — only the checkouts are gone. ⚠️ `git worktree remove` reported *"Directory not empty"* and still deregistered both; the `rmdir` then needed a second pass. Judge it by `git worktree list`, not by the first error. |
 
 ## 3-old5. Current state (2026-08-31) — superseded by §3 above
 

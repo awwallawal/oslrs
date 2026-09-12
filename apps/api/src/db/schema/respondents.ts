@@ -59,6 +59,33 @@ export type RespondentStatus = typeof respondentStatusTypes[number];
  * NOTE: `pending_nin_capture` / `nin_unavailable` are NOT excluded — those are
  * legitimate field respondents who merely lack a NIN and still earn marketplace
  * profiles once consented.
+ *
+ * ⛔⛔ BEFORE YOU REMOVE A STATUS FROM THIS LIST — READ THIS. It is the exact edit
+ * 13-2 R-A2 calls for, and on its own it DOES NOTHING.
+ *
+ * **Removing `imported_unverified` here creates ZERO marketplace profiles.** This
+ * set is the *defensive second* gate. The primary one is by-construction, and the
+ * chain is broken further upstream:
+ *
+ *   - `import.service.ts` holds NO reference to the marketplace-extraction queue;
+ *   - the only production enqueue is `submission-processing.service.ts` (~:1349),
+ *     which the importer never calls;
+ *   - `scripts/_backfill-marketplace-extraction.ts` — the operator's
+ *     create-profiles script — is scoped `WHERE r.source = 'public'` (~:126-140),
+ *     so it skips every imported row.
+ *
+ * So the gate change must ship WITH (b): widen that script's `source` predicate and
+ * run it as an operator one-shot, dry-run first, with a predict-then-compare
+ * (profiles created should equal imported respondents with `consent_marketplace`).
+ * ⚖️ Awwal ruled 2026-09-09: widen the SCRIPT, **not** an import-time enqueue —
+ * all 10 BullMQ workers run IN the API process on a 2 GB VPS, so enqueuing 8,278
+ * jobs at import is a self-inflicted load spike.
+ *
+ * Found at 13-58's adversarial review (H3 → its R7) because the story's sequencing
+ * argument had never been traced to where it executes. The raw material exists
+ * (13-2 AC3.4 gives every imported row a `submissions` row), so the fix is small —
+ * but it is NOT implied by this constant, and the instruction that said so lived
+ * only in a story file until 2026-09-12. → docs/adjudication-agent-handoff.md §2aj
  */
 export const PIPELINE_EXCLUDED_STATUSES: readonly RespondentStatus[] = [
   'imported_unverified',
