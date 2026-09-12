@@ -74,6 +74,17 @@ export interface MarketplaceSearchParams {
   lgaId?: string;
   profession?: string;
   experienceLevel?: string;
+  /**
+   * Story 13-58 R5 — filter to workers a NAMED body vouched for. Partial,
+   * case-insensitive match on the stored `association_name`, mirroring the
+   * `profession` filter.
+   *
+   * ⚠️ This is the PRECISE half of R5; the tsvector carries the loose half at
+   * weight D. They answer different questions and both were ruled in: the filter is
+   * "show me AFAN members" (exact, no cross-trade pollution), the vector is "I typed
+   * AFAN into the search box and expect it to mean something".
+   */
+  association?: string;
   cursor?: string;
   pageSize?: number;
 }

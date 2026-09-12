@@ -8,17 +8,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
-import { MARKETPLACE_EXPERIENCE_LEVELS, experienceLabelFor } from '@oslsr/types';
+import {
+  MARKETPLACE_EXPERIENCE_LEVELS,
+  MARKETPLACE_ASSOCIATION_NAME_MAX_LEN,
+  experienceLabelFor,
+} from '@oslsr/types';
 import type { LgaItem } from '../../dashboard/api/export.api';
 
 interface MarketplaceFiltersProps {
   lgaId: string;
   profession: string;
   experienceLevel: string;
+  /** Story 13-58 R5 — filter to workers a named body vouched for. */
+  association: string;
   lgas: LgaItem[];
   onLgaChange: (value: string) => void;
   onProfessionChange: (value: string) => void;
   onExperienceLevelChange: (value: string) => void;
+  onAssociationChange: (value: string) => void;
   onClear: () => void;
 }
 
@@ -26,27 +33,34 @@ export function MarketplaceFilters({
   lgaId,
   profession,
   experienceLevel,
+  association,
   lgas,
   onLgaChange,
   onProfessionChange,
   onExperienceLevelChange,
+  onAssociationChange,
   onClear,
 }: MarketplaceFiltersProps) {
   // Debounced internal state for text inputs (300ms, matching search bar)
   const [profInput, setProfInput] = useState(profession);
   const [expInput, setExpInput] = useState(experienceLevel);
+  const [assocInput, setAssocInput] = useState(association);
 
   const onProfRef = useRef(onProfessionChange);
   onProfRef.current = onProfessionChange;
   const onExpRef = useRef(onExperienceLevelChange);
   onExpRef.current = onExperienceLevelChange;
+  const onAssocRef = useRef(onAssociationChange);
+  onAssocRef.current = onAssociationChange;
 
   const isInitialProf = useRef(true);
   const isInitialExp = useRef(true);
+  const isInitialAssoc = useRef(true);
 
   // Sync from parent (e.g., "Clear filters")
   useEffect(() => { setProfInput(profession); }, [profession]);
   useEffect(() => { setExpInput(experienceLevel); }, [experienceLevel]);
+  useEffect(() => { setAssocInput(association); }, [association]);
 
   // Debounce profession changes
   useEffect(() => {
@@ -62,7 +76,14 @@ export function MarketplaceFilters({
     return () => clearTimeout(t);
   }, [expInput]);
 
-  const hasFilters = lgaId || profInput || expInput;
+  // Debounce association changes
+  useEffect(() => {
+    if (isInitialAssoc.current) { isInitialAssoc.current = false; return; }
+    const t = setTimeout(() => onAssocRef.current(assocInput), 300);
+    return () => clearTimeout(t);
+  }, [assocInput]);
+
+  const hasFilters = lgaId || profInput || expInput || assocInput;
 
   return (
     <div className="flex flex-wrap gap-3 items-end">
@@ -120,6 +141,28 @@ export function MarketplaceFilters({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/*
+        Story 13-58 R5 (Awwal's ruling 2026-09-09) — the PRECISE half of "can an
+        employer find association members". A free-text partial match, mirroring the
+        profession filter above, rather than a Select: `association_name` has no
+        canon to bind to (13-67 stores whatever the operator typed), and unlike
+        13-38 R4's experience-level trap there is no slug here to type wrongly — the
+        stored value IS the display value, matched with ILIKE '%…%'.
+
+        A Select bound to a distinct-values endpoint is the natural follow-up once
+        there are more than the two bodies on prod today (AFAN, ASNAT); it is not
+        worth an endpoint for two.
+      */}
+      <div className="w-40">
+        <Input
+          placeholder="Association"
+          value={assocInput}
+          onChange={(e) => setAssocInput(e.target.value)}
+          maxLength={MARKETPLACE_ASSOCIATION_NAME_MAX_LEN}
+          data-testid="association-filter"
+        />
       </div>
 
       {hasFilters && (

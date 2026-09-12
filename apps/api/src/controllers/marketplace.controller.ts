@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { AppError } from '@oslsr/utils';
+import { MARKETPLACE_ASSOCIATION_NAME_MAX_LEN } from '@oslsr/types';
 import { MarketplaceService } from '../services/marketplace.service.js';
 import { MarketplaceEditService } from '../services/marketplace-edit.service.js';
 import { AuditService, PII_ACTIONS } from '../services/audit.service.js';
@@ -45,6 +46,10 @@ const marketplaceSearchSchema = z.object({
   lgaId: z.string().max(50).optional(),
   profession: z.string().max(100).optional(),
   experienceLevel: z.string().max(50).optional(),
+  // Story 13-58 R5 — bounded by the same cap the column is normalised to
+  // (MARKETPLACE_ASSOCIATION_NAME_MAX_LEN = 60), so a filter can never be longer
+  // than any value it could match.
+  association: z.string().max(MARKETPLACE_ASSOCIATION_NAME_MAX_LEN).optional(),
   cursor: z.string().max(200).optional(),
   pageSize: z.coerce.number().min(1).max(100).default(20),
 });

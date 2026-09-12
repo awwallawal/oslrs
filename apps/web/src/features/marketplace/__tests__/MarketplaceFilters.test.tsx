@@ -2,9 +2,13 @@
 
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MARKETPLACE_EXPERIENCE_LEVELS, experienceLabelFor } from '@oslsr/types';
+import {
+  MARKETPLACE_EXPERIENCE_LEVELS,
+  MARKETPLACE_ASSOCIATION_NAME_MAX_LEN,
+  experienceLabelFor,
+} from '@oslsr/types';
 import { MarketplaceFilters } from '../components/MarketplaceFilters';
 
 expect.extend(matchers);
@@ -39,16 +43,71 @@ function renderFilters(overrides: Partial<Parameters<typeof MarketplaceFilters>[
       lgaId=""
       profession=""
       experienceLevel=""
+      association=""
       lgas={[]}
       onLgaChange={vi.fn()}
       onProfessionChange={vi.fn()}
       onExperienceLevelChange={onExperienceLevelChange}
+      onAssociationChange={vi.fn()}
       onClear={vi.fn()}
       {...overrides}
     />,
   );
   return { onExperienceLevelChange };
 }
+
+/**
+ * Story 13-58 R5 (Awwal's ruling 2026-09-09) — the association filter: the PRECISE
+ * half of "can an employer find the workers a named body vouched for". The loose
+ * half is the tsvector at weight D, proven in the API's real-DB smoke.
+ */
+describe('MarketplaceFilters — association (13-58 R5)', () => {
+  it('renders a control for filtering by association', () => {
+    renderFilters();
+
+    expect(screen.getByTestId('association-filter')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Association')).toBeInTheDocument();
+  });
+
+  it('reports the typed association upward, debounced', async () => {
+    vi.useFakeTimers();
+    try {
+      const onAssociationChange = vi.fn();
+      renderFilters({ onAssociationChange });
+
+      fireEvent.change(screen.getByTestId('association-filter'), {
+        target: { value: 'AFAN' },
+      });
+
+      // Debounced like the profession box — not on every keystroke.
+      expect(onAssociationChange).not.toHaveBeenCalled();
+      act(() => { vi.advanceTimersByTime(300); });
+      expect(onAssociationChange).toHaveBeenCalledWith('AFAN');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * "Clear filters" appears on ANY active filter. Before 13-58 the association box
+   * did not exist, so a user who filtered only by association would have had no way
+   * to clear it — the control would simply never appear.
+   */
+  it('surfaces Clear filters when only the association is set', () => {
+    renderFilters({ association: 'AFAN' });
+
+    expect(screen.getByTestId('clear-filters')).toBeInTheDocument();
+  });
+
+  it('bounds the input to the stored column length', () => {
+    renderFilters();
+
+    expect(screen.getByTestId('association-filter')).toHaveAttribute(
+      'maxLength',
+      String(MARKETPLACE_ASSOCIATION_NAME_MAX_LEN),
+    );
+  });
+});
 
 describe('MarketplaceFilters — experience level (13-38 R4)', () => {
   it('is a bound control, NOT the free-text box it replaced', () => {

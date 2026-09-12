@@ -15,6 +15,8 @@ export default function MarketplaceSearchPage() {
   const [lgaId, setLgaId] = useState(searchParams.get('lgaId') || '');
   const [profession, setProfession] = useState(searchParams.get('profession') || '');
   const [experienceLevel, setExperienceLevel] = useState(searchParams.get('experienceLevel') || '');
+  // Story 13-58 R5 — shareable/bookmarkable like every other filter here.
+  const [association, setAssociation] = useState(searchParams.get('association') || '');
   const [cursor, setCursor] = useState<string | undefined>(undefined);
 
   const { data: lgas = [] } = useQuery({
@@ -28,6 +30,7 @@ export default function MarketplaceSearchPage() {
     lgaId: lgaId || undefined,
     profession: profession || undefined,
     experienceLevel: experienceLevel || undefined,
+    association: association || undefined,
     cursor,
   };
 
@@ -72,11 +75,18 @@ export default function MarketplaceSearchPage() {
     updateUrlParams({ experienceLevel: value });
   }, [updateUrlParams]);
 
+  const handleAssociationChange = useCallback((value: string) => {
+    setAssociation(value);
+    setCursor(undefined);
+    updateUrlParams({ association: value });
+  }, [updateUrlParams]);
+
   const handleClearFilters = useCallback(() => {
     setQuery('');
     setLgaId('');
     setProfession('');
     setExperienceLevel('');
+    setAssociation('');
     setCursor(undefined);
     setSearchParams({}, { replace: true });
   }, [setSearchParams]);
@@ -122,6 +132,8 @@ export default function MarketplaceSearchPage() {
           lgaId={lgaId}
           profession={profession}
           experienceLevel={experienceLevel}
+          association={association}
+          onAssociationChange={handleAssociationChange}
           lgas={lgas}
           onLgaChange={handleLgaChange}
           onProfessionChange={handleProfessionChange}

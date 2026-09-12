@@ -101,6 +101,20 @@ export class MarketplaceService {
       );
     }
 
+    // Story 13-58 R5 — "show me the workers a named body vouched for". Partial +
+    // case-insensitive, exactly like `profession` above: an employer types "afan",
+    // not the operator's stored casing.
+    //
+    // ⚠️ This filters on the DENORMALISED profile column and joins nothing. The
+    // association name lives on the respondent too, but `respondents` is the PII
+    // table that this unauthenticated read path deliberately never touches — the
+    // whole reason the name was copied onto the profile at extraction.
+    if (params.association) {
+      filterConditions.push(
+        sql`mp.association_name ILIKE ${'%' + params.association + '%'}`,
+      );
+    }
+
     // Cursor condition (data query only — excluded from count)
     let cursorCondition: SQL | null = null;
     if (params.cursor) {

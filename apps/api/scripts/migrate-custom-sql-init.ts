@@ -57,6 +57,24 @@ if (!databaseUrl) {
 /** The SAME directory `db:custom` applies — never a second copy of the SQL. */
 const CUSTOM_SQL_DIR = path.resolve(__dirname, '../src/db/custom-sql');
 
+/**
+ * Every column the deployed `update_marketplace_search_vector` definition must
+ * reference. Checked AFTER the .sql files are applied, so a mismatch means the
+ * apply did not take or the file stopped setting a column somebody still expects.
+ *
+ * Keep this list in step with `src/db/custom-sql/marketplace-trigger.sql` — a
+ * deliberate removal must delete the entry here in the same commit, which is the
+ * point: the guard forces the change to be stated rather than discovered.
+ */
+const REQUIRED_FTS_COLUMNS = [
+  'business_name', // 13-38 AC8, weight A
+  'profession', // weight A
+  'skills', // weight B
+  'lga_name', // weight C
+  'experience_level', // weight D
+  'association_name', // 13-58 R5, weight D
+] as const;
+
 const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
 
 async function run(): Promise<void> {
@@ -77,9 +95,20 @@ async function run(): Promise<void> {
     console.log(`[migrate-custom-sql-init]   ✓ ${file}`);
   }
 
-  // Sanity: prove the marketplace FTS trigger is actually installed, and that its
-  // definition carries business_name (Story 13-38 AC8). A silent "applied" that
-  // left the old definition in place is the failure this runner exists to stop.
+  // Sanity: prove the marketplace FTS trigger is actually installed AND that its
+  // deployed definition carries every column it is supposed to index. A silent
+  // "applied" that left the old definition in place is the failure this runner
+  // exists to stop.
+  //
+  // ⚠️ THIS USED TO PRINT A BOOLEAN INSTEAD OF ASSERTING ONE (Story 13-58 R5,
+  // adjudication 2026-09-12). The line read `indexes business_name: ${...}` and
+  // would happily log `false` and exit 0 — a check that cannot fail is a comment,
+  // not a gate (handoff §2a2: "make emptiness fail"). It went unnoticed because
+  // the value was always true; R5 is what made it matter, since the association
+  // badge's whole promise is that typing "AFAN" finds AFAN's members, and that is
+  // true only if the DEPLOYED definition — not the file in git — carries the
+  // column. 13-38's R8 was this exact shape: the FTS trigger gaining a column
+  // with nothing proving it reached prod.
   const fn = await pool.query<{ def: string }>(
     `SELECT pg_get_functiondef(oid) AS def
        FROM pg_proc
@@ -88,8 +117,22 @@ async function run(): Promise<void> {
   if (fn.rows.length === 0) {
     throw new Error('update_marketplace_search_vector missing after applying custom SQL');
   }
+
+  const deployedDef = fn.rows[0].def;
+  const missingColumns = REQUIRED_FTS_COLUMNS.filter((col) => !deployedDef.includes(col));
+  if (missingColumns.length > 0) {
+    throw new Error(
+      `update_marketplace_search_vector is STALE: its deployed definition does not ` +
+        `reference ${missingColumns.join(', ')}. The .sql file was applied, so either ` +
+        `the file no longer sets these columns or the apply did not take. Search ` +
+        `matches on a hard WHERE, so a column missing from the vector is UNFINDABLE, ` +
+        `not merely ranked low. If a column was removed deliberately, remove it from ` +
+        `REQUIRED_FTS_COLUMNS in this script in the SAME commit.`,
+    );
+  }
   console.log(
-    `[migrate-custom-sql-init] ✓ FTS trigger installed; indexes business_name: ${fn.rows[0].def.includes('business_name')}`,
+    `[migrate-custom-sql-init] ✓ FTS trigger installed and current; ` +
+      `indexes ${REQUIRED_FTS_COLUMNS.join(', ')}.`,
   );
 
   console.log('[migrate-custom-sql-init] Done.');

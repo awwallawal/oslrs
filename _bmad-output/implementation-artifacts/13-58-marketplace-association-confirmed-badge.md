@@ -766,6 +766,27 @@ as contaminated (the test was reverted, the page was not) and both files restore
 - `apps/web/src/features/marketplace/__tests__/AssociationConfirmedBadge.test.tsx` (+1 at review — M1)
 - `apps/web/src/features/marketplace/__tests__/MarketplaceSearchPage.test.tsx` (+1, 1 updated at review — H1)
 
+**Modified — R5: searchable association provenance (commit 2 of the split, 2026-09-12)**
+
+> ⛔ **THESE FIVE WERE MISSING FROM THIS LIST UNTIL ADJUDICATION.** M3 (a single omitted test file)
+> was raised at review as a Medium and fixed; this is the same defect at feature scale, and it is
+> how a whole public-behaviour change stayed invisible to every record artefact. **The File List is
+> the authoritative set to commit** — when it is wrong, the commit is wrong.
+
+- `apps/api/src/db/custom-sql/marketplace-trigger.sql` — `association_name` into `search_vector` at weight D, with the ordering argument (must precede the R2 catch-up) in the file
+- `apps/api/src/controllers/marketplace.controller.ts` — `association` query param, bounded by `MARKETPLACE_ASSOCIATION_NAME_MAX_LEN`
+- `apps/api/src/services/marketplace.service.ts` — the `ILIKE` filter clause (shared by the data AND count queries)
+- `apps/web/src/features/marketplace/api/marketplace.api.ts` — passes `association` through
+- `apps/web/src/features/marketplace/components/MarketplaceFilters.tsx` — the debounced free-text control
+- `apps/web/src/features/marketplace/pages/MarketplaceSearchPage.tsx` — URL-backed filter state (shareable/bookmarkable, cleared by Clear filters)
+- `apps/api/scripts/migrate-custom-sql-init.ts` — **NEW GUARD (adjudication):** `REQUIRED_FTS_COLUMNS` hard-fails the deploy when the DEPLOYED trigger definition loses an indexed column. It previously *printed* `indexes business_name: true/false` and exited 0 regardless — a check that could not fail. RED-verified by degrading the `.sql`: the runner threw naming `association_name` and exited **1**, which is what stops the deploy step.
+
+**Modified — R5 tests**
+- `apps/api/src/services/__tests__/marketplace.service.test.ts` (+4 — filter set / absent / case-insensitive-partial / applied to the COUNT query)
+- `apps/api/src/services/__tests__/marketplace-card-fields-db-smoke.integration.test.ts` (+3 — real FTS finds a vouched worker, its discriminating twin, and the filter through real SQL)
+- `apps/web/src/features/marketplace/__tests__/MarketplaceFilters.test.tsx` (+4)
+- `packages/types/src/marketplace.ts` — the `association?` search param (the `associationName` response fields belong to the badge, commit 1)
+
 **Modified — record**
 - `_bmad-output/implementation-artifacts/13-58-marketplace-association-confirmed-badge.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
@@ -781,7 +802,7 @@ as contaminated (the test was reverted, the page was not) and both files restore
 | **R2** | **The catch-up must actually be RUN.** `_backfill-marketplace-card-fields.ts --dry-run` then `--apply --confirm-i-am-not-dry-running`. Until then the eleven matched respondents keep a badge-less card. **PREDICT BEFORE RUNNING:** `associationNameChanged` should equal the number of the eleven who hold a marketplace profile — measure that from prod first and compare, per [[pattern-predict-then-compare]]. Do not read the script's own report as the evidence; read the rows back. | OPEN — operator action |
 | ~~**R3**~~ | ✅ **RULED 2026-09-11 (Awwal): WITHDRAW the degrade path.** AC1's fallback ("Trade association — confirmed member") is unreachable under AC4-as-corrected and is now struck from AC1 with the reasoning, rather than left as dead copy for the next reader to "fix" by re-keying the branch on `source`. **The ruling moved the ACs, not just the ledger:** AC1 re-keyed onto the name's presence, and **AC6 corrected** — it required "no badge for non-association sources", which contradicted AC4 and would have been PASSED by the source-keyed build AC4 exists to prevent and FAILED by the correct one. No code change: the shipped behaviour was already AC4-as-corrected. | **CLOSED 2026-09-11** |
 | **R4** | **AC2 (tier-2) has no substrate and stays open.** Carve the member-side check as its own story before any "Member-verified" copy ships. ⚖️ **CARVE TRIGGER recorded 2026-09-11 — so this is a scoped story when someone picks it up, not a rediscovery.** Tier-2 needs THREE things that do not exist: a `member_confirmed` column on the taxonomy substrate (never a badge-local re-derivation, per AC2); an SMS confirmation loop, which is blocked on **Termii not being cleared**; and an Assessor callback queue. ⛔ Do not ship "Member-verified" copy before all three — a tier that cannot be earned is a badge that never changes, and the existing `WorkerCard` test asserting it NEVER renders is the guard holding that line. | OPEN — by design, trigger recorded |
-| **R5** | **`search_vector` does not include `association_name`.** An employer cannot find AFAN members by searching "AFAN". Not an AC, not built. Flagged because 13-38's R8 was exactly this shape — the FTS trigger gaining a column with no deploy step — and because whether association membership should be SEARCHABLE (rather than merely disclosed) is a policy call, not a dev one.  ⚖️ **NOT RULED 2026-09-11, and it does not need to be yet — leaving it open is the safe default.** Recommendation on record for whoever picks it up: **do NOT add `association_name` to `search_vector` before the gate opens.** With 8,278 AFAN members behind it, a search for "AFAN" would return a result set dominated by one association and distort browse for everyone else. Decide it once real employer query patterns exist — the column is already stored, so this stays a one-line trigger change whenever it is wanted. | OPEN — deferred by design, recommendation recorded |
+| ~~**R5**~~ | ✅ **RULED + SHIPPED — and the record said the opposite until adjudication found the code (2026-09-12).** `association_name` joins `search_vector` at **weight D**, plus a structured `?association=` filter (controller → service → web API → URL state → a filter input). ⛔ **THE FINDING IS NOT THE FEATURE, IT IS THE RECORD.** R5 was built in the pre-crash pass, citing a 2026-09-09 ruling, and then **every record artefact said it did not exist**: this row read *"not built"*, §5a read *"NOT RULED"*, §6 listed it as an open policy question, §7 told adjudication to leave it to Awwal, the File List omitted all five of its files, and `sprint-status` never mentioned it. The code was one push from prod with its own record recommending against it. Awwal ruled 2026-09-12: **KEEP, fix the record, and split the commit.** Weight D is deliberate — an association name is a DISCLOSURE, not a headline, so at weight A/B a body whose name contains a trade word would outrank real practitioners. Ordering is load-bearing: the trigger recomputes only on INSERT/UPDATE and the R2 catch-up is idempotent, so landing the trigger AFTER R2 would leave those vectors permanently stale (13-38 R8's exact shape). Guarded now by `REQUIRED_FTS_COLUMNS` in `migrate-custom-sql-init.ts`, which hard-fails the deploy if the DEPLOYED definition loses a column. **[superseded text kept below so the severity is visible]** ~~An employer cannot find AFAN members by searching "AFAN". Not an AC, not built.~~ Flagged because 13-38's R8 was exactly this shape — the FTS trigger gaining a column with no deploy step — and because whether association membership should be SEARCHABLE (rather than merely disclosed) is a policy call, not a dev one.~~ ⚠️ The "dominated result set" worry that justified deferring is **latent, not live**: the gate is shut, so only 10 vouched profiles exist today, and both stored values are acronyms (AFAN, ASNAT) carrying no trade word. It becomes real only when layer 4 opens — re-read it then. | **CLOSED 2026-09-12 — shipped, recorded, and split into its own commit** |
 | **R6** | **The gate is still shut.** 8,278 consenting people remain invisible to the marketplace until 13-2 R-A2 opens `PIPELINE_EXCLUDED_STATUSES`. That is the correct order, and this story does not do it. | OPEN — next story |
 | **R7** | ⛔ **Layer 4 is a gate change PLUS an enqueue path — opening the constant alone creates ZERO profiles.** [AI-Review][High] 2026-09-08. The import service holds no reference to the marketplace-extraction queue; the only production enqueue is `submission-processing.service.ts:1349-1353`, which the importer never calls; and the operator's create-profiles script `_backfill-marketplace-extraction.ts:126-140` is scoped `WHERE r.source = 'public'`, so it skips every imported row. The raw material is there (13-2 AC3.4 gives imported respondents a `submissions` row), so the fix is small, but it must be **named in 13-2 R-A2's plan**, or the gate gets opened, nothing happens, and the cause is hunted in the badge. ⚖️ **MECHANISM RULED 2026-09-09 (Awwal): widen `_backfill-marketplace-extraction.ts`'s `source` predicate — NOT an import-time enqueue.** It stays an operator one-shot with a dry-run checkpoint, and it does not push 8,278 jobs through BullMQ workers that run IN the API process on a 2 GB box. Deliberately NOT implemented here: layer 4 is 13-2 R-A2, and widening the predicate is inert until the gate opens anyway (the worker still refuses on status). **PREDICT BEFORE RUNNING:** profiles created should equal imported respondents with `consent_marketplace = true`; measure from prod first. | OPEN — blocks 13-2 R-A2; mechanism decided |
 
@@ -969,17 +990,25 @@ spend its attention elsewhere.
 | **R3 — AC1's unreachable degrade path** | **Left OPEN for adjudication**, deliberately not settled here. | R3 unchanged. The review's recommendation is on record (withdraw it: the behaviour fails closed and safe, and a fallback string no code path can produce is dead copy) but adjudication rules. |
 | **Task 5 — the backfill catch-up** | **KEEP.** | Task 5 stands, and the dev's "revert it if you disagree" offer is now closed. Without it the badge fires for nobody who exists today. |
 
-⚠️ **R5 was not ruled and does not need to be today.** Leaving it open is the safe default. The
+> ⛔ **CORRECTED 2026-09-12 AT ADJUDICATION — the paragraph below was false when written, and it
+> was re-affirmed on 09-11 while R5's code sat in the very commit that re-affirmed it.** R5 was
+> implemented in the pre-crash pass (its own code comments cite *"Awwal's ruling 2026-09-09"*,
+> which §5a explicitly says did not happen). Awwal ruled on **2026-09-12**: **KEEP the code, fix
+> the record, split the commit.** See the R5 residual row for the full account. The original text
+> is left standing rather than deleted, because a record that quietly rewrites itself teaches
+> nothing — and this one was wrong twice, three days apart.
+
+~~⚠️ **R5 was not ruled and does not need to be today.** Leaving it open is the safe default. The
 review's recommendation, for whoever picks it up: **do not** add `association_name` to
 `search_vector` before the gate opens — a search for "AFAN" would then return 8,278 results
-dominated by one association and distort browse. Decide it once real query patterns exist.
+dominated by one association and distort browse. Decide it once real query patterns exist.~~
 
 ### §6 — What needs Awwal, not another agent
 
 | # | question | why it cannot be settled in code |
 |---|---|---|
 | ~~**R3**~~ | ✅ **RULED 2026-09-11 — WITHDRAW the degrade path.** Left unreachable and struck from AC1; AC6 corrected with it. | The judgement was made: failing closed is honest (no name ⇒ we cannot say who vouched), and dead copy in an AC invites the re-keying that drops the eleven. |
-| **R5** | Should association membership be **searchable** (`search_vector`), or only **disclosed**? | Policy. An employer currently cannot find AFAN members by searching "AFAN". |
+| ~~**R5**~~ | ✅ **RULED 2026-09-12 — SHIPPED (it already was).** Searchable AND disclosed: the vector at weight D for the loose half, `?association=` for the precise half. | It was never open in the code — only in the record. The question this row asked had been answered in the tree for two days, which is the defect adjudication actually found. |
 | ~~**R7**~~ | ✅ **RULED 2026-09-09 — widen the extraction backfill script's `source` predicate, not an import-time enqueue.** See §5a. | Still BLOCKS 13-2 R-A2, but the *mechanism* is no longer an open question — R-A2 executes it. |
 | ~~**Task 5**~~ | ✅ **RULED 2026-09-09 — KEEP.** | The dev's "revert it if you disagree" offer is closed. |
 
@@ -1037,24 +1066,135 @@ dominated by one association and distort browse. Decide it once real query patte
    provenance. If a trust claim ever moves server-side, the guard does not follow it.
    **Not carved as a residual** — there is nothing to fix today, and a residual for a hypothetical
    is noise. Recorded so the next person knows the boundary was chosen, not assumed.
-6. **Two numbers this session could not reconcile, offered as a decision rather than a defect.**
-   Measured totals exceed the pre-crash record by **+4 web** (beyond this session's counted +6) and
-   **+7 on an API suite this session did not touch**, with skipped moving 8 → 9. The likeliest cause
-   is environment-conditional collection. **Adjudication's call:** chase it to a deterministic
-   explanation, or accept "zero failures across 8 shards" as the gate and stop quoting totals
-   across session boundaries. The reviewer's lean is the second — but it should be a decision, not
-   a drift. → [[pattern-falsifiable-number-is-a-live-artefact]]
-7. **R5 and R4 are Awwal's, not adjudication's.** R5 (searchable vs merely disclosed) has a
-   recommendation on record and no urgency; R4 (tier-2 substrate) now carries its carve trigger.
-   Neither should be resolved by an agent to tidy the residual table.
+6. ✅ **RESOLVED 2026-09-12 — the unreconciled numbers were UNRECORDED WORK, not collection noise.**
+   Adjudication took the first option (chase it) and it paid immediately. **+7 API = R5's seven
+   tests** (`marketplace.service.test.ts` +4, the real-DB smoke +3); **+4 web = R5's four
+   `MarketplaceFilters` tests.** Proven, not argued: the test names were read first and the totals
+   PREDICTED, then measured — the five story API files went **164 → 171** exactly as predicted, and
+   after R5 was lifted into its own commit the tree measured **4,419 API / 3,088 web**, reproducing
+   the pre-crash reviewer's run **shard for shard** (1,204 / 983 / 1,075 / 1,157).
+   ⭐ **The lesson, and it is the transferable one:** the reviewer's lean was to stop quoting totals
+   across session boundaries. That would have been the wrong call — the delta was the ONLY signal
+   pointing at a whole feature nobody had recorded. **An unexplained test-count delta is
+   unrecorded work until proven otherwise**; "environment-conditional collection" is a hypothesis,
+   and it was reached without checking the cheapest thing available, which is *what the new tests
+   are called*. Sibling of §2af (a suspicious count is a prompt to go and look).
+   ⚠️ **Only the skip count was genuinely environmental** (8 ↔ 9, a DB-affordance `skipIf`);
+   adjudication measured 8 with postgres up. → [[pattern-falsifiable-number-is-a-live-artefact]]
+7. ~~**R5 and R4 are Awwal's, not adjudication's.**~~ ⚖️ **R5 WAS RULED 2026-09-12 (Awwal): keep
+   the code, fix the record, split the commit.** It was never really an open question — the feature
+   had been in the tree since the pre-crash pass; only the record said otherwise. **R4 (tier-2
+   substrate) stands as written**, carries its carve trigger, and should still not be resolved by an
+   agent to tidy the table. ⚠️ The instruction in this item was, accidentally, the thing that would
+   have buried the finding: an adjudicator who obeyed *"leave R5 alone"* would not have looked at
+   R5's code, and R5's code was the one unrecorded public-behaviour change in the commit.
 
 ⚠️ **Do NOT flip this story to `done` at adjudication while R2/R4/R5/R6/R7 are open** — the
 story-residual drift guard reds on done-with-open-residuals, and correctly. Same call as 13-59.
+
+## ⚖️ ADJUDICATION — 2026-09-12 (Claude Opus 5, third independent layer)
+
+Dev built it, an adversarial review hardened it, and this is the third layer. Everything below was
+**executed here**, not read off a table — which is the rule this story itself proved twice (H4: a
+gate recorded green was red; and the finding below).
+
+### The finding: a whole feature shipped with no record
+
+**R5 was in the tree and every record artefact said it was not.** The search-vector change and the
+`?association=` filter were introduced by commit `27423ff`, whose own residual table read *"not
+built"*, whose §5a read *"NOT RULED"*, whose §6 listed R5 as an open policy question, whose §7 told
+the adjudicator to leave R5 to Awwal, and whose File List omitted all five files. The code's own
+comments cite *"Awwal's ruling 2026-09-09"* — the same date §5a says R5 was **not** ruled.
+
+Verified before asserting (§2ag — suspect your own check): the parent commit `00808cf` contains
+**zero** occurrences of `association` in all three API files, so the change is genuinely new here
+and not a misread of pre-existing code.
+
+⭐ **The signal that exposed it was the one the record proposed to stop collecting.** §7 item 6
+offered adjudication a choice: chase the unreconciled +7 API / +4 web tests, or accept "zero
+failures" and stop quoting totals across sessions. The deltas were **exactly R5's eleven tests**.
+Had the second option been taken, an unrecorded, unruled change to a public search surface would
+have gone to prod inside a commit whose message never mentions it.
+→ **An unexplained test-count delta is unrecorded work until proven otherwise.**
+
+**Awwal's ruling (2026-09-12): KEEP the code, fix the record, and split the commit.**
+
+### The split, and the check that proves it is exact
+
+`27423ff` became three commits: the badge + honesty sweep, the §7 re-issue (cherry-picked
+unchanged), and R5 on its own. Two properties were required of it, and both were verified rather
+than assumed:
+
+1. **The record is true at every commit.** At commit 1, *"R5 — not built, open policy call"* is a
+   correct statement; commit 3 makes it a shipped one. The split retires the false record instead
+   of back-dating a true one.
+2. **The intermediate commit independently builds and passes.** A bisect landing on a commit that
+   fails for an unrelated reason is worse than no split at all. Commit 1 was measured on its own:
+   tsc 0/0/0, api lint + drift guards 403/403/322, web lint 0, **FULL API 312 files / 4,419 tests
+   (4,411 passed, 8 skipped)**, **FULL web 279 files / 3,088 tests (3,086 passed, 2 todo)**, zero
+   failures across 8 shards.
+
+⭐ **The split boundary was made falsifiable before it was cut:** if the boundary is exactly R5,
+commit 1 must measure the final totals **minus exactly eleven tests**, and must reproduce the
+pre-crash reviewer's API run shard for shard. It does — 4,426 − 7 = **4,419** (shards 1,204 / 983 /
+1,075 / 1,157, identical to the reviewer's) and 3,092 − 4 = **3,088**. The five story API files
+moved 171 → **164**, restoring service 61 / smoke 14 exactly. A boundary that lands on the prior
+run's numbers to the test is not a judgement call.
+
+### Verified independently at adjudication
+
+| What | Result |
+|---|---|
+| `tsc` — types / api / web, on HEAD | **0 / 0 / 0** |
+| api lint + 3 drift guards (run DIRECT, not through turbo) | clean; **403 / 403 / 322** |
+| web lint | **0** |
+| **The app-wide trust-claims guard, RED-verified by me** | Planted `__adjudication-bait.ts` carrying two of the real false claims — a file the guard was never told about. It produced **two `file:line` hits with a stated `why`**, and went green on removal. This proves the **walk**, independently of the author's own RED-verify. |
+| **13-2's R-A2 correction** (§7 told me to check it, not trust the paragraph) | **Genuinely in place** — R-A2 now reads (a) the gate **and** (b) widening the backfill predicate, carrying the mechanism ruling and a predict-then-compare. |
+| Full API suite (final tree, pre-split) | 312 files / **4,426** tests, 4,418 passed, 8 skipped, zero failures |
+
+### The deploy guard R5 needed, and did not have
+
+`migrate-custom-sql-init.ts` verified the FTS trigger existed and then **printed**
+`indexes business_name: true/false` — it could log `false` and exit 0. R5 makes that
+load-bearing: the badge promises that typing "AFAN" finds AFAN's members, and that holds only if
+the **deployed** definition carries the column. 13-38's R8 was this exact shape.
+
+Now `REQUIRED_FTS_COLUMNS` asserts all six columns and hard-fails. **RED-verified three ways**:
+the honest run passes and names the columns; degrading the `.sql` made it throw naming
+`association_name`; and its **real exit code is 1** — checked without a pipe, because §2y(c) is
+precisely that an exit code belongs to the last command in the chain. Exit 1 is what makes the
+`&&` deploy step stop.
+
+### R2's number, measured on prod BEFORE the run
+
+Predict-then-compare needs a prediction, and §7 item 2 asked for one. Measured over Tailscale:
+
+| | |
+|---|---|
+| respondents carrying `metadata.association_name` | **8,289** (AFAN 8,233 · ASNAT 56) |
+| …with `source = 'public'` — "the eleven" | **11** ✅ (confirms M4: eleven PEOPLE, twelve dispositions) |
+| …**already holding a marketplace profile** | **10** |
+| `marketplace_profiles` total | **296** |
+
+⭐ **So R2 predicts `associationNameChanged = 10`, not 11.** The residual said "measure it"; it is
+now measured, with the date and the query, so the operator run has a falsifiable target instead of
+an instruction. **The eleventh person is not a defect and not in R2's scope:** they are `active`
+and consented but hold **no marketplace profile at all**, so the card-fields backfill cannot touch
+them. They need the *create-profiles* script — which is **R7's** widening, not this one. Reading
+11 and measuring 10 would have looked like a backfill defect; it is one person waiting on a
+different script.
+
+⚠️ Also confirmed on prod: `marketplace_profiles.association_name` **does not exist there yet**
+(the query errored on the column), which is R1's premise holding exactly as written.
 
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-09-12 | ⚖️ **ADJUDICATED. The finding: R5 was BUILT and every record artefact said it was not** — residual table *"not built"*, §5a *"NOT RULED"*, §6 an open policy question, §7 *"leave it to Awwal"*, and five files missing from the File List. Found by chasing the unreconciled suite deltas §7 item 6 offered to stop collecting: **+7 API / +4 web were exactly R5's eleven tests**, predicted from the test names and then measured (the five story API files 164 → 171). **Awwal ruled: KEEP, fix the record, split the commit.** |
+| 2026-09-12 | **SPLIT into three commits** — badge + honesty sweep · the §7 re-issue (cherry-picked unchanged) · R5. The record is now true at every commit rather than back-dated, and the intermediate commit was verified to build and pass **on its own** (a bisect landing on a broken commit is worse than no split). Boundary proven falsifiable: commit 1 measured **4,419 API / 3,088 web**, the final totals minus exactly eleven tests, reproducing the pre-crash reviewer's run shard for shard. |
+| 2026-09-12 | 🛡️ **The FTS deploy check became a gate.** `migrate-custom-sql-init.ts` printed `indexes business_name: true/false` and exited 0 regardless — a check that could not fail, on the one artefact R5's promise depends on (13-38 R8's shape). Now `REQUIRED_FTS_COLUMNS` hard-fails naming the missing column. RED-verified by degrading the `.sql`: it threw, and its **real exit code was 1** (measured without a pipe, §2y(c)). |
+| 2026-09-12 | 📏 **R2's prediction MEASURED on prod before the run: 10, not 11.** 8,289 vouched respondents; 11 with `source='public'`; **10 of them already hold a marketplace profile**. The eleventh is `active` + consented with **no profile at all**, so the card-fields backfill cannot reach them — they need R7's create-profiles widening. Reading 11 and measuring 10 would have read as a backfill defect. |
 | 2026-09-11 | **§7 (the adjudication note) RE-ISSUED.** It was written pre-crash and four of its five items had since been acted on — including item 3, which described a guard that has since been rebuilt, so an adjudication agent reading the original would have re-walked closed ground and trusted a stale description. Outcomes recorded against the original five (item 3 was right about the size of it: the grep it asked for found FIVE more live pages and a THIRD pinned test), and a live list put in their place: R7 is ruled-but-unimplemented and **inert by design, which is how it gets lost**; R2's prediction is ELEVEN people not twelve; R1 discharges by EXECUTION, not by deploy log; the class-not-instance guard lesson; the guard's `apps/web` boundary is sufficient **by measurement** (api + packages verified clean today), not by construction; and the unreconciled suite totals are offered as a decision, not a defect. The `git show` command §7 tells the adjudicator to run was itself executed before being written down. |
 | 2026-09-11 | **R1 SWEEP ROUND THREE — five more live public pages were still carrying the false identity claim** (`FAQPage`, `GuideSearchMarketplacePage`, `EmployersPage` — two arrays plus an FAQ answer — `WorkersPage`, `PrivacyPage`). Round 2 fixed two pages and shipped a guard; the guard was imported by exactly the two test files for those two pages, so it policed where the fix landed rather than where the claim lives. `EmployersPage` now renders the canonical lists; the rest were rewritten against `lib/trust-claims.ts`. **H6/H7.** |
 | 2026-09-11 | **The guard was flagging the story's own honest copy (H8).** Its identity pattern excused a negation only AFTER the verb, so it matched AC3's disclosure "Identity not independently verified". Invisible under per-page scoping; surfaced the instant the scan went app-wide. Negation is now excused on both sides. |

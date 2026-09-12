@@ -432,6 +432,59 @@ describe('Story 13-38 card fields — real-DB smoke (raw-SQL ↔ schema parity)'
       expect(row.associationName).toBe('AFAN');
     });
 
+    /**
+     * Story 13-58 R5 — the FTS half, end to end against the REAL trigger.
+     *
+     * Search matches `search_vector @@ plainto_tsquery` as a HARD WHERE filter, so
+     * before this an employer who read "AFAN — confirmed member" on a card and typed
+     * "AFAN" into the search box got ZERO rows. Only a real-DB test can prove this:
+     * the trigger lives in `custom-sql/marketplace-trigger.sql` and the mocked unit
+     * tests would pass whether or not it had ever been applied.
+     *
+     * ⚠️ The UPDATE below is also the mechanism: the trigger is BEFORE INSERT OR
+     * UPDATE, so writing the name recomputes the vector. That is exactly why R5 was
+     * closed BEFORE the R2 catch-up runs — R2's own writes will do this for the
+     * real rows, and no recompute sweep is ever needed.
+     */
+    it('finds a vouched worker by the association name through real FTS', async () => {
+      await db
+        .update(marketplaceProfiles)
+        .set({ associationName: 'AFAN' })
+        .where(eq(marketplaceProfiles.id, vouchedProfileId));
+
+      const result = await MarketplaceService.searchProfiles({ q: 'AFAN' });
+
+      expect(result.data.map((p) => p.id)).toContain(vouchedProfileId);
+    });
+
+    /**
+     * The discriminating twin: a worker no association vouched for must NOT surface
+     * for that query. Without it, a trigger that dumped every column into the vector
+     * would pass the test above.
+     */
+    it('does not return an unvouched worker for an association query', async () => {
+      const result = await MarketplaceService.searchProfiles({ q: 'AFAN' });
+
+      expect(result.data.map((p) => p.id)).not.toContain(noBusinessProfileId);
+    });
+
+    /** R5's precise half, against real SQL rather than a mocked query object. */
+    it('filters to the association through the real search SQL', async () => {
+      await db
+        .update(marketplaceProfiles)
+        .set({ associationName: 'AFAN' })
+        .where(eq(marketplaceProfiles.id, vouchedProfileId));
+
+      const result = await MarketplaceService.searchProfiles({
+        profession: PROFESSION,
+        association: 'afan',
+      });
+
+      const ids = result.data.map((p) => p.id);
+      expect(ids).toContain(vouchedProfileId);
+      expect(ids).not.toContain(noBusinessProfileId);
+    });
+
     it('leaves a profile alone when its respondent carries no vouch', async () => {
       const result = await backfillMarketplaceCardFields({
         apply: true,

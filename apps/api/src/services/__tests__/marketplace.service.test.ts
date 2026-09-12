@@ -191,6 +191,58 @@ describe('MarketplaceService', () => {
       expect(dataQuery).not.toContain('respondents');
     });
 
+    /**
+     * Story 13-58 R5 (ruled 2026-09-09) — the PRECISE half. "Show me the workers
+     * AFAN vouched for" must not depend on the free-text vector, which matches
+     * loosely and at weight D.
+     */
+    it('filters to a named association when the filter is set', async () => {
+      setupDbMock([makeProfile({ association_name: 'AFAN' })], 1);
+
+      await MarketplaceService.searchProfiles({ association: 'AFAN' });
+
+      const dataQuery = JSON.stringify(mockDbExecute.mock.calls[0][0]);
+      expect(dataQuery).toContain('association_name ILIKE');
+      expect(dataQuery).toContain('%AFAN%');
+    });
+
+    /**
+     * The negative twin. Without it, a service that appended the clause
+     * unconditionally would pass the test above and quietly filter every
+     * unfiltered browse down to vouched workers only.
+     */
+    it('adds no association clause when the filter is absent', async () => {
+      setupDbMock([makeProfile()], 1);
+
+      await MarketplaceService.searchProfiles({});
+
+      const dataQuery = JSON.stringify(mockDbExecute.mock.calls[0][0]);
+      expect(dataQuery).not.toContain('association_name ILIKE');
+    });
+
+    /** Partial + case-insensitive, exactly like the profession filter. */
+    it('matches an association case-insensitively and partially', async () => {
+      setupDbMock([makeProfile({ association_name: 'AFAN' })], 1);
+
+      await MarketplaceService.searchProfiles({ association: 'afa' });
+
+      expect(JSON.stringify(mockDbExecute.mock.calls[0][0])).toContain('%afa%');
+    });
+
+    /**
+     * The filter must constrain the COUNT too, or the result header reports a
+     * total the caller can never page to — the pagination defect shape this
+     * service already guards for its other filters.
+     */
+    it('applies the association filter to the count query as well', async () => {
+      setupDbMock([makeProfile({ association_name: 'AFAN' })], 1);
+
+      await MarketplaceService.searchProfiles({ association: 'AFAN' });
+
+      const countQuery = JSON.stringify(mockDbExecute.mock.calls[1][0]);
+      expect(countQuery).toContain('association_name ILIKE');
+    });
+
     it('should execute two queries (data + count) for search', async () => {
       setupDbMock([], 0);
 

@@ -10,6 +10,8 @@ export async function searchMarketplace(
   if (params.lgaId) searchParams.set('lgaId', params.lgaId);
   if (params.profession) searchParams.set('profession', params.profession);
   if (params.experienceLevel) searchParams.set('experienceLevel', params.experienceLevel);
+  // Story 13-58 R5 — "show me who a named body vouched for".
+  if (params.association) searchParams.set('association', params.association);
   if (params.cursor) searchParams.set('cursor', params.cursor);
   if (params.pageSize) searchParams.set('pageSize', String(params.pageSize));
 
