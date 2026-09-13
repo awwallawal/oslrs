@@ -57,7 +57,7 @@ describe('seedFraudThresholds (integration)', () => {
     }
   });
 
-  it('should insert 27 records into an empty table', async () => {
+  it('should insert 30 records into an empty table', async () => {
     // Ensure clean state — clear ALL thresholds so idempotent guard doesn't skip
     await db.delete(fraudThresholds);
 
@@ -68,7 +68,7 @@ describe('seedFraudThresholds (integration)', () => {
       eq(fraudThresholds.isActive, true)
     );
     expect(allThresholds).toHaveLength(FRAUD_THRESHOLD_DEFAULTS.length);
-    expect(allThresholds).toHaveLength(27);
+    expect(allThresholds).toHaveLength(30);
 
     // Verify all records have correct version and active status
     for (const threshold of allThresholds) {
@@ -87,7 +87,7 @@ describe('seedFraudThresholds (integration)', () => {
       gps: 6,
       speed: 4,
       straightline: 5,
-      duplicate: 4,
+      duplicate: 7,
       timing: 4,
       composite: 4,
     });
@@ -108,7 +108,7 @@ describe('seedFraudThresholds (integration)', () => {
     const allThresholds = await db.select().from(fraudThresholds).where(
       eq(fraudThresholds.isActive, true)
     );
-    expect(allThresholds).toHaveLength(27);
+    expect(allThresholds).toHaveLength(30);
   });
 
   it('should preserve existing thresholds (not overwrite)', async () => {

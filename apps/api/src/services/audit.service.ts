@@ -92,6 +92,9 @@ export const AUDIT_ACTIONS = {
   // Secondary-data import batches (Story 11-2)
   IMPORT_BATCH_CREATED: 'import_batch.created',
   IMPORT_BATCH_ROLLED_BACK: 'import_batch.rolled_back',
+  // Story 13-2 R-A2 review P1 — a provenance record written onto an EXISTING batch by
+  // the one-shot backfill (new batches record it inside `import_batch.created`).
+  IMPORT_BATCH_PROVENANCE_RECORDED: 'import_batch.provenance_recorded',
   // Admin Actions
   ADMIN_USER_DEACTIVATE: 'admin.user_deactivate',
   ADMIN_USER_REACTIVATE: 'admin.user_reactivate',
@@ -283,6 +286,8 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
  */
 export const AUDIT_TARGETS = {
   RESPONDENT: 'respondent',
+  /** Story 11-2 import batches — the value `import.service.ts` has always written. */
+  IMPORT_BATCH: 'import_batch',
   /*
    * Story 13-51 (AC2.6) — SINGULAR is canonical ([[feedback_audit_target_unification]],
    * and `RESPONDENT` above is the precedent).

@@ -33,6 +33,7 @@
 import { pgTable, uuid, text, integer, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
 import { uuidv7 } from 'uuidv7';
 import { users } from './users.js';
+import type { ImportProvenanceStatsColumn } from './import-batches.js';
 
 /**
  * Shape of the `parsed_result` JSONB payload — the full dry-run output the
@@ -68,6 +69,10 @@ export const importBatchDrafts = pgTable('import_batch_drafts', {
 
   // Optional admin-supplied column mapping (for `imported_other`).
   columnMapping: jsonb('column_mapping'),
+
+  // Story 13-2 R-A2 review P1 — provenance supplied at dry-run, validated and
+  // reconciled against the parsed file there, then copied onto the batch at confirm.
+  provenanceStats: jsonb('provenance_stats').$type<ImportProvenanceStatsColumn>(),
 
   // The authoritative parsed payload confirm replays.
   parsedResult: jsonb('parsed_result').$type<ImportDraftParsedResult>().notNull(),

@@ -29,3 +29,4 @@ export * from './staff-photo.js';
 export * from './staff-id.js'; // Story 13-59
 export * from './staff-artefacts.js'; // Story 13-59 (review H3 — one entitlement list)
 export * from './ingestion-health.js'; // Story 13-57
+export * from './import-provenance.js'; // Story 13-2 R-A2 review P1/P2

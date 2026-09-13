@@ -203,11 +203,11 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
       return { action: 'error', respondentId, reason: 'respondent_not_found' };
     }
 
-    // 2b. Status gate (Story 11-2 AC#6) — imported_unverified / rolled_back rows
-    // are low-trust secondary-data imports and MUST NOT earn a marketplace
-    // profile. The primary gate is by-construction (the import service never
-    // enqueues this worker), but we also refuse defensively so a stray enqueue
-    // can never leak an import into the marketplace.
+    // 2b. Status gate (Story 11-2 AC#6, REOPENED by 13-2 R-A2 on 2026-09-12) —
+    // `rolled_back` rows are soft-deleted batches and never earn a profile.
+    // `imported_unverified` is NO LONGER in the set: association imports are
+    // INCLUDED in the marketplace with a provenance badge (ruling 2026-07-19 §1),
+    // subject to the vouch guard in 4b below.
     if (PIPELINE_EXCLUDED_STATUSES.includes(respondent.status)) {
       logger.info({
         event: 'marketplace_extraction.status_excluded',
@@ -247,6 +247,13 @@ export const marketplaceExtractionWorker = new Worker<MarketplaceExtractionJobDa
     // AC4 was corrected on 2026-09-07 precisely because a `source` predicate drops
     // the eleven people the AFAN import MATCHED, whose own source is `public`.
     const associationName = normaliseAssociationName(respondent.metadata?.association_name);
+
+    // ⚖️ NO VOUCH ⇒ NO BADGE, NEVER NO CARD (Awwal, ruled 13-58 and re-affirmed
+    // 2026-09-13). A consenting imported respondent without an association name still
+    // gets a profile; it simply renders badge-less. Withholding the CARD because the
+    // BADGE is absent would remove a consented person from the marketplace over a
+    // metadata gap. A review proposed exactly that guard here and it was rejected —
+    // do not re-add it.
 
     // 5. Resolve LGA name
     const { lgaId: resolvedLgaId, lgaName } = await resolveLgaName(respondent.lgaId);

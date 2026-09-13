@@ -75,6 +75,7 @@ describe('fraud interfaces (compile-time checks)', () => {
     const result: FraudDetectionResult = {
       submissionId: '018e5f2a-1234-7890-abcd-1234567890ab',
       enumeratorId: '018e5f2a-0000-7890-abcd-1234567890ab',
+      importBatchId: null,
       configVersion: 1,
       componentScores: { gps: 25, speed: 25, straightline: 20, duplicate: 0, timing: 0 },
       totalScore: 70,

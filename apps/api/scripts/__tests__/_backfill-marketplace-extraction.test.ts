@@ -37,6 +37,7 @@ function makeCandidate(overrides: Partial<CandidateRow> = {}): CandidateRow {
     submissionId: 'sub-1',
     firstName: 'Ada',
     status: 'active',
+    source: 'public',
     createdAt: new Date('2026-07-01T00:00:00Z'),
     ...overrides,
   };
@@ -56,6 +57,19 @@ describe('parseArgs', () => {
   it('throws on an unknown flag (typo-safety)', () => {
     expect(() => parseArgs(['--aply'])).toThrow(/Unknown flag/);
   });
+
+  /**
+   * 13-2 R-A2 review P4 — the staged publish scopes by batch, and the scope must fail
+   * CLOSED: a mistyped or valueless id parsing as "no batch" would publish every
+   * consenting person at once, the event staging exists to prevent.
+   */
+  it('scopes to one batch, and refuses a malformed or valueless --batch-id', () => {
+    const id = '01a071c8-709f-73a3-9e31-eb0e8cedf01a';
+    expect(parseArgs(['--dry-run', '--batch-id', id]).batchId).toBe(id);
+    expect(parseArgs(['--dry-run']).batchId).toBeNull();
+    expect(() => parseArgs(['--dry-run', '--batch-id', '01a071c8'])).toThrow(/--batch-id/);
+    expect(() => parseArgs(['--dry-run', '--batch-id'])).toThrow(/--batch-id/);
+  });
 });
 
 describe('fetchCandidates', () => {
@@ -71,6 +85,7 @@ describe('fetchCandidates', () => {
           submission_id: 's-1',
           first_name: 'Ada',
           status: 'active',
+          source: 'imported_association',
           created_at: '2026-07-05T00:00:00Z',
         },
       ],
@@ -82,6 +97,7 @@ describe('fetchCandidates', () => {
         submissionId: 's-1',
         firstName: 'Ada',
         status: 'active',
+        source: 'imported_association',
         createdAt: new Date('2026-07-05T00:00:00Z'),
       },
     ]);
@@ -155,5 +171,98 @@ describe('enqueueCandidates', () => {
     const result = await enqueueCandidates([], { live: true });
     expect(mockQueueMarketplaceExtraction).not.toHaveBeenCalled();
     expect(result).toEqual({ enqueued: 0, deduped: 0, failed: 0 });
+  });
+});
+
+/**
+ * Story 13-2 R-A2 half (b) — THE PREDICATE ITSELF.
+ *
+ * ⭐ Why these assert on SQL TEXT rather than on returned rows. `fetchCandidates`
+ * is the whole of half (b): opening `PIPELINE_EXCLUDED_STATUSES` creates zero
+ * profiles on its own, and this SELECT is what decides who gets one. A test that
+ * mocks `db.execute`'s RESULT (as every test above does, correctly, for mapping)
+ * cannot see the predicate at all — it would pass unchanged if the `source` filter
+ * were still `= 'public'`, which is precisely the defect half (b) exists to fix.
+ *
+ * So these read the emitted SQL. It is a coarser instrument, and deliberately so:
+ * it is the only place the widening is observable without a live database.
+ */
+function emittedSql(): string {
+  const arg = mockDbExecute.mock.calls[0]?.[0] as { queryChunks?: unknown[] } | undefined;
+  if (!arg?.queryChunks) throw new Error('db.execute was not called with a drizzle SQL object');
+  return arg.queryChunks
+    .map((c) => (typeof c === 'object' && c !== null && 'value' in c
+      ? (c as { value: string[] }).value.join('')
+      : ''))
+    .join('');
+}
+
+describe('fetchCandidates — the widened source predicate (13-2 R-A2 half b)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDbExecute.mockResolvedValue({ rows: [] });
+  });
+
+  it('makes imported_association rows eligible (the 8,278 this story exists for)', async () => {
+    await fetchCandidates(null);
+    expect(emittedSql()).toContain('imported_association');
+  });
+
+  /**
+   * ⛔ THE DISCRIMINATING TWIN, and the reason this was not fixed by DELETING the
+   * source condition. Dropping it would have made every source eligible, sweeping
+   * in `enumerator` and `clerk` respondents whose profiles are created by the live
+   * worker path — a different cohort, published as a side effect of a story about
+   * association imports. The widening is an ALLOW-LIST, not a removal.
+   */
+  it('does NOT make enumerator or clerk rows eligible (allow-list, not removal)', async () => {
+    await fetchCandidates(null);
+    const emitted = emittedSql();
+    expect(emitted).not.toContain("'enumerator'");
+    expect(emitted).not.toContain("'clerk'");
+  });
+
+  it('keeps public rows eligible (the original cohort is not displaced)', async () => {
+    await fetchCandidates(null);
+    expect(emittedSql()).toContain("'public'");
+  });
+
+  /**
+   * The sibling conditions the story names as load-bearing. Asserted because the
+   * widening edits the same WHERE clause they live in, and a careless rewrite of
+   * that clause is exactly how consent gets dropped.
+   */
+  it('still requires consent_marketplace and still skips respondents who have a profile', async () => {
+    await fetchCandidates(null);
+    const emitted = emittedSql();
+    expect(emitted).toContain('r.consent_marketplace = true');
+    expect(emitted).toContain('mp.id IS NULL');
+  });
+
+  /**
+   * ⛔ NEW EXCLUSION THE WIDENING MAKES NECESSARY. Before half (b) the script only
+   * saw `source = 'public'`, and no public row is ever `rolled_back` — that status
+   * only arises from a retracted import batch. Widening to imported rows puts
+   * soft-deleted people in reach of the selection for the first time.
+   *
+   * The worker would still refuse them at the status gate, so no profile would be
+   * created either way. What breaks without this is the OPERATOR'S COUNT: the
+   * dry-run would promise N profiles and the run would produce fewer, and
+   * predict-then-compare cannot tell that apart from a real defect.
+   */
+  it('excludes rolled_back respondents so the dry-run count is honest', async () => {
+    await fetchCandidates(null);
+    expect(emittedSql()).toContain('rolled_back');
+  });
+
+  /**
+   * ⚖️ NO VOUCH ⇒ NO BADGE, NEVER NO CARD (13-58; re-affirmed by Awwal 2026-09-13).
+   * R-A2 first required `association_name` in this SELECT, which withheld the card
+   * from a consenting person over a metadata gap. Pinned in the negative so the
+   * exclusion cannot quietly return; the real-DB sibling proves the rows ARE selected.
+   */
+  it('does NOT make the card conditional on an association vouch', async () => {
+    await fetchCandidates(null);
+    expect(emittedSql()).not.toContain('association_name');
   });
 });

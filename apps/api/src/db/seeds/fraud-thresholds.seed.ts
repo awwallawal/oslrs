@@ -30,7 +30,8 @@ export interface FraudThresholdSeedRecord {
  * - GPS (6 records): Clustering parameters + weight
  * - Speed (4 records): Tier thresholds + bootstrap + weight
  * - Straightline (5 records): PIR, battery size, entropy, min batteries, weight
- * - Duplicate (4 records): Exact/partial thresholds, lookback window, weight
+ * - Duplicate (7 records): Exact/partial thresholds, lookback window, weight,
+ *   plus roll-padding identity/contact points + reuse minimum (13-2 R-A2)
  * - Timing (4 records): Night window, weekend penalty, weight
  * - Composite (4 records): Severity cutoffs
  */
@@ -216,6 +217,39 @@ export const FRAUD_THRESHOLD_DEFAULTS: FraudThresholdSeedRecord[] = [
     weight: '20.00',
     severityFloor: null,
     notes: 'Component weight in composite score (max 20 points). Strong evidence when triggered.',
+  },
+
+  // ── Roll Padding (3 records) — Story 13-2 R-A2 ──────────────────────
+  // Shares the `duplicate` category (and therefore `duplicate_weight`) with
+  // duplicate-response: roll padding IS duplicate detection, batch-scoped rather
+  // than enumerator-scoped. Only one of the two ever runs for a given submission.
+
+  {
+    ruleKey: 'padding_identity_weight',
+    displayName: 'Roll Padding — Duplicate Identity Points',
+    ruleCategory: 'duplicate',
+    thresholdValue: '12.0000',
+    weight: null,
+    severityFloor: null,
+    notes: 'Points when a row shares a normalised name+LGA with others in the same import batch. Saturates at a cluster excess of 3.',
+  },
+  {
+    ruleKey: 'padding_contact_weight',
+    displayName: 'Roll Padding — Contact Reuse Points',
+    ruleCategory: 'duplicate',
+    thresholdValue: '8.0000',
+    weight: null,
+    severityFloor: null,
+    notes: 'Points when one phone number stands in for many rows in a batch. Weaker than the identity signal by design.',
+  },
+  {
+    ruleKey: 'padding_contact_reuse_min',
+    displayName: 'Roll Padding — Contact Reuse Minimum',
+    ruleCategory: 'duplicate',
+    thresholdValue: '5.0000',
+    weight: null,
+    severityFloor: null,
+    notes: 'Rows per phone (within one import batch) before reuse counts as a signal. Calibrated 2026-09-13 on the 9,563-row farming consolidation, the only intake with shared phones: 345 shared numbers — 305 used by 2 rows, 19 by 3, 9 by 4, 12 by 5+ (83 rows). At 5, the ordinary 2-4-person household/co-op handsets stay silent and only the 12 heaviest fire. Those rows were held for review and are not yet imported.',
   },
 
   // ── Off-Hours Timing (4 records) ─────────────────────────────────

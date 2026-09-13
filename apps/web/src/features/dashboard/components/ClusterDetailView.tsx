@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { fraudSubjectLabel } from '../api/fraud.api';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import { DefaultIcon, HighlightedIcon } from './leaflet-icons';
 import { ArrowLeft, CheckSquare, Square } from 'lucide-react';
@@ -97,7 +98,7 @@ export function ClusterDetailView({
                   >
                     <Popup>
                       <div className="text-sm">
-                        <p className="font-semibold">{m.enumeratorName}</p>
+                        <p className="font-semibold">{fraudSubjectLabel(m)}</p>
                         <p className="text-neutral-500 text-xs">
                           {new Date(m.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>
@@ -145,7 +146,7 @@ export function ClusterDetailView({
                         <button
                           onClick={(e) => { e.stopPropagation(); onToggle(m.id); }}
                           className="flex items-center justify-center"
-                          aria-label={checked ? `Deselect ${m.enumeratorName}` : `Select ${m.enumeratorName}`}
+                          aria-label={checked ? `Deselect ${fraudSubjectLabel(m)}` : `Select ${fraudSubjectLabel(m)}`}
                           data-testid={`cluster-checkbox-${m.id}`}
                         >
                           {checked
@@ -154,7 +155,7 @@ export function ClusterDetailView({
                           }
                         </button>
                       </td>
-                      <td className="p-3">{m.enumeratorName}</td>
+                      <td className="p-3">{fraudSubjectLabel(m)}</td>
                       <td className="p-3 text-neutral-600">
                         {new Date(m.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>

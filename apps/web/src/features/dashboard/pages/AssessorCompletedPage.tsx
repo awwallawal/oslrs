@@ -17,6 +17,7 @@ import { EvidencePanel } from '../components/EvidencePanel';
 import { useCompletedReviews } from '../hooks/useAssessor';
 import { useFraudDetectionDetail } from '../hooks/useFraudDetections';
 import type { CompletedFilters } from '../api/assessor.api';
+import { fraudSubjectLabel } from '../api/fraud.api';
 
 const DECISION_OPTIONS = [
   { value: '', label: 'All Decisions' },
@@ -213,7 +214,7 @@ export default function AssessorCompletedPage() {
                             onKeyDown={e => { if (e.key === 'Enter') setSelectedDetectionId(review.id); }}
                             data-testid={`completed-row-${review.id}`}
                           >
-                            <td className="py-3 px-4 text-neutral-900 font-medium">{review.enumeratorName}</td>
+                            <td className="py-3 px-4 text-neutral-900 font-medium">{fraudSubjectLabel(review)}</td>
                             <td className="py-3 px-4 text-neutral-600 text-xs">
                               {review.lgaId ? review.lgaId.replace(/_/g, ' ') : '—'}
                             </td>
@@ -234,7 +235,7 @@ export default function AssessorCompletedPage() {
                                   e.stopPropagation();
                                   setSelectedDetectionId(review.id);
                                 }}
-                                aria-label={`View evidence for ${review.enumeratorName}`}
+                                aria-label={`View evidence for ${fraudSubjectLabel(review)}`}
                               >
                                 <Eye className="w-4 h-4 mr-1" />
                                 View

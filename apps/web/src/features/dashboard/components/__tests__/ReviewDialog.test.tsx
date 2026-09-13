@@ -35,6 +35,21 @@ describe('ReviewDialog', () => {
     expect(screen.getByText('Enumerator Suspended')).toBeInTheDocument();
   });
 
+  /**
+   * 13-2 R-A2 review — an imported detection has no enumerator. "Warn" and "Suspend"
+   * would record an action against nobody, and the subject must say what KIND of
+   * party it is rather than rendering blank or "null".
+   */
+  it('offers no enumerator actions for an imported detection, and labels the subject', () => {
+    render(
+      <ReviewDialog {...defaultProps} enumeratorName={null} importBatchId="01a071c8-0000-4000-8000-000000000000" />,
+    );
+    expect(screen.queryByText('Enumerator Warned')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enumerator Suspended')).not.toBeInTheDocument();
+    expect(screen.getByText('Confirmed Fraud')).toBeInTheDocument();
+    expect(screen.getByText('Imported batch')).toBeInTheDocument();
+  });
+
   it('renders enumerator name in description', () => {
     render(<ReviewDialog {...defaultProps} />);
     expect(screen.getByText('Adewale Johnson')).toBeInTheDocument();

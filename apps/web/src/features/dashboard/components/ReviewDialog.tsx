@@ -5,6 +5,7 @@
  */
 
 import { useState } from 'react';
+import { fraudSubjectLabel } from '../api/fraud.api';
 import { Loader2 } from 'lucide-react';
 import {
   AlertDialog,
@@ -31,12 +32,29 @@ interface ReviewDialogProps {
   onClose: () => void;
   onSubmit: (resolution: string, resolutionNotes?: string) => void;
   isPending: boolean;
-  enumeratorName: string;
+  /**
+   * 13-2 R-A2 — null for an imported detection. Callers pass the value straight
+   * from the API, so the dialog does the labelling rather than trusting each
+   * caller to remember.
+   */
+  enumeratorName: string | null;
+  importBatchId?: string | null;
 }
 
-export function ReviewDialog({ isOpen, onClose, onSubmit, isPending, enumeratorName }: ReviewDialogProps) {
+/**
+ * 13-2 R-A2 review — resolutions that ACT ON AN ENUMERATOR. An imported detection has
+ * no enumerator (its accountable party is an import batch), so offering "warn" or
+ * "suspend" would record an action against nobody and read, in the audit trail, as
+ * if one had been taken.
+ */
+const ENUMERATOR_ACTIONS: ReadonlySet<string> = new Set(['enumerator_warned', 'enumerator_suspended']);
+
+export function ReviewDialog({ isOpen, onClose, onSubmit, isPending, enumeratorName, importBatchId }: ReviewDialogProps) {
   const [resolution, setResolution] = useState<string>('');
   const [notes, setNotes] = useState('');
+  const options = importBatchId
+    ? RESOLUTION_OPTIONS.filter((o) => !ENUMERATOR_ACTIONS.has(o.value))
+    : RESOLUTION_OPTIONS;
 
   const handleSubmit = () => {
     if (resolution) {
@@ -58,13 +76,14 @@ export function ReviewDialog({ isOpen, onClose, onSubmit, isPending, enumeratorN
           <AlertDialogDescription asChild>
             <div className="space-y-4">
               <p>
-                Select a resolution for the detection flagged on <strong>{enumeratorName}</strong>.
+                Select a resolution for the detection flagged on{' '}
+                <strong>{fraudSubjectLabel({ enumeratorName, importBatchId })}</strong>.
               </p>
 
               {/* Resolution Options */}
               <fieldset className="space-y-2">
                 <legend className="text-sm font-medium text-neutral-700 mb-2">Resolution</legend>
-                {RESOLUTION_OPTIONS.map((option) => (
+                {options.map((option) => (
                   <label
                     key={option.value}
                     className={`flex items-start gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${

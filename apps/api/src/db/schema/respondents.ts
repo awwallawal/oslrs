@@ -47,48 +47,67 @@ export const respondentStatusTypes = [
 export type RespondentStatus = typeof respondentStatusTypes[number];
 
 /**
- * Story 11-2 — statuses excluded from NIN-keyed downstream pipelines
- * (fraud-detection, marketplace-extraction, partner-API `verify_nin`).
+ * Statuses excluded from NIN-keyed downstream pipelines (fraud-detection,
+ * marketplace-extraction, partner-API `verify_nin`).
  *
- * `imported_unverified` rows are low-trust secondary-data imports that must not
- * masquerade as field-verified; `rolled_back` rows are soft-deleted batches.
- * Both are held out of the pipelines. The PRIMARY gate is by-construction — the
- * importer never enqueues those workers — but the workers also consult this set
- * defensively so a stray enqueue can never leak an import into fraud/marketplace.
+ * Story 11-2 opened this set with TWO members. Story 13-2 R-A2 (2026-09-12)
+ * removed `imported_unverified`; only the soft-delete remains.
+ *
+ * `rolled_back` rows are soft-deleted batches — a 14-day retraction, not a trust
+ * tier — and must stay out of every pipeline. The PRIMARY gate is
+ * by-construction (the importer never enqueues those workers); the workers also
+ * consult this set defensively so a stray enqueue can never resurrect a
+ * retracted batch.
  *
  * NOTE: `pending_nin_capture` / `nin_unavailable` are NOT excluded — those are
  * legitimate field respondents who merely lack a NIN and still earn marketplace
  * profiles once consented.
  *
- * ⛔⛔ BEFORE YOU REMOVE A STATUS FROM THIS LIST — READ THIS. It is the exact edit
- * 13-2 R-A2 calls for, and on its own it DOES NOTHING.
+ * ── WHY `imported_unverified` LEFT THIS LIST (13-2 R-A2) ─────────────────────
  *
- * **Removing `imported_unverified` here creates ZERO marketplace profiles.** This
- * set is the *defensive second* gate. The primary one is by-construction, and the
- * chain is broken further upstream:
+ * Awwal's 2026-07-19 ruling §1: association imports are INCLUDED in the
+ * marketplace, carrying a provenance badge. The exclusion was a SEQUENCING
+ * dependency on the badge (13-58), not a permanent trust decision. 13-58 shipped
+ * and is live on prod, so the badge renders and the gate opens. Imported rows now
+ * reach marketplace extraction and are surfaced with `associationName`, never as
+ * bare "verified" listings.
  *
- *   - `import.service.ts` holds NO reference to the marketplace-extraction queue;
- *   - the only production enqueue is `submission-processing.service.ts` (~:1349),
- *     which the importer never calls;
- *   - `scripts/_backfill-marketplace-extraction.ts` — the operator's
- *     create-profiles script — is scoped `WHERE r.source = 'public'` (~:126-140),
- *     so it skips every imported row.
+ * ⛔⛔ REMOVING A STATUS FROM THIS LIST DOES NOT, BY ITSELF, DO ANYTHING. Read this
+ * before assuming the next such change is one line.
  *
- * So the gate change must ship WITH (b): widen that script's `source` predicate and
- * run it as an operator one-shot, dry-run first, with a predict-then-compare
- * (profiles created should equal imported respondents with `consent_marketplace`).
- * ⚖️ Awwal ruled 2026-09-09: widen the SCRIPT, **not** an import-time enqueue —
- * all 10 BullMQ workers run IN the API process on a 2 GB VPS, so enqueuing 8,278
- * jobs at import is a self-inflicted load spike.
+ * This set is the *defensive second* gate. The primary one is by-construction, and
+ * for imports the chain is broken further upstream:
+ *
+ *   - `import.service.ts` holds NO queue reference of any kind;
+ *   - the only production enqueue of either worker is
+ *     `submission-processing.service.ts` (~:1333 fraud, ~:1349 marketplace),
+ *     which the importer never calls.
+ *
+ * So the gate change shipped WITH (b): `scripts/_backfill-marketplace-extraction.ts`
+ * — the operator's create-profiles script — had its `source` predicate widened, and
+ * is run as a dry-run-first one-shot with a predict-then-compare. Opening this
+ * constant without that script creates ZERO marketplace profiles.
+ * ⚖️ Awwal ruled 2026-09-09: widen the SCRIPT, **not** an import-time enqueue — all
+ * 10 BullMQ workers run IN the API process on a 2 GB VPS, so enqueuing 8,278 jobs at
+ * import is a self-inflicted load spike.
+ *
+ * ⚠️ THE FRAUD SIDE OF THIS GATE IS OPEN, AND FED ONLY BY AN OPERATOR ONE-SHOT.
+ * Nothing enqueues fraud for an imported row at import time; the path is
+ * `scripts/_backfill-fraud-detection-imports.ts`, which has NOT been run (13-2 R-A7).
+ * The engine CAN score an import since R-A2 — `enumerator_id` is nullable, the
+ * heuristic registry is split by provenance, and imports run `roll_padding` — but
+ * until that script runs, "the fraud gate is open" still does not mean "imports are
+ * fraud-scored".
+ *
+ * ⚖️ A consenting imported respondent with NO association name still earns a card —
+ * badge-less. No vouch means no badge, never no card (13-58; re-affirmed by Awwal
+ * 2026-09-13, when a review's proposal to withhold the card was rejected).
  *
  * Found at 13-58's adversarial review (H3 → its R7) because the story's sequencing
- * argument had never been traced to where it executes. The raw material exists
- * (13-2 AC3.4 gives every imported row a `submissions` row), so the fix is small —
- * but it is NOT implied by this constant, and the instruction that said so lived
- * only in a story file until 2026-09-12. → docs/adjudication-agent-handoff.md §2aj
+ * argument had never been traced to where it executes.
+ * → docs/adjudication-agent-handoff.md §2aj
  */
 export const PIPELINE_EXCLUDED_STATUSES: readonly RespondentStatus[] = [
-  'imported_unverified',
   'rolled_back',
 ];
 

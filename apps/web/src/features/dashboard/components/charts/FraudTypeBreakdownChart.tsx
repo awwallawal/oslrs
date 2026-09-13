@@ -1,5 +1,5 @@
 /**
- * Fraud Type Breakdown Chart — horizontal bar chart with 5 heuristic types
+ * Fraud Type Breakdown Chart — horizontal bar chart with 6 heuristic types (roll padding added by 13-2 R-A2)
  * Story 8.4 AC#1, AC#2 — bars are clickable, navigating to audit queue filtered by heuristic
  */
 
@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../../../../components
 import { SkeletonCard } from '../../../../components/skeletons';
 import { ChartExportButton } from './ChartExportButton';
 import { CHART_COLORS } from './chart-utils';
-import type { FraudTypeBreakdown } from '@oslsr/types';
+import type { FraudTypeBreakdown, FraudDrilldownHeuristic } from '@oslsr/types';
 
 interface Props {
   data?: FraudTypeBreakdown;
@@ -18,11 +18,17 @@ interface Props {
   className?: string;
 }
 
-const HEURISTIC_MAP: { key: keyof FraudTypeBreakdown; label: string; heuristic: string }[] = [
+/**
+ * Exported for the drift test: each bar's `heuristic` must be a drill-down filter the API
+ * accepts (`FRAUD_DRILLDOWN_HEURISTICS`), and every breakdown field needs a bar.
+ */
+export const HEURISTIC_MAP: { key: keyof FraudTypeBreakdown; label: string; heuristic: FraudDrilldownHeuristic }[] = [
   { key: 'gpsCluster', label: 'GPS Cluster', heuristic: 'gps_clustering' },
   { key: 'speedRun', label: 'Speed Run', heuristic: 'speed_run' },
   { key: 'straightLining', label: 'Straight-lining', heuristic: 'straight_lining' },
   { key: 'duplicateResponse', label: 'Duplicate', heuristic: 'duplicate_response' },
+  // 13-2 R-A2 — imported association rolls; shares duplicate_score, split by provenance.
+  { key: 'rollPadding', label: 'Roll Padding', heuristic: 'roll_padding' },
   { key: 'offHours', label: 'Off Hours', heuristic: 'off_hours' },
 ];
 

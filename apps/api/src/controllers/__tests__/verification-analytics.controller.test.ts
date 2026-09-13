@@ -13,7 +13,7 @@ const { VerificationAnalyticsController } = await import('../verification-analyt
 
 const MOCK_PIPELINE_DATA = {
   funnel: { totalSubmissions: 100, totalFlagged: 30, totalReviewed: 20, totalApproved: 15, totalRejected: 5 },
-  fraudTypeBreakdown: { gpsCluster: 10, speedRun: 8, straightLining: 5, duplicateResponse: 3, offHours: 2 },
+  fraudTypeBreakdown: { gpsCluster: 10, speedRun: 8, straightLining: 5, duplicateResponse: 3, rollPadding: 1, offHours: 2 },
   throughputTrend: [],
   topFlaggedEnumerators: [],
   backlogTrend: [],

@@ -126,7 +126,7 @@ export class FraudDetectionsController {
         .select({ count: sql<number>`COUNT(*)::int` })
         .from(fraudDetections)
         .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
-        .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+        .leftJoin(users, eq(fraudDetections.enumeratorId, users.id))
         .where(whereClause);
 
       const totalItems = countResult?.count ?? 0;
@@ -145,11 +145,12 @@ export class FraudDetectionsController {
           reviewedAt: fraudDetections.reviewedAt,
           reviewedBy: fraudDetections.reviewedBy,
           enumeratorName: users.fullName,
+          importBatchId: fraudDetections.importBatchId,
           submittedAt: submissions.submittedAt,
         })
         .from(fraudDetections)
         .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
-        .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+        .leftJoin(users, eq(fraudDetections.enumeratorId, users.id))
         .where(whereClause)
         .orderBy(desc(fraudDetections.computedAt))
         .limit(pageSizeNum)
@@ -219,15 +220,17 @@ export class FraudDetectionsController {
           gpsLatitude: submissions.gpsLatitude,
           gpsLongitude: submissions.gpsLongitude,
           submittedAt: submissions.submittedAt,
-          // JOINed enumerator data
+          // JOINed enumerator data — NULL for an imported detection (13-2 R-A2);
+          // `importBatchId` is what names the accountable party for those.
           enumeratorName: users.fullName,
           enumeratorLgaId: users.lgaId,
+          importBatchId: fraudDetections.importBatchId,
           // JOINed form data
           formName: questionnaireForms.title,
         })
         .from(fraudDetections)
         .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
-        .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+        .leftJoin(users, eq(fraudDetections.enumeratorId, users.id))
         // Join in TEXT space — `submissions.questionnaire_form_id` is TEXT and
         // legitimately holds non-UUID sentinels ('supplemental-survey',
         // 'self-edit', legacy 'no-form-pinned-at-submit'). Casting it to uuid
@@ -246,7 +249,14 @@ export class FraudDetectionsController {
       // Supervisor scope check
       if (user.role === 'supervisor') {
         const enumeratorIds = await TeamAssignmentService.getEnumeratorIdsForSupervisor(user.sub);
-        if (!enumeratorIds.includes(detection.enumeratorId)) {
+        /*
+         * 13-2 R-A2 — `enumeratorId` is nullable now. An imported detection belongs
+         * to no team, so it can never be in scope for a supervisor; DENY explicitly
+         * rather than let a null fall through a membership test. (`includes(null)`
+         * would be false today, but that is an accident of the array's contents, not
+         * a decision — and an accident is not an access-control rule.)
+         */
+        if (detection.enumeratorId === null || !enumeratorIds.includes(detection.enumeratorId)) {
           throw new AppError('FORBIDDEN', 'Not authorized to view this detection', 403);
         }
       }
@@ -297,7 +307,9 @@ export class FraudDetectionsController {
       // Supervisor scope check
       if (user.role === 'supervisor') {
         const enumeratorIds = await TeamAssignmentService.getEnumeratorIdsForSupervisor(user.sub);
-        if (!enumeratorIds.includes(existing.enumeratorId)) {
+        // 13-2 R-A2 — see the note on the view-scope check above. An imported
+        // detection has no team, so a supervisor may not review it either.
+        if (existing.enumeratorId === null || !enumeratorIds.includes(existing.enumeratorId)) {
           throw new AppError('FORBIDDEN', 'Not authorized to review this detection', 403);
         }
       }
@@ -380,7 +392,7 @@ export class FraudDetectionsController {
         })
         .from(fraudDetections)
         .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
-        .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+        .leftJoin(users, eq(fraudDetections.enumeratorId, users.id))
         .where(and(...conditions));
 
       // Build union-find graph from clusterMembers overlap
@@ -456,7 +468,13 @@ export class FraudDetectionsController {
           if (m.gpsLongitude != null) lngs.push(m.gpsLongitude);
           scores.push(parseFloat(m.totalScore));
           if (m.computedAt) timestamps.push(new Date(m.computedAt));
-          enumeratorMap.set(m.enumeratorId, m.enumeratorName);
+          // 13-2 R-A2 — both sides nullable now: the id (imported detections have no
+          // enumerator) and the name (the users join is LEFT). A GPS cluster is a
+          // field-collection artefact, so an import cannot appear here anyway; this
+          // just declines to invent a name rather than coercing one.
+          if (m.enumeratorId !== null && m.enumeratorName !== null) {
+            enumeratorMap.set(m.enumeratorId, m.enumeratorName);
+          }
           severities.push(m.severity);
         }
 
@@ -568,7 +586,11 @@ export class FraudDetectionsController {
 
         // 2. Supervisor scope enforcement (all-or-nothing)
         if (allowedEnumeratorIds !== null) {
-          const outOfScope = detections.filter(d => !allowedEnumeratorIds!.includes(d.enumeratorId));
+          // 13-2 R-A2 — a null enumerator (imported detection) is out of scope for
+          // every supervisor, stated rather than inferred from `includes`.
+          const outOfScope = detections.filter(
+            d => d.enumeratorId === null || !allowedEnumeratorIds!.includes(d.enumeratorId),
+          );
           if (outOfScope.length > 0) {
             throw new AppError('SCOPE_VIOLATION', 'Cannot review detections outside your team', 403);
           }

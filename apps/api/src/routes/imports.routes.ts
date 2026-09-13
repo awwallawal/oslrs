@@ -11,7 +11,7 @@
  *   POST /confirm       commit a dry-run draft transactionally
  *   POST /:id/rollback  soft-delete a batch within 14 days
  *   GET  /              paginated batch list (filter: source/status/uploaded_by)
- *   GET  /:id           batch detail
+ *   GET  /:id           batch detail + integrity reading (13-2 R-A2 review P2)
  */
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
@@ -61,7 +61,10 @@ router.post(
       if (!req.file) {
         throw new AppError('VALIDATION_ERROR', 'A file upload (field "file") is required.', 400);
       }
-      const { source, parser_used, source_description, column_mapping } = req.body as Record<string, string>;
+      const { source, parser_used, source_description, column_mapping, provenance_stats } = req.body as Record<
+        string,
+        string
+      >;
       if (!source || !parser_used) {
         throw new AppError('VALIDATION_ERROR', 'source and parser_used are required.', 400);
       }
@@ -75,6 +78,20 @@ router.post(
         }
       }
 
+      /*
+       * Story 13-2 R-A2 review P1 — optional JSON (multipart fields are strings).
+       * Numbers only: raw/merged/held/clean rows, heldByReason, declaredMembers. The
+       * service validates the shape and refuses a record that does not reconcile.
+       */
+      let provenanceStats: unknown;
+      if (provenance_stats) {
+        try {
+          provenanceStats = JSON.parse(provenance_stats);
+        } catch {
+          throw new AppError('VALIDATION_ERROR', 'provenance_stats must be valid JSON.', 400);
+        }
+      }
+
       const { actorId } = actorOf(req);
       const result = await ImportService.dryRun({
         buffer: req.file.buffer,
@@ -83,6 +100,7 @@ router.post(
         parserUsed: parser_used,
         columnMapping,
         sourceDescription: source_description ?? null,
+        provenanceStats,
         actorId,
       });
 
@@ -182,7 +200,9 @@ router.get('/:id/failure-report.csv', async (req: Request, res: Response, next: 
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const batch = await ImportService.get(req.params.id);
-    res.status(200).json({ data: batch });
+    // Story 13-2 R-A2 review P2 — the batch's integrity reading beside its record.
+    const integrity = await ImportService.getIntegrity(batch);
+    res.status(200).json({ data: { ...batch, integrity } });
   } catch (err) {
     next(err);
   }

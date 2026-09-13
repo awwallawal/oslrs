@@ -3,8 +3,9 @@ import { FRAUD_THRESHOLD_DEFAULTS } from '../fraud-thresholds.seed.js';
 import { ruleCategoryTypes } from '../../schema/fraud-thresholds.js';
 
 describe('FRAUD_THRESHOLD_DEFAULTS', () => {
-  it('should contain exactly 27 records', () => {
-    expect(FRAUD_THRESHOLD_DEFAULTS).toHaveLength(27);
+  it('should contain exactly 30 records', () => {
+    // 27 + the three roll-padding tunables added by 13-2 R-A2.
+    expect(FRAUD_THRESHOLD_DEFAULTS).toHaveLength(30);
   });
 
   it('should have unique ruleKey for each record', () => {
@@ -86,7 +87,9 @@ describe('FRAUD_THRESHOLD_DEFAULTS', () => {
     const duplicateRecords = FRAUD_THRESHOLD_DEFAULTS.filter(r => r.ruleCategory === 'duplicate');
 
     it('should have 4 duplicate records', () => {
-      expect(duplicateRecords).toHaveLength(4);
+      // 4 duplicate-response + 3 roll-padding (13-2 R-A2); they share the category
+      // because roll padding IS duplicate detection, scoped to a batch.
+      expect(duplicateRecords).toHaveLength(7);
     });
 
     it('should include exact threshold, partial threshold, lookback days, and weight', () => {

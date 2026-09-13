@@ -20,9 +20,11 @@
  * `PIPELINE_EXCLUDED_STATUSES` for the whole module graph, and the sibling file's
  * gate behaviour must keep testing the REAL constant.
  *
- * ⛔ This does NOT open the gate in production. `PIPELINE_EXCLUDED_STATUSES` in
- * `db/schema/respondents.ts` is untouched and stays that way — opening it is
- * Story 13-2 R-A2, after this ships. See the note on the second test.
+ * ✅ UPDATE — 13-2 R-A2 (2026-09-12): the REAL gate is now open for
+ * `imported_unverified`, so this file no longer stands alone against production.
+ * The mock is kept deliberately: it pins the DERIVATION (does extraction carry the
+ * vouch at that status?) independently of the constant, so the two concerns cannot
+ * fail as one. The third test asserts the real constant and is the tripwire.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -139,11 +141,16 @@ describe('marketplace-extraction — the imported cohort, once the gate opens (1
   });
 
   /**
-   * The discriminating twin, at the cohort's own status: an imported respondent
-   * whose metadata carries NO name still gets no vouch. Without this, a worker that
-   * wrote a constant would pass the test above.
+   * The discriminating twin, at the cohort's own status: an imported respondent whose
+   * metadata carries NO name still gets a CARD, with no vouch on it. Without this, a
+   * worker that wrote a constant name would pass the test above.
+   *
+   * ⚖️ The card itself is the ruled outcome (13-58; re-affirmed by Awwal 2026-09-13):
+   * no vouch means no badge, never no card. A 13-2 R-A2 review briefly inverted this
+   * test to refuse the profile; that guard was rejected and removed. Asserting the
+   * INSERT (not merely the null) is what keeps it from coming back unnoticed.
    */
-  it('writes null for an imported_unverified respondent with no vouch', async () => {
+  it('writes a badge-less profile for an imported_unverified respondent with no vouch', async () => {
     const mocks = setupDbMocks({
       id: 'resp-002',
       status: 'imported_unverified',
@@ -161,16 +168,29 @@ describe('marketplace-extraction — the imported cohort, once the gate opens (1
   });
 
   /**
-   * ⛔ AND THE GATE IS STILL SHUT IN PRODUCTION. This asserts the REAL constant, not
-   * the mocked one, so the file that opens the gate to prove the cohort works cannot
-   * also be read as evidence that the gate is open. Opening it is Story 13-2 R-A2.
+   * ⭐ THE TRIPWIRE, INVERTED BY 13-2 R-A2 (2026-09-12).
+   *
+   * Until R-A2 this asserted the REAL constant was still SHUT, so that this file —
+   * which opens the gate in a module mock — could not be misread as evidence that
+   * production was open. R-A2 is the story that opens it, so the assertion flips:
+   * `imported_unverified` must now be ABSENT from the real constant.
+   *
+   * It is deliberately still an assertion on `importActual`, not on the mock. That
+   * is what makes it a tripwire rather than a tautology: it is the one test in the
+   * suite that fails if the gate change is reverted or never made, and the two
+   * tests above would keep passing either way because they read the mocked value.
+   *
+   * ⛔ `rolled_back` STAYS EXCLUDED — it is a 14-day soft-delete, not a trust tier.
+   * Asserted explicitly because a change that opened the whole array (`[]`) would
+   * satisfy every other assertion in this story while silently republishing every
+   * retracted batch.
    */
-  it('leaves the real PIPELINE_EXCLUDED_STATUSES closed (13-2 R-A2, not this story)', async () => {
+  it('has the real gate OPEN for imported_unverified and STILL SHUT for rolled_back (13-2 R-A2)', async () => {
     const actual = await vi.importActual<typeof import('../../db/schema/respondents.js')>(
       '../../db/schema/respondents.js',
     );
 
-    expect(actual.PIPELINE_EXCLUDED_STATUSES).toContain('imported_unverified');
+    expect(actual.PIPELINE_EXCLUDED_STATUSES).not.toContain('imported_unverified');
     expect(actual.PIPELINE_EXCLUDED_STATUSES).toContain('rolled_back');
   });
 });

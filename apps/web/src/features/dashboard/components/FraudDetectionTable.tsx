@@ -9,6 +9,7 @@ import { Button } from '../../../components/ui/button';
 import { FraudSeverityBadge } from './FraudSeverityBadge';
 import { FraudResolutionBadge } from './FraudResolutionBadge';
 import type { FraudDetectionListItem } from '../api/fraud.api';
+import { fraudSubjectLabel } from '../api/fraud.api';
 
 interface FraudDetectionTableProps {
   detections: (FraudDetectionListItem & { lgaId?: string | null })[];
@@ -103,7 +104,7 @@ export function FraudDetectionTable({
                       <button
                         onClick={(e) => { e.stopPropagation(); onToggleSelect?.(detection.id); }}
                         className="flex items-center justify-center"
-                        aria-label={isChecked ? `Deselect ${detection.enumeratorName}` : `Select ${detection.enumeratorName}`}
+                        aria-label={isChecked ? `Deselect ${fraudSubjectLabel(detection)}` : `Select ${fraudSubjectLabel(detection)}`}
                         data-testid={`checkbox-${detection.id}`}
                       >
                         {isChecked
@@ -123,7 +124,9 @@ export function FraudDetectionTable({
                 )}
                 <td className="py-3 px-4 text-neutral-900 font-medium">
                   {isVerified && <CheckCircle className="h-4 w-4 text-green-500 inline mr-1.5" />}
-                  {detection.enumeratorName}
+                  {/* 13-2 R-A2 — an imported detection has no enumerator; the label
+                      says which KIND of subject it is rather than rendering null. */}
+                  {fraudSubjectLabel(detection)}
                 </td>
                 {showLgaColumn && (
                   <td className="py-3 px-4 text-neutral-600 text-xs">
@@ -150,7 +153,7 @@ export function FraudDetectionTable({
                       e.stopPropagation();
                       onSelectDetection(detection.id);
                     }}
-                    aria-label={`View evidence for ${detection.enumeratorName}`}
+                    aria-label={`View evidence for ${fraudSubjectLabel(detection)}`}
                   >
                     <Eye className="w-4 h-4 mr-1" />
                     Evidence

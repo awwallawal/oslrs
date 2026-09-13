@@ -14,6 +14,7 @@ import { pgTable, uuid, text, timestamp, numeric, integer, jsonb, index } from '
 import { uuidv7 } from 'uuidv7';
 import { submissions } from './submissions.js';
 import { users } from './users.js';
+import { importBatches } from './import-batches.js';
 
 /**
  * Resolution outcome values — must match @oslsr/types fraudResolutions.
@@ -48,7 +49,32 @@ export const fraudDetections = pgTable('fraud_detections', {
 
   // Submission + enumerator references
   submissionId: uuid('submission_id').notNull().references(() => submissions.id),
-  enumeratorId: uuid('enumerator_id').notNull().references(() => users.id),
+  /**
+   * ⛔ NULLABLE SINCE 13-2 R-A2 (was NOT NULL).
+   *
+   * An imported row has no enumerator: `import.service.ts` writes its submissions
+   * with neither `enumerator_id` nor `submitter_id`. The engine coerced that to
+   * `''`, which is not a uuid, so the insert threw `invalid input syntax for type
+   * uuid: ""` and every imported job dead-lettered after three retries.
+   *
+   * The alternative — attributing the detection to the uploading operator — was
+   * rejected: it would make a real super-admin the subject of thousands of fraud
+   * detections on surfaces whose resolutions include `enumerator_warned` and
+   * `enumerator_suspended`. Accountability for an import travels via
+   * `import_batch_id` instead, which reaches the uploader without accusing them.
+   *
+   * ⚠️ CONSUMERS MUST LEFT JOIN. `fraud-detections.controller.ts` used
+   * `.innerJoin(users, eq(enumeratorId, users.id))`, which silently DROPS null
+   * rows — imported detections would have been scored, stored, and invisible on
+   * every surface. Those joins were converted with this change.
+   */
+  enumeratorId: uuid('enumerator_id').references(() => users.id),
+  /**
+   * 13-2 R-A2 — the import batch a detection came from; null for field submissions.
+   * Mutually exclusive with `enumerator_id` in practice: exactly one of the two
+   * says who is accountable for the row being on the register.
+   */
+  importBatchId: uuid('import_batch_id').references(() => importBatches.id),
 
   // When computed and which config version
   computedAt: timestamp('computed_at', { withTimezone: true }).notNull().$defaultFn(() => new Date()),

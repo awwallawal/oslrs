@@ -264,8 +264,13 @@ export const gpsClusteringHeuristic: FraudHeuristic = {
       flags.push('teleportation_detected');
     }
 
-    // --- Secondary: Duplicate coordinates (different enumerators) ---
-    const duplicateCoords = detectDuplicateCoords(
+    /*
+     * --- Secondary: Duplicate coordinates (different enumerators) ---
+     * 13-2 R-A2 made `enumeratorId` nullable. "Coordinates shared with a DIFFERENT
+     * enumerator" is undefined without one, so skip rather than coerce — the old
+     * `?? ''` style of fallback is what produced a confident wrong answer upstream.
+     */
+    const duplicateCoords = enumeratorId === null ? [] : detectDuplicateCoords(
       gpsLatitude,
       gpsLongitude,
       nearbySubmissions,

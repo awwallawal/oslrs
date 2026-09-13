@@ -1159,6 +1159,14 @@ jobs:
             # zero active super_admin rows exist (FK target).
             cd apps/api && pnpm tsx scripts/migrate-system-settings-init.ts && cd ~/oslrs
 
+            # Story 13-2 R-A2 review: converge NEW fraud-threshold rule keys (the three
+            # roll_padding tunables) onto the already-seeded prod table. The seed skips a
+            # non-empty table and the self-heal bootstrap only fires on an empty one, so
+            # without this the keys never exist on prod and the admin UI cannot tune them.
+            # ADDITIVE ONLY — never touches an existing (possibly tuned) row; no-op on an
+            # empty table. Idempotent.
+            cd apps/api && pnpm tsx scripts/migrate-fraud-thresholds-init.ts && cd ~/oslrs
+
             # Story 9-56: registry search-at-scale indexes — expression index on
             # lower(raw_data->>'email') + GIN trigram indexes on respondents
             # first_name/last_name/phone_number/nin. Drizzle 0.45 cannot express

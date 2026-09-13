@@ -12,7 +12,8 @@ import { apiClient } from '../../../lib/api-client';
 export interface AuditQueueItem {
   id: string;
   submissionId: string;
-  enumeratorId: string;
+  /** Null for an imported detection (13-2 R-A2). */
+  enumeratorId: string | null;
   computedAt: string;
   totalScore: number;
   severity: string;
@@ -20,7 +21,9 @@ export interface AuditQueueItem {
   resolutionNotes: string | null;
   reviewedAt: string | null;
   reviewedBy: string | null;
-  enumeratorName: string;
+  /** Null for an imported detection (13-2 R-A2) — render via `fraudSubjectLabel`. */
+  enumeratorName: string | null;
+  importBatchId?: string | null;
   submittedAt: string;
   lgaId: string | null;
 }
@@ -28,7 +31,8 @@ export interface AuditQueueItem {
 export interface CompletedReviewItem {
   id: string;
   submissionId: string;
-  enumeratorId: string;
+  /** Null for an imported detection (13-2 R-A2). */
+  enumeratorId: string | null;
   computedAt: string;
   totalScore: number;
   severity: string;
@@ -37,7 +41,9 @@ export interface CompletedReviewItem {
   assessorResolution: string;
   assessorNotes: string | null;
   assessorReviewedAt: string;
-  enumeratorName: string;
+  /** Null for an imported detection (13-2 R-A2) — render via `fraudSubjectLabel`. */
+  enumeratorName: string | null;
+  importBatchId?: string | null;
   submittedAt: string;
   lgaId: string | null;
 }

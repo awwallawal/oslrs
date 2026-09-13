@@ -47,7 +47,8 @@ vi.mock('recharts', () => ({
 }));
 
 import VerificationFunnelChart from '../VerificationFunnelChart';
-import FraudTypeBreakdownChart from '../FraudTypeBreakdownChart';
+import FraudTypeBreakdownChart, { HEURISTIC_MAP } from '../FraudTypeBreakdownChart';
+import { FRAUD_DRILLDOWN_HEURISTICS } from '@oslsr/types';
 import ReviewThroughputChart from '../ReviewThroughputChart';
 import TopFlaggedEnumeratorsTable from '../TopFlaggedEnumeratorsTable';
 import BacklogTrendChart from '../BacklogTrendChart';
@@ -63,7 +64,7 @@ const mockFunnel: VerificationFunnel = {
 };
 
 const mockBreakdown: FraudTypeBreakdown = {
-  gpsCluster: 10, speedRun: 8, straightLining: 5, duplicateResponse: 3, offHours: 2,
+  gpsCluster: 10, speedRun: 8, straightLining: 5, duplicateResponse: 3, rollPadding: 1, offHours: 2,
 };
 
 const mockThroughput: ReviewThroughput[] = [
@@ -104,6 +105,17 @@ describe('FraudTypeBreakdownChart', () => {
   it('renders loading state', () => {
     wrap(<FraudTypeBreakdownChart isLoading={true} error={null} />);
     expect(screen.queryByText('Fraud Type Breakdown')).not.toBeInTheDocument();
+  });
+
+  /**
+   * 13-2 R-A2 review L2 — recharts draws no bars in jsdom, so a missing bar or a bar
+   * linking to a filter the API rejects would pass every render test. Pinned on the map:
+   * one bar per breakdown field, each linking to a drill-down the API accepts.
+   */
+  it('has one bar per breakdown field, each linking to an accepted drill-down', () => {
+    expect(HEURISTIC_MAP.map((h) => h.key).sort()).toEqual(Object.keys(mockBreakdown).sort());
+    expect(HEURISTIC_MAP.map((h) => h.heuristic).sort()).toEqual([...FRAUD_DRILLDOWN_HEURISTICS].sort());
+    expect(HEURISTIC_MAP.find((h) => h.key === 'rollPadding')?.heuristic).toBe('roll_padding');
   });
 });
 

@@ -244,8 +244,13 @@ describe('AuditService', () => {
       //   so this audit row and the `association_vouched_by_batch_id` metadata key are the
       //   only trace that a third party claim was written onto a live citizen record, and
       //   the only way to undo the run.
+      // Story 13-2 R-A2 review P1 (2026-09-13) added 1:
+      //   IMPORT_BATCH_PROVENANCE_RECORDED ('import_batch.provenance_recorded') → 66.
+      //   The one-shot backfill writes a provenance record (raw → merged → held → clean) onto
+      //   the two association batches that predate the column. It is a compliance fact about
+      //   a batch written after the fact, so it must leave its own trace.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(65);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(66);
     });
 
     /**

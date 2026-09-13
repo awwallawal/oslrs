@@ -32,8 +32,10 @@ import {
   isNotNull,
   inArray,
   like,
+  type SQL,
 } from 'drizzle-orm';
 import { AppError } from '@oslsr/utils';
+import { FRAUD_DRILLDOWN_HEURISTICS, type FraudDrilldownHeuristic } from '@oslsr/types';
 import pino from 'pino';
 
 const logger = pino({ name: 'assessor-service' });
@@ -58,16 +60,26 @@ function castScores<T extends Record<string, unknown>>(row: T): T {
   return result;
 }
 
-/** Map heuristic name to score column for drill-down filtering */
-const HEURISTIC_SCORE_MAP: Record<string, string> = {
-  gps_clustering: 'gps_score',
-  speed_run: 'speed_score',
-  straight_lining: 'straightline_score',
-  duplicate_response: 'duplicate_score',
-  off_hours: 'timing_score',
+/**
+ * Drill-down filter per heuristic.
+ *
+ * ⛔ `duplicate_response` and `roll_padding` SHARE the `duplicate_score` column (13-2
+ * R-A2: roll padding is duplicate detection, batch-scoped) and are told apart by
+ * PROVENANCE — a field detection has no `import_batch_id`, an imported one always has.
+ * Filtering on the column alone returned imported roll-padding detections under the
+ * "Duplicate response" label (R-A2 review L2).
+ */
+const HEURISTIC_FILTERS: Record<FraudDrilldownHeuristic, SQL> = {
+  gps_clustering: sql`CAST(fraud_detections.gps_score AS numeric) > 0`,
+  speed_run: sql`CAST(fraud_detections.speed_score AS numeric) > 0`,
+  straight_lining: sql`CAST(fraud_detections.straightline_score AS numeric) > 0`,
+  duplicate_response: sql`CAST(fraud_detections.duplicate_score AS numeric) > 0 AND fraud_detections.import_batch_id IS NULL`,
+  roll_padding: sql`CAST(fraud_detections.duplicate_score AS numeric) > 0 AND fraud_detections.import_batch_id IS NOT NULL`,
+  off_hours: sql`CAST(fraud_detections.timing_score AS numeric) > 0`,
 };
 
-export const VALID_HEURISTICS = Object.keys(HEURISTIC_SCORE_MAP);
+/** Typed `Record<FraudDrilldownHeuristic, SQL>` above, so a name missing here is a compile error. */
+export const VALID_HEURISTICS: readonly string[] = FRAUD_DRILLDOWN_HEURISTICS;
 
 export interface AuditQueueFilters {
   lgaId?: string;
@@ -143,20 +155,28 @@ export class AssessorService {
       conditions.push(eq(fraudDetections.enumeratorId, filters.enumeratorId));
     }
 
-    if (filters.heuristic && HEURISTIC_SCORE_MAP[filters.heuristic]) {
-      const scoreColumn = HEURISTIC_SCORE_MAP[filters.heuristic];
-      conditions.push(sql`CAST(${sql.raw(`fraud_detections.${scoreColumn}`)} AS numeric) > 0`);
+    if (filters.heuristic && VALID_HEURISTICS.includes(filters.heuristic)) {
+      conditions.push(HEURISTIC_FILTERS[filters.heuristic as FraudDrilldownHeuristic]);
     }
 
     const whereClause = and(...conditions);
 
+    /*
+     * ⛔ `users` IS LEFT-JOINED IN ALL FOUR QUERIES HERE — 13-2 R-A2 review H.
+     * `fraud_detections.enumerator_id` is nullable: an imported detection has no
+     * enumerator and names its `import_batch_id` instead. An INNER join drops those
+     * rows, so the assessor surfaces — the ones R-A10 says CAN see imports — showed
+     * none. The fraud controller's four joins were converted with the schema change;
+     * these four were missed, and a mocked-db test cannot tell the two joins apart.
+     * Pinned by `fraud-engine.imports.integration.test.ts` against a real database.
+     */
     // Count total
     const [countResult] = await db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(fraudDetections)
       .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
       .leftJoin(respondents, eq(submissions.respondentId, respondents.id))
-      .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+      .leftJoin(users, eq(fraudDetections.enumeratorId, users.id))
       .where(whereClause);
 
     const totalItems = countResult?.count ?? 0;
@@ -174,13 +194,14 @@ export class AssessorService {
         resolutionNotes: fraudDetections.resolutionNotes,
         reviewedAt: fraudDetections.reviewedAt,
         enumeratorName: users.fullName,
+        importBatchId: fraudDetections.importBatchId,
         submittedAt: submissions.submittedAt,
         lgaId: respondents.lgaId,
       })
       .from(fraudDetections)
       .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
       .leftJoin(respondents, eq(submissions.respondentId, respondents.id))
-      .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+      .leftJoin(users, eq(fraudDetections.enumeratorId, users.id))
       .where(whereClause)
       .orderBy(desc(fraudDetections.computedAt))
       .limit(pageSize)
@@ -234,7 +255,7 @@ export class AssessorService {
       .from(fraudDetections)
       .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
       .leftJoin(respondents, eq(submissions.respondentId, respondents.id))
-      .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+      .leftJoin(users, eq(fraudDetections.enumeratorId, users.id))
       .where(whereClause);
 
     const totalItems = countResult?.count ?? 0;
@@ -253,13 +274,14 @@ export class AssessorService {
         assessorNotes: fraudDetections.assessorNotes,
         assessorReviewedAt: fraudDetections.assessorReviewedAt,
         enumeratorName: users.fullName,
+        importBatchId: fraudDetections.importBatchId,
         submittedAt: submissions.submittedAt,
         lgaId: respondents.lgaId,
       })
       .from(fraudDetections)
       .innerJoin(submissions, eq(fraudDetections.submissionId, submissions.id))
       .leftJoin(respondents, eq(submissions.respondentId, respondents.id))
-      .innerJoin(users, eq(fraudDetections.enumeratorId, users.id))
+      .leftJoin(users, eq(fraudDetections.enumeratorId, users.id))
       .where(whereClause)
       .orderBy(desc(fraudDetections.assessorReviewedAt))
       .limit(pageSize)

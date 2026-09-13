@@ -5,6 +5,7 @@
  */
 
 import { useState } from 'react';
+import { fraudSubjectLabel } from '../api/fraud.api';
 import { ChevronDown, ChevronRight, MapPin, Timer, Copy, Clock, BarChart3 } from 'lucide-react';
 import { Card, CardContent } from '../../../components/ui/card';
 import { FraudSeverityBadge } from './FraudSeverityBadge';
@@ -251,7 +252,7 @@ export function EvidencePanel({ detection, onReview, renderActions }: EvidencePa
         {/* Summary Section */}
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-neutral-900">{detection.enumeratorName}</h3>
+            <h3 className="text-lg font-semibold text-neutral-900">{fraudSubjectLabel(detection)}</h3>
             <p className="text-sm text-neutral-500">
               {detection.formName ?? 'Unknown Form'} — {new Date(detection.submittedAt).toLocaleDateString()}
             </p>

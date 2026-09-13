@@ -45,12 +45,17 @@ export const fraudDetectionWorker = new Worker<FraudDetectionJobData, WorkerResu
       respondentId: job.data.respondentId,
     });
 
-    // Status gate (Story 11-2 AC#6) — imported_unverified / rolled_back
-    // respondents are low-trust secondary-data imports and MUST NOT be scored
-    // for fraud (they never went through the field-collection path the engine
-    // assumes). The primary gate is by-construction (the import service never
-    // enqueues this worker), but we refuse defensively so a stray enqueue can
-    // never leak an import into fraud scoring.
+    /*
+     * Status gate (Story 11-2 AC#6, REOPENED BY 13-2 R-A2).
+     *
+     * ⚠️ This no longer excludes `imported_unverified`. R-A2 removed it from
+     * `PIPELINE_EXCLUDED_STATUSES` so association imports ARE scored — on the
+     * roll-padding heuristic, which is the fraud an imported roll can actually
+     * evidence (see `fraud-engine.service.ts`, the two heuristic registries).
+     *
+     * What remains excluded is `rolled_back`: a 14-day soft-delete, not a trust
+     * tier. Scoring a retracted batch would resurrect it onto the review surfaces.
+     */
     if (job.data.respondentId) {
       const respondent = await db.query.respondents.findFirst({
         where: eq(respondents.id, job.data.respondentId),
@@ -83,9 +88,17 @@ export const fraudDetectionWorker = new Worker<FraudDetectionJobData, WorkerResu
     }
 
     // Store result in fraud_detections table
+    /*
+     * 13-2 R-A2 — `enumeratorId` may legitimately be null (an imported row has no
+     * field worker), and `importBatchId` carries accountability in its place. Before
+     * this story the engine coerced a missing enumerator to `''`, which is not a
+     * uuid, so this insert threw `invalid input syntax for type uuid: ""` and every
+     * imported job dead-lettered after three retries.
+     */
     await db.insert(fraudDetections).values({
       submissionId: result.submissionId,
       enumeratorId: result.enumeratorId,
+      importBatchId: result.importBatchId,
       configSnapshotVersion: result.configVersion,
       gpsScore: String(result.componentScores.gps),
       speedScore: String(result.componentScores.speed),

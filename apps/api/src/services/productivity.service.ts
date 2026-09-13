@@ -534,11 +534,19 @@ export class ProductivityService {
         ))
         .groupBy(fraudDetections.enumeratorId);
 
+      /*
+       * 13-2 R-A2 — `enumerator_id` is nullable now (imported detections have no
+       * enumerator). This map is per-ENUMERATOR productivity, so a null-keyed row
+       * would be a category error; the `inArray` filter above already excludes
+       * them, and this narrowing makes that guarantee explicit rather than implied.
+       */
       todayFraudMap = new Map(
-        todayFraudCounts.map((r) => [r.enumeratorId, {
-          approved: Number(r.approvedCount) || 0,
-          rejected: Number(r.rejectedCount) || 0,
-        }]),
+        todayFraudCounts
+          .filter((r): r is typeof r & { enumeratorId: string } => r.enumeratorId !== null)
+          .map((r) => [r.enumeratorId, {
+            approved: Number(r.approvedCount) || 0,
+            rejected: Number(r.rejectedCount) || 0,
+          }]),
       );
     }
 
@@ -956,11 +964,15 @@ export class ProductivityService {
         ))
         .groupBy(fraudDetections.enumeratorId);
 
+      // 13-2 R-A2 — per-ENUMERATOR map; imported detections have no enumerator and
+      // are already excluded by the `inArray` filter. Narrowed explicitly.
       rejectionMap = new Map(
-        fraudCounts.map((r) => [r.enumeratorId, {
-          approved: Number(r.approved) || 0,
-          rejected: Number(r.rejected) || 0,
-        }]),
+        fraudCounts
+          .filter((r): r is typeof r & { enumeratorId: string } => r.enumeratorId !== null)
+          .map((r) => [r.enumeratorId, {
+            approved: Number(r.approved) || 0,
+            rejected: Number(r.rejected) || 0,
+          }]),
       );
     }
 

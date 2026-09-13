@@ -11,13 +11,14 @@ import express from 'express';
 import request from 'supertest';
 import { AppError } from '@oslsr/utils';
 
-const { mockDryRun, mockConfirm, mockRollback, mockList, mockGet, mockGetFailureReportCsv } = vi.hoisted(() => ({
+const { mockDryRun, mockConfirm, mockRollback, mockList, mockGet, mockGetIntegrity, mockGetFailureReportCsv } = vi.hoisted(() => ({
   mockDryRun: vi.fn(),
   mockConfirm: vi.fn(),
   mockRollback: vi.fn(),
   mockList: vi.fn(),
   mockGet: vi.fn(),
   mockGetFailureReportCsv: vi.fn(),
+  mockGetIntegrity: vi.fn(),
 }));
 
 vi.mock('../../middleware/auth.js', () => ({
@@ -45,6 +46,7 @@ vi.mock('../../services/import.service.js', () => ({
     list: mockList,
     get: mockGet,
     getFailureReportCsv: mockGetFailureReportCsv,
+    getIntegrity: mockGetIntegrity,
   },
 }));
 
@@ -186,11 +188,46 @@ describe('imports.routes', () => {
     expect(mockList).toHaveBeenCalledWith(expect.objectContaining({ source: 'imported_other' }));
   });
 
-  it('GET /:id returns a batch', async () => {
-    mockGet.mockResolvedValue({ id: 'b1', source: 'imported_other' });
+  it('GET /:id returns a batch with its integrity reading (13-2 R-A2 review P2)', async () => {
+    const batch = { id: 'b1', source: 'imported_other' };
+    mockGet.mockResolvedValue(batch);
+    mockGetIntegrity.mockResolvedValue({ basis: 'recorded', signals: ['rows_matched_existing'] });
     const res = await request(buildApp()).get('/admin/imports/b1');
     expect(res.status).toBe(200);
     expect(res.body.data.id).toBe('b1');
+    expect(res.body.data.integrity).toEqual({ basis: 'recorded', signals: ['rows_matched_existing'] });
+    // The loaded row is passed through — the batch is not fetched twice.
+    expect(mockGetIntegrity).toHaveBeenCalledWith(batch);
+  });
+
+  /**
+   * P1 — provenance_stats arrives as a multipart STRING. Parsed here and handed to the
+   * service as an object; malformed JSON is a 400 at the edge, never a 500 inside.
+   */
+  it('POST /dry-run parses provenance_stats JSON and forwards it', async () => {
+    mockDryRun.mockResolvedValue({ dryRunToken: 't' });
+    const res = await request(buildApp())
+      .post('/admin/imports/dry-run')
+      .field('source', 'imported_association')
+      .field('parser_used', 'csv')
+      .field('provenance_stats', JSON.stringify({ rawRows: 70, heldRows: 14, cleanRows: 56 }))
+      .attach('file', Buffer.from('x'), 'x.csv');
+    expect(res.status).toBe(200);
+    expect(mockDryRun).toHaveBeenCalledWith(
+      expect.objectContaining({ provenanceStats: { rawRows: 70, heldRows: 14, cleanRows: 56 } }),
+    );
+  });
+
+  it('POST /dry-run rejects provenance_stats that is not JSON', async () => {
+    mockDryRun.mockReset();
+    const res = await request(buildApp())
+      .post('/admin/imports/dry-run')
+      .field('source', 'imported_association')
+      .field('parser_used', 'csv')
+      .field('provenance_stats', '{rawRows: 70')
+      .attach('file', Buffer.from('x'), 'x.csv');
+    expect(res.status).toBe(400);
+    expect(mockDryRun).not.toHaveBeenCalled();
   });
 
   it('GET /:id/failure-report.csv streams a CSV attachment (AC#8)', async () => {

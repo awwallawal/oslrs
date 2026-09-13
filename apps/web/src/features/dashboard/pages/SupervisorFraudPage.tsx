@@ -445,6 +445,7 @@ export default function SupervisorFraudPage() {
           onSubmit={handleSubmitReview}
           isPending={reviewMutation.isPending}
           enumeratorName={detectionDetail.enumeratorName}
+          importBatchId={detectionDetail.importBatchId}
         />
       )}
     </div>

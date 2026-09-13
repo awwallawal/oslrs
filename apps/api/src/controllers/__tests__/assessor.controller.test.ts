@@ -17,7 +17,7 @@ vi.mock('../../services/assessor.service.js', () => ({
     getRecentActivity: (...args: unknown[]) => mockGetRecentActivity(...args),
     reviewDetection: (...args: unknown[]) => mockReviewDetection(...args),
   },
-  VALID_HEURISTICS: ['gps_clustering', 'speed_run', 'straight_lining', 'duplicate_response', 'off_hours'],
+  VALID_HEURISTICS: ['gps_clustering', 'speed_run', 'straight_lining', 'duplicate_response', 'roll_padding', 'off_hours'],
 }));
 
 vi.mock('pino', () => ({ default: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) }));

@@ -102,8 +102,17 @@ export interface TimingDetails {
 export interface SubmissionWithContext {
   /** Submission ID */
   submissionId: string;
-  /** Enumerator (submitter) ID */
-  enumeratorId: string;
+  /**
+   * Enumerator (submitter) ID, or NULL for a row that no field worker collected.
+   *
+   * ⛔ NULLABLE SINCE 13-2 R-A2. Imported rows carry neither `enumerator_id` nor
+   * `submitter_id`, and the engine used to coerce that to `''` — which is not a
+   * uuid, so every insert threw. There is no honest enumerator for an import, and
+   * naming one (the uploading operator, say) would make a real person the subject
+   * of thousands of fraud detections on surfaces that offer "warn" and "suspend"
+   * actions. Accountability for an import travels via `importBatchId` instead.
+   */
+  enumeratorId: string | null;
   /** Questionnaire form ID */
   questionnaireFormId: string;
   /** When the submission was submitted */
@@ -128,6 +137,29 @@ export interface SubmissionWithContext {
     enumeratorId: string;
     questionnaireFormId: string;
   }>;
+  /**
+   * 13-2 R-A2 — the import batch this submission arrived in, or null for a field
+   * submission. Carries accountability for an imported row (batch -> uploader ->
+   * association) without inventing an enumerator.
+   */
+  importBatchId: string | null;
+  /**
+   * 13-2 R-A2 — pre-computed roll-padding context, null for field submissions.
+   *
+   * These are COUNTS, not rows, and that is deliberate. The obvious shape would be
+   * an array of batch siblings, but a batch is up to 8,222 rows and every row is
+   * its own job — loading siblings per job is O(n^2) against a 2 GB box. Two
+   * indexed COUNTs per job stay flat, and they keep the heuristic PURE, which the
+   * `FraudHeuristic` contract requires (heuristics receive context, never query).
+   */
+  importCohort: {
+    /** Rows in this batch — context for how meaningful a cluster size is. */
+    batchSize: number;
+    /** Rows in this batch sharing this row's normalised name+LGA identity key. */
+    sameIdentityCount: number;
+    /** Rows in this batch sharing this row's phone number (null if no phone). */
+    samePhoneCount: number | null;
+  } | null;
   /** Other enumerators' recent submissions in the same area (for duplicate coordinate detection) */
   nearbySubmissions: Array<{
     id: string;
@@ -177,7 +209,10 @@ export interface FraudComponentScore {
  */
 export interface FraudDetectionResult {
   submissionId: string;
-  enumeratorId: string;
+  /** Null for imported rows — see the note on SubmissionWithContext.enumeratorId. */
+  enumeratorId: string | null;
+  /** 13-2 R-A2 — set for imported rows, null for field submissions. */
+  importBatchId: string | null;
   configVersion: number;
   componentScores: FraudComponentScore;
   totalScore: number; // 0-100

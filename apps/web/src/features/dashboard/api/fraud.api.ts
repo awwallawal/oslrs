@@ -13,7 +13,8 @@ export interface FraudFilterParams {
 export interface FraudDetectionListItem {
   id: string;
   submissionId: string;
-  enumeratorId: string;
+  /** Null for an imported detection (13-2 R-A2). */
+  enumeratorId: string | null;
   computedAt: string;
   totalScore: number;
   severity: string;
@@ -21,14 +22,24 @@ export interface FraudDetectionListItem {
   resolutionNotes: string | null;
   reviewedAt: string | null;
   reviewedBy: string | null;
-  enumeratorName: string;
+  /**
+   * ⛔ NULLABLE SINCE 13-2 R-A2. An imported detection has no enumerator — the API
+   * LEFT JOINs `users` now — so this comes back null and `importBatchId` says who
+   * is accountable instead. Render it through `fraudSubjectLabel`, never raw: typed
+   * as non-null, the table showed a blank cell and an aria-label reading
+   * "Select null".
+   */
+  enumeratorName: string | null;
+  /** Optional: shapes that reuse this type (the assessor queue) never carry one. */
+  importBatchId?: string | null;
   submittedAt: string;
 }
 
 export interface FraudDetectionDetail {
   id: string;
   submissionId: string;
-  enumeratorId: string;
+  /** Null for an imported detection (13-2 R-A2). */
+  enumeratorId: string | null;
   computedAt: string;
   configSnapshotVersion: number;
   gpsScore: number;
@@ -50,8 +61,10 @@ export interface FraudDetectionDetail {
   gpsLatitude: number | null;
   gpsLongitude: number | null;
   submittedAt: string;
-  enumeratorName: string;
+  /** Null for an imported detection — see the note above. */
+  enumeratorName: string | null;
   enumeratorLgaId: string | null;
+  importBatchId?: string | null;
   formName: string | null;
 }
 
@@ -93,8 +106,9 @@ export async function submitFraudReview(id: string, body: ReviewBody): Promise<{
 export interface ClusterMemberItem {
   id: string;
   submissionId: string;
-  enumeratorId: string;
-  enumeratorName: string;
+  /** Null for an imported detection (13-2 R-A2). */
+  enumeratorId: string | null;
+  enumeratorName: string | null;
   computedAt: string;
   submittedAt: string;
   totalScore: number;
@@ -132,4 +146,24 @@ export async function submitBulkFraudReview(body: BulkReviewBody): Promise<{ dat
     method: 'PATCH',
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * Story 13-2 R-A2 — what to show where an enumerator name used to be.
+ *
+ * A detection now has one of two accountable parties: a field enumerator, or an
+ * import batch. Rendering `enumeratorName` raw produced "null" on screen for the
+ * second kind — the same shape of defect as the rest of this story, just in the UI.
+ *
+ * Deliberately NOT "Unknown": the subject is not unknown, it is a different KIND of
+ * subject, and a reviewer needs to know that before deciding what to do about it —
+ * the resolutions include "warn enumerator" and "suspend enumerator", neither of
+ * which means anything for an import.
+ */
+export function fraudSubjectLabel(detection: {
+  enumeratorName: string | null;
+  importBatchId?: string | null;
+}): string {
+  if (detection.enumeratorName) return detection.enumeratorName;
+  return detection.importBatchId ? 'Imported batch' : 'Unattributed';
 }

@@ -278,3 +278,59 @@ describe('FraudEngine', () => {
     });
   });
 });
+
+/**
+ * Story 13-2 R-A2 — the provenance split.
+ *
+ * ⭐ THE GUARD THAT KEEPS THE TWO REGISTRIES DISJOINT. If an imported row ever ran
+ * the field heuristics, `off_hours` would flag every row of a batch on the single
+ * timestamp the operator imported at — 8,222 people scored on the uploader's clock.
+ * If a field row ever ran roll-padding, it would score on absent import context.
+ * Both are silent failures: the suite would stay green and the detections would
+ * simply be wrong.
+ */
+describe('heuristic selection by provenance (13-2 R-A2)', () => {
+  const base = {
+    submissionId: 'sub-1',
+    questionnaireFormId: 'form-1',
+    submittedAt: new Date('2026-09-12T02:00:00Z').toISOString(),
+    gpsLatitude: null,
+    gpsLongitude: null,
+    completionTimeSeconds: null,
+    rawData: null,
+    formSchema: null,
+    recentSubmissions: [],
+    nearbySubmissions: [],
+  };
+
+  it('runs ONLY roll-padding for an imported row', async () => {
+    const { heuristicsFor } = await import('../fraud-engine.service.js');
+    const keys = heuristicsFor({
+      ...base,
+      enumeratorId: null,
+      importBatchId: 'batch-1',
+      importCohort: { batchSize: 10, sameIdentityCount: 1, samePhoneCount: 1 },
+    } as never).map((h) => h.key);
+
+    expect(keys).toEqual(['roll_padding']);
+  });
+
+  it('runs the five field heuristics — and NOT roll-padding — for a field row', async () => {
+    const { heuristicsFor } = await import('../fraud-engine.service.js');
+    const keys = heuristicsFor({
+      ...base,
+      enumeratorId: 'user-1',
+      importBatchId: null,
+      importCohort: null,
+    } as never).map((h) => h.key);
+
+    expect(keys).toEqual([
+      'gps_clustering',
+      'speed_run',
+      'straight_lining',
+      'duplicate_response',
+      'off_hours',
+    ]);
+    expect(keys).not.toContain('roll_padding');
+  });
+});

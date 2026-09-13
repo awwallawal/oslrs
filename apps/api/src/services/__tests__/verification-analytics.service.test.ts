@@ -45,7 +45,7 @@ describe('VerificationAnalyticsService', () => {
   describe('getFraudTypeBreakdown', () => {
     it('returns per-heuristic counts', async () => {
       mockExecute.mockResolvedValueOnce(mockRows([{
-        gps_cluster: '10', speed_run: '8', straight_lining: '5', duplicate_response: '3', off_hours: '2',
+        gps_cluster: '10', speed_run: '8', straight_lining: '5', duplicate_response: '3', roll_padding: '4', off_hours: '2',
       }]));
 
       const result = await VerificationAnalyticsService.getFraudTypeBreakdown();
@@ -53,6 +53,8 @@ describe('VerificationAnalyticsService', () => {
       expect(result.speedRun).toBe(8);
       expect(result.straightLining).toBe(5);
       expect(result.duplicateResponse).toBe(3);
+      // 13-2 R-A2 L2 — roll padding is reported on its own, not folded into Duplicate.
+      expect(result.rollPadding).toBe(4);
       expect(result.offHours).toBe(2);
     });
 
@@ -213,7 +215,7 @@ describe('VerificationAnalyticsService', () => {
           totalSubmissions: 100, totalFlagged: 30, totalReviewed: 20, totalApproved: 15, totalRejected: 5,
         }),
         breakdown: vi.spyOn(VerificationAnalyticsService, 'getFraudTypeBreakdown').mockResolvedValue({
-          gpsCluster: 10, speedRun: 8, straightLining: 5, duplicateResponse: 3, offHours: 2,
+          gpsCluster: 10, speedRun: 8, straightLining: 5, duplicateResponse: 3, rollPadding: 1, offHours: 2,
         }),
         throughput: vi.spyOn(VerificationAnalyticsService, 'getReviewThroughput').mockResolvedValue([
           { date: '2026-03-11', reviewedCount: 5, approvedCount: 3, rejectedCount: 2 },

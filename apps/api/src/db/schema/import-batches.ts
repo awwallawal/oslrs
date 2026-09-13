@@ -42,6 +42,22 @@ export const importBatchStatusTypes = ['active', 'rolled_back'] as const;
 export type ImportBatchStatus = typeof importBatchStatusTypes[number];
 
 /**
+ * Inline mirror of `ImportProvenanceStats` (@oslsr/types `import-provenance.ts`) —
+ * schema files must not import that package. Keep the two in step; the import
+ * service validates with the zod schema before anything reaches this column.
+ */
+export interface ImportProvenanceStatsColumn {
+  rawRows?: number;
+  rawRowsBySource?: Record<string, number>;
+  mergedRows?: number;
+  heldRows?: number;
+  heldByReason?: Record<string, number>;
+  cleanRows?: number;
+  declaredMembers?: number;
+  note?: string;
+}
+
+/**
  * Lawful basis under NDPA Article 6 — populated at ingest time by the operator.
  * Common values: `ndpa_6_1_e` (public interest), `ndpa_6_1_f` (legitimate interest),
  * `ndpa_6_1_a` (consent), etc. Free-text TEXT column rather than enum so that
@@ -89,6 +105,17 @@ export const importBatches = pgTable('import_batches', {
   rowsSkipped: integer('rows_skipped').notNull().default(0),
   rowsFailed: integer('rows_failed').notNull().default(0),
   failureReport: jsonb('failure_report'),
+
+  /**
+   * Story 13-2 R-A2 review P1 — how the uploaded file relates to what the association
+   * actually supplied: raw → merged → held → clean, why rows were held, and the head's
+   * declared member count (AC5.2). NUMBERS ONLY, never personal data. Null when the
+   * operator did not supply it (surfaced as `provenance_missing` for association
+   * batches). Validated + reconciled by `importProvenanceStatsSchema` /
+   * `reconcileProvenanceStats` in `@oslsr/types` — the shape is inlined here because
+   * schema files must not import that package.
+   */
+  provenanceStats: jsonb('provenance_stats').$type<ImportProvenanceStatsColumn>(),
 
   // Compliance trail
   lawfulBasis: text('lawful_basis').notNull(),

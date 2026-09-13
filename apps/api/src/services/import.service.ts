@@ -4,8 +4,10 @@
  * The backbone for secondary-data ingestion: parse (PDF/CSV/XLSX) → dry-run
  * preview → transactional confirm with mandatory lawful basis → 14-day
  * rollback (soft-delete via status flip). Imported respondents land
- * `status = 'imported_unverified'` so they are excluded from fraud /
- * marketplace / verify pipelines by the existing status gate.
+ * `status = 'imported_unverified'` — a PROVENANCE marker. Since 13-2 R-A2 it no
+ * longer excludes them from fraud or marketplace (only `rolled_back` does); it
+ * still keeps them out of partner-API `verify_nin`. This service enqueues
+ * neither worker — those runs are operator one-shots (13-2 R-A7).
  *
  * Reuse contract: Story 13-2 (association importer) adds ONE `import-sources.ts`
  * config block + wires `imported_association` onto THIS service — it does not
@@ -32,7 +34,7 @@ import { db } from '../db/index.js';
 import { importBatches, importBatchDrafts, respondents, submissions, lgas } from '../db/schema/index.js';
 import { importBatchStatusTypes } from '../db/schema/import-batches.js';
 import type { ImportDraftParsedResult } from '../db/schema/import-batch-drafts.js';
-import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
+import { AuditService, AUDIT_ACTIONS, AUDIT_TARGETS } from './audit.service.js';
 import { buildLgaLabelResolver } from './lga-canonical.service.js';
 import { resolveColumnMapping, isImportableSource } from '../config/import-sources.js';
 import { getParser } from './import/parsers/index.js';
@@ -40,6 +42,13 @@ import type { ColumnMapping, ParseFailure } from './import/parsers/types.js';
 import { planIngest, type IngestDisposition } from './import/ingest-plan.js';
 import { PARSE_DEADLINE_MS } from './import/parse-limits.js';
 import { buildImportRawData } from './import/submission-payload.js';
+import { computeBatchIntegrity } from './import/batch-integrity.js';
+import {
+  importProvenanceStatsSchema,
+  reconcileProvenanceStats,
+  type ImportBatchIntegrity,
+  type ImportProvenanceStats,
+} from '@oslsr/types';
 
 const logger = pino({ name: 'import-service' });
 
@@ -153,6 +162,13 @@ export interface DryRunParams {
   parserUsed: string;
   columnMapping?: ColumnMapping | null;
   sourceDescription?: string | null;
+  /**
+   * Story 13-2 R-A2 review P1 — how this file relates to what the association supplied
+   * (raw → merged → held → clean, declared member count). Untrusted JSON from the
+   * route; validated against `importProvenanceStatsSchema` and reconciled against the
+   * parsed file here, so a contradictory record is refused before a draft exists.
+   */
+  provenanceStats?: unknown;
   actorId: string;
 }
 
@@ -168,6 +184,15 @@ export interface DryRunResult {
   rowsPreview: Array<{ rowIndex: number; canonical: Record<string, unknown>; warnings: string[] }>;
   failureReport: ImportDraftParsedResult['failures'];
   lawfulBasisRequired: true;
+  /** P1 — the validated provenance record, or null when none was supplied. */
+  provenanceStats: ImportProvenanceStats | null;
+  /**
+   * P2 — the batch's integrity reading as it WOULD land (basis `predicted`): the ingest
+   * plan is run read-only against the register, so inserted/matched/skipped here are
+   * what confirm will do unless the register changes in between. Predict-then-compare,
+   * built into the import itself.
+   */
+  integrity: ImportBatchIntegrity;
 }
 
 export interface ConfirmParams {
@@ -204,6 +229,52 @@ export interface ConfirmResult {
    * discovered later as 8,000 rows that can never carry a badge.
    */
   associationNameMissing: boolean;
+  /**
+   * P1 — TRUE when an association batch was confirmed without a provenance record.
+   * Not blocking (same reasoning as `associationNameMissing`), but visible.
+   */
+  provenanceStatsMissing: boolean;
+  /** P2 — the integrity reading of what actually landed (basis `recorded`). */
+  integrity: ImportBatchIntegrity;
+}
+
+/** A parsed row in the shape the ingest planner consumes. */
+type PlannableRow = {
+  rowIndex: number;
+  canonical: Record<string, string>;
+  raw: Record<string, string>;
+  warnings: string[];
+};
+
+/** Narrow the draft's stored JSON rows to the planner's input shape. */
+function toPlannableRows(rows: Array<Record<string, unknown>>): PlannableRow[] {
+  return rows.map((r) => ({
+    rowIndex: (r as { rowIndex: number }).rowIndex,
+    canonical: (r as { canonical: Record<string, string> }).canonical,
+    raw: (r as { raw: Record<string, string> }).raw,
+    warnings: (r as { warnings: string[] }).warnings,
+  }));
+}
+
+/**
+ * Validate + reconcile an operator-supplied provenance record. `fileRows` is the
+ * uploaded file's data-row count (parsed + parse-failed).
+ */
+function parseProvenanceStats(raw: unknown, fileRows: number): ImportProvenanceStats | null {
+  if (raw === undefined || raw === null) return null;
+  const parsed = importProvenanceStatsSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_ERROR', 'provenance_stats is invalid.', 400, {
+      issues: parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`),
+    });
+  }
+  const problems = reconcileProvenanceStats(parsed.data, fileRows);
+  if (problems.length > 0) {
+    // ⛔ Refused, not warned: a provenance record that does not add up is worse than
+    // none — it is evidence that LOOKS checked. The operator corrects it and re-runs.
+    throw new AppError('PROVENANCE_MISMATCH', 'provenance_stats does not reconcile.', 400, { problems });
+  }
+  return parsed.data;
 }
 
 export class ImportService {
@@ -282,6 +353,32 @@ export class ImportService {
       detectedColumns: parseResult.detectedColumns,
     };
 
+    // P1 — validated + reconciled against the parsed file BEFORE any draft is written.
+    const provenanceStats = parseProvenanceStats(
+      params.provenanceStats,
+      parsedResult.stats.rowsParsed + parsedResult.stats.rowsFailed,
+    );
+
+    /*
+     * P2 — run the ingest plan READ-ONLY so the operator sees what confirm will do
+     * (inserted / matched / skipped) before anything is written. Same helper confirm
+     * uses, so the prediction and the result cannot diverge on logic — only on the
+     * register changing in between.
+     */
+    const plannable = toPlannableRows(parsedResult.rows);
+    const plan = await ImportService.buildIngestPlan(db, plannable, mapping);
+    const integrity = computeBatchIntegrity({
+      basis: 'predicted',
+      rowsParsed: parsedResult.stats.rowsParsed,
+      rowsFailed: parsedResult.stats.rowsFailed + plan.dispositions.filter((d) => d.category === 'failed').length,
+      inserted: plan.toInsert.length,
+      matchedExisting: plan.dispositions.filter((d) => d.category === 'matched').length,
+      skipped: plan.dispositions.filter((d) => d.category === 'skipped').length,
+      rows: plan.toInsert.map((c) => c.respondent),
+      provenance: provenanceStats,
+      isAssociationBatch: source === ASSOCIATION_SOURCE,
+    });
+
     const draftId = uuidv7();
     await db.insert(importBatchDrafts).values({
       id: draftId,
@@ -293,6 +390,7 @@ export class ImportService {
       sourceDescription: sourceDescription ?? null,
       columnMapping: mapping,
       parsedResult,
+      provenanceStats,
       expiresAt: new Date(Date.now() + DRY_RUN_TTL_MS),
       createdBy: actorId,
     });
@@ -322,7 +420,61 @@ export class ImportService {
       })),
       failureReport: parseResult.failures,
       lawfulBasisRequired: true,
+      provenanceStats,
+      integrity,
     };
+  }
+
+  /**
+   * The ingest plan for a set of parsed rows: one batched existing-phone/NIN lookup,
+   * the LGA resolver, then the PURE `planIngest`. Shared by dry-run (read-only, on
+   * `db`) and confirm (inside its transaction) so the prediction a dry-run shows and
+   * the disposition confirm writes are produced by the same code.
+   */
+  private static async buildIngestPlan(
+    executor: typeof db | DbTx,
+    parsedRows: PlannableRow[],
+    columnMapping: ColumnMapping,
+  ): Promise<ReturnType<typeof planIngest>> {
+    const phones = Array.from(
+      new Set(parsedRows.map((r) => r.canonical.phoneNumber).filter((p): p is string => !!p && VALID_PHONE.test(p))),
+    );
+    const nins = Array.from(
+      new Set(parsedRows.map((r) => r.canonical.nin).filter((n): n is string => !!n && VALID_NIN.test(n))),
+    );
+
+    const existingIdByPhone = new Map<string, string>();
+    const existingIdByNin = new Map<string, string>();
+    const lookupConds: SQL[] = [];
+    if (phones.length) lookupConds.push(inArray(respondents.phoneNumber, phones));
+    if (nins.length) lookupConds.push(inArray(respondents.nin, nins));
+    if (lookupConds.length) {
+      const existing = await executor
+        .select({ id: respondents.id, phoneNumber: respondents.phoneNumber, nin: respondents.nin })
+        .from(respondents)
+        .where(lookupConds.length === 1 ? lookupConds[0] : or(...lookupConds));
+      for (const e of existing) {
+        if (e.phoneNumber && !existingIdByPhone.has(e.phoneNumber)) existingIdByPhone.set(e.phoneNumber, e.id);
+        if (e.nin && !existingIdByNin.has(e.nin)) existingIdByNin.set(e.nin, e.id);
+      }
+    }
+
+    // LGA resolution (33 rows — load once) via the ONE shared, robust
+    // name→slug resolver (Story 11-2 code-review L1). Handles case /
+    // hyphen / space / underscore / spelling variants; only genuinely
+    // non-Oyo-LGA text falls through to null (+ raw preserved by planIngest).
+    const lgaRows = await executor.select({ code: lgas.code, name: lgas.name }).from(lgas);
+    const resolveLga = buildLgaLabelResolver(lgaRows);
+
+    const hasConsentColumn = Object.values(columnMapping).includes('consent');
+
+    return planIngest({
+      rows: parsedRows,
+      hasConsentColumn,
+      existingIdByPhone,
+      existingIdByNin,
+      resolveLga,
+    });
   }
 
   /** Commit a dry-run draft into `import_batches` + `respondents` transactionally. */
@@ -396,55 +548,14 @@ export class ImportService {
         );
       }
       const associationNameMissing = isAssociationBatch && associationName === null;
+      const provenanceStats = (draft.provenanceStats ?? null) as ImportProvenanceStats | null;
+      const provenanceStatsMissing = isAssociationBatch && provenanceStats === null;
 
       const parsed = draft.parsedResult;
-      const parsedRows = parsed.rows.map((r) => ({
-        rowIndex: (r as { rowIndex: number }).rowIndex,
-        canonical: (r as { canonical: Record<string, string> }).canonical,
-        raw: (r as { raw: Record<string, string> }).raw,
-        warnings: (r as { warnings: string[] }).warnings,
-      }));
+      const parsedRows = toPlannableRows(parsed.rows);
 
-      // Batched existing-lookup: gather valid phones + NINs, one query.
-      const phones = Array.from(
-        new Set(parsedRows.map((r) => r.canonical.phoneNumber).filter((p): p is string => !!p && VALID_PHONE.test(p))),
-      );
-      const nins = Array.from(
-        new Set(parsedRows.map((r) => r.canonical.nin).filter((n): n is string => !!n && VALID_NIN.test(n))),
-      );
-
-      const existingIdByPhone = new Map<string, string>();
-      const existingIdByNin = new Map<string, string>();
-      const lookupConds: SQL[] = [];
-      if (phones.length) lookupConds.push(inArray(respondents.phoneNumber, phones));
-      if (nins.length) lookupConds.push(inArray(respondents.nin, nins));
-      if (lookupConds.length) {
-        const existing = await tx
-          .select({ id: respondents.id, phoneNumber: respondents.phoneNumber, nin: respondents.nin })
-          .from(respondents)
-          .where(lookupConds.length === 1 ? lookupConds[0] : or(...lookupConds));
-        for (const e of existing) {
-          if (e.phoneNumber && !existingIdByPhone.has(e.phoneNumber)) existingIdByPhone.set(e.phoneNumber, e.id);
-          if (e.nin && !existingIdByNin.has(e.nin)) existingIdByNin.set(e.nin, e.id);
-        }
-      }
-
-      // LGA resolution (33 rows — load once) via the ONE shared, robust
-      // name→slug resolver (Story 11-2 code-review L1). Handles case /
-      // hyphen / space / underscore / spelling variants; only genuinely
-      // non-Oyo-LGA text falls through to null (+ raw preserved by planIngest).
-      const lgaRows = await tx.select({ code: lgas.code, name: lgas.name }).from(lgas);
-      const resolveLga = buildLgaLabelResolver(lgaRows);
-
-      const hasConsentColumn = Object.values(draft.columnMapping as ColumnMapping).includes('consent');
-
-      const plan = planIngest({
-        rows: parsedRows,
-        hasConsentColumn,
-        existingIdByPhone,
-        existingIdByNin,
-        resolveLga,
-      });
+      // Same planning helper the dry-run used — see `buildIngestPlan`.
+      const plan = await ImportService.buildIngestPlan(tx, parsedRows, draft.columnMapping as ColumnMapping);
 
       const rowsInserted = plan.toInsert.length;
       const rowsMatchedExisting = plan.dispositions.filter((d) => d.category === 'matched').length;
@@ -471,6 +582,8 @@ export class ImportService {
           rowsSkipped,
           rowsFailed,
           failureReport: { dispositions: plan.dispositions, parserFailures: parsed.failures },
+          // P1 — validated + reconciled at dry-run; carried, never re-derived.
+          provenanceStats,
           lawfulBasis,
           lawfulBasisNote: lawfulBasisNote ?? null,
           uploadedBy: actorId,
@@ -623,7 +736,7 @@ export class ImportService {
       await AuditService.logActionTx(tx, {
         actorId,
         action: AUDIT_ACTIONS.IMPORT_BATCH_CREATED,
-        targetResource: 'import_batch',
+        targetResource: AUDIT_TARGETS.IMPORT_BATCH,
         targetId: batchId,
         details: {
           source: draft.source,
@@ -635,6 +748,8 @@ export class ImportService {
           rowsMatchedExisting,
           rowsSkipped,
           rowsFailed,
+          // P1 — the cleaning's arithmetic is part of the compliance trail (numbers only).
+          provenanceStats,
         },
         ipAddress,
         userAgent,
@@ -668,6 +783,17 @@ export class ImportService {
         });
       }
 
+      if (provenanceStatsMissing) {
+        logger.warn({
+          event: 'import.provenance_stats_missing',
+          batchId,
+          source: draft.source,
+          rowsInserted,
+          message:
+            'Association batch confirmed with no provenance_stats — what the cleaning removed (and the declared member count) is unrecorded.',
+        });
+      }
+
       return {
         batchId,
         rowsParsed: parsed.stats.rowsParsed,
@@ -677,6 +803,18 @@ export class ImportService {
         rowsFailed,
         associationName,
         associationNameMissing,
+        provenanceStatsMissing,
+        integrity: computeBatchIntegrity({
+          basis: 'recorded',
+          rowsParsed: parsed.stats.rowsParsed,
+          rowsFailed,
+          inserted: rowsInserted,
+          matchedExisting: rowsMatchedExisting,
+          skipped: rowsSkipped,
+          rows: plan.toInsert.map((c) => c.respondent),
+          provenance: provenanceStats,
+          isAssociationBatch,
+        }),
       };
     });
   }
@@ -752,7 +890,7 @@ export class ImportService {
       await AuditService.logActionTx(tx, {
         actorId,
         action: AUDIT_ACTIONS.IMPORT_BATCH_ROLLED_BACK,
-        targetResource: 'import_batch',
+        targetResource: AUDIT_TARGETS.IMPORT_BATCH,
         targetId: batchId,
         details: { batchId, reason, rowsAffected: affected.length },
         ipAddress,
@@ -812,6 +950,39 @@ export class ImportService {
       throw new AppError('NOT_FOUND', 'Import batch not found.', 404);
     }
     return rows[0];
+  }
+
+  /**
+   * P2 — the integrity reading of a batch ALREADY on the register (basis `recorded`).
+   *
+   * Counters come from the batch row; the pair counts are recomputed over the
+   * respondents the batch holds now, with the same pure function the dry-run and
+   * confirm use. For a rolled-back batch this still describes what was imported —
+   * rollback flips status, it does not delete rows.
+   */
+  static async getIntegrity(batch: typeof importBatches.$inferSelect): Promise<ImportBatchIntegrity> {
+    const id = batch.id;
+    const rows = await db
+      .select({
+        firstName: respondents.firstName,
+        lastName: respondents.lastName,
+        phoneNumber: respondents.phoneNumber,
+        lgaId: respondents.lgaId,
+      })
+      .from(respondents)
+      .where(eq(respondents.importBatchId, id));
+
+    return computeBatchIntegrity({
+      basis: 'recorded',
+      rowsParsed: batch.rowsParsed,
+      rowsFailed: batch.rowsFailed,
+      inserted: batch.rowsInserted,
+      matchedExisting: batch.rowsMatchedExisting,
+      skipped: batch.rowsSkipped,
+      rows,
+      provenance: (batch.provenanceStats ?? null) as ImportProvenanceStats | null,
+      isAssociationBatch: batch.source === ASSOCIATION_SOURCE,
+    });
   }
 
   /**

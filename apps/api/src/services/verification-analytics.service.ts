@@ -115,13 +115,17 @@ export class VerificationAnalyticsService {
       speed_run: string;
       straight_lining: string;
       duplicate_response: string;
+      roll_padding: string;
       off_hours: string;
     }>(sql`
       SELECT
         COUNT(*) FILTER (WHERE CAST(fd.gps_score AS numeric) > 0)::int AS gps_cluster,
         COUNT(*) FILTER (WHERE CAST(fd.speed_score AS numeric) > 0)::int AS speed_run,
         COUNT(*) FILTER (WHERE CAST(fd.straightline_score AS numeric) > 0)::int AS straight_lining,
-        COUNT(*) FILTER (WHERE CAST(fd.duplicate_score AS numeric) > 0)::int AS duplicate_response,
+        -- 13-2 R-A2 review L2: duplicate_response and roll_padding share duplicate_score
+        -- and are split by provenance, or imported detections inflate "Duplicate".
+        COUNT(*) FILTER (WHERE CAST(fd.duplicate_score AS numeric) > 0 AND fd.import_batch_id IS NULL)::int AS duplicate_response,
+        COUNT(*) FILTER (WHERE CAST(fd.duplicate_score AS numeric) > 0 AND fd.import_batch_id IS NOT NULL)::int AS roll_padding,
         COUNT(*) FILTER (WHERE CAST(fd.timing_score AS numeric) > 0)::int AS off_hours
       ${joinClause}
       WHERE ${whereClause(allFilters)}
@@ -133,6 +137,7 @@ export class VerificationAnalyticsService {
       speedRun: Number(row?.speed_run ?? 0),
       straightLining: Number(row?.straight_lining ?? 0),
       duplicateResponse: Number(row?.duplicate_response ?? 0),
+      rollPadding: Number(row?.roll_padding ?? 0),
       offHours: Number(row?.off_hours ?? 0),
     };
   }

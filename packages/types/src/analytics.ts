@@ -311,11 +311,29 @@ export interface VerificationFunnel {
   totalRejected: number;
 }
 
+/**
+ * The heuristic names the assessor audit queue accepts as a drill-down filter, and the
+ * values the fraud-type breakdown chart links to. ONE list so the chart can never link
+ * to a filter the API rejects (13-2 R-A2 review L2 added `roll_padding`).
+ */
+export const FRAUD_DRILLDOWN_HEURISTICS = [
+  'gps_clustering',
+  'speed_run',
+  'straight_lining',
+  'duplicate_response',
+  'roll_padding',
+  'off_hours',
+] as const;
+
+export type FraudDrilldownHeuristic = (typeof FRAUD_DRILLDOWN_HEURISTICS)[number];
+
 export interface FraudTypeBreakdown {
   gpsCluster: number;
   speedRun: number;
   straightLining: number;
   duplicateResponse: number;
+  /** 13-2 R-A2 — imported-batch duplicate detections, split from `duplicateResponse` by provenance. */
+  rollPadding: number;
   offHours: number;
 }
 

@@ -132,11 +132,30 @@ describe('fraud-detections schema', () => {
     expect(severityResolutionIdx).toBeDefined();
   });
 
-  it('should have 4 foreign key references (submissionId, enumeratorId, reviewedBy, assessorReviewedBy)', () => {
+  it('should have 5 foreign key references (submissionId, enumeratorId, reviewedBy, assessorReviewedBy, importBatchId)', () => {
     const config = getTableConfig(fraudDetections);
     const foreignKeys = config.foreignKeys;
-    // submissionId → submissions, enumeratorId → users, reviewedBy → users, assessorReviewedBy → users
-    expect(foreignKeys.length).toBe(4);
+    // submissionId → submissions, enumeratorId → users, reviewedBy → users,
+    // assessorReviewedBy → users, and importBatchId → import_batches (13-2 R-A2:
+    // an imported detection has no enumerator, so the batch carries accountability).
+    expect(foreignKeys.length).toBe(5);
+  });
+
+  /**
+   * Story 13-2 R-A2 — `enumerator_id` became NULLABLE, and that is the whole fix.
+   * Imported submissions carry no enumerator; the engine coerced that to `''`,
+   * which is not a uuid, so every imported job threw at the insert. Pinned here
+   * because the column reverting to NOT NULL would restore the crash silently —
+   * mocked tests accept an empty string happily.
+   */
+  it('allows a NULL enumerator and records the import batch instead (13-2 R-A2)', () => {
+    const config = getTableConfig(fraudDetections);
+    const enumerator = config.columns.find((c) => c.name === 'enumerator_id');
+    const batch = config.columns.find((c) => c.name === 'import_batch_id');
+
+    expect(enumerator?.notNull).toBe(false);
+    expect(batch).toBeDefined();
+    expect(batch?.notNull).toBe(false);
   });
 
   it('should define severity levels as enum', () => {
