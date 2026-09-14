@@ -604,8 +604,39 @@ Box: `ssh -o ConnectTimeout=25 root@100.93.100.28`, then `cd /root/oslrs/apps/ap
 
 ### A5 — Residuals after adjudication
 
-- **R-A7** — OPEN, runbook A4 (now including step 1b).
-- **R-A8** — OPEN, re-scoped. The first run is predicted all-`clean`, so it calibrates nothing. The contact-reuse minimum IS now calibrated against the population that has shared phones (P3), but it first meets real data **the day any `needs-eyes` rows are imported** — import them as their own batch (handoff D8), run the fraud script on that batch immediately, and read its distribution before acting.
+- ~~**R-A7**~~ — ✅ **DISCHARGED 2026-09-14. The whole runbook ran, in order, and EVERY step landed on
+  its prediction.** Nothing was confirmed on a number that did not match. Observed, against §A4's
+  predictions:
+
+  | Step | Predicted | Observed |
+  |---|---|---|
+  | 1 deploy | SHA, health 200, `padding_*` = 12/8/5, `enumerator_id` → YES, 3 new columns | ✅ all exact |
+  | 1b provenance | `rowsParsed` 56 / 8,234, `willWrite:true`, then `· not written` | ✅ exact; re-run idempotent |
+  | 2 ASNAT fraud | 56 selectable → `enqueued=56 failed=0` → 56 `clean`, 0 `enumerator_id` | ✅ exact |
+  | 3 AFAN fraud | 8,222 selectable → `enqueued=8222 failed=0`; total **8,279** | ✅ exact, all `clean` |
+  | 4 marketplace control | `imported_association` 8,278 + `public` **1** | ✅ exact |
+  | 5a ASNAT publish | 353 profiles; ASNAT 56 / AFAN 10 / none 287 | ✅ exact; 0 verified badges |
+  | 5b AFAN publish | 8,575 profiles; AFAN **8,232** | ✅ exact; `?q=AFAN` → 8,232 |
+  | 5c public row | 8,576 profiles; none **288** | ✅ exact |
+
+  **Public surface now: 8,576 listings** (287 pre-existing + 1 public + 56 ASNAT + 8,232 AFAN),
+  from **297** the day before. **0** imported cards carry a bare ✓ Verified; **0** are badge-less.
+
+  ⭐ **THE EXECUTION EVIDENCE, not just the outcome (§2aa).** "8,278 rows all `clean`" is a number
+  consistent with a working check AND with one that never ran. The stored `duplicate_details` settle
+  it: `{"reason":"no_padding_signal","batchSize":56,"samePhoneCount":1,"sameIdentityCount":1,
+  "contactReuseMin":5}` — the engine loaded the cohort, computed BOTH cluster counts, and read
+  **`contactReuseMin: 5`**, the threshold row that did not exist on prod before this deploy. That is
+  H3 proven end to end: the new runner inserted it and the engine demonstrably consumed it at scoring
+  time. `clean` here means *measured and clean*, which is the distinction C1 existed to restore.
+
+  ⚠️ **One alarm, correctly disbelieved.** The health monitor fired three `CURL_FAIL`s mid-run. The
+  publish it was watching **had not started** (the command was blocked before execution, and
+  `marketplace_profiles` was still 353), and `oslsr-api` showed **1,086 minutes of uptime with no
+  restart** across the window. So it was the operator's own link, not prod. A monitor that cannot
+  tell "the service is down" from "my laptop lost DNS" will report both the same way — gate the
+  diagnosis on server-side evidence before acting (§2l).
+- **R-A8** — OPEN, re-scoped. ✅ **The prediction held: 8,278 of 8,278 scored `clean`, so the run calibrated nothing** — exactly as forecast, which is why it was never going to be calibration data. The distribution is now a measured baseline (`roll_padding` fired on nobody in a consolidated batch), not an assumption. The first run is predicted all-`clean`, so it calibrates nothing. The contact-reuse minimum IS now calibrated against the population that has shared phones (P3), but it first meets real data **the day any `needs-eyes` rows are imported** — import them as their own batch (handoff D8), run the fraud script on that batch immediately, and read its distribution before acting.
 - **R-A10** — assessor visibility fixed (H2). An import reaches the assessor queue only when `high`/`critical` or once a super-admin records a resolution.
 - ~~**L2**~~ — **FIXED** (see A6): drill-down and analytics now split `duplicate_response` / `roll_padding` by provenance.
 

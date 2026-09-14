@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-09-12 · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-09-14 · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1029,7 +1029,55 @@ than folding it into a neighbour.
 
 ---
 
-## 3. Current state (2026-09-12) — READ THIS ONE
+## 3. Current state (2026-09-14) — READ THIS ONE
+
+**Prod `1fc9f62`**, health 200. ⭐ **THE MARKETPLACE WENT 297 → 8,576 LISTINGS**, and every
+association import is now fraud-scored. **No prod SHA in the header — D6.**
+
+- ✅ **13-2 R-A2 ADJUDICATED, DEPLOYED AND RUN.** The gate is open, both operator one-shots have
+  executed on prod, and **every step of the runbook landed on its prediction** — nothing was
+  confirmed on a number that did not match.
+  - `marketplace_profiles` **8,576** = 287 pre-existing + 1 public + **56 ASNAT** + **8,232 AFAN**.
+    **0** imported cards carry a bare ✓ Verified; **0** are badge-less.
+  - `fraud_detections` **8,279** (1 + 56 + 8,222), **all imported rows `clean`**, none carrying an
+    `enumerator_id`.
+  - Staged deliberately: ASNAT 56 → *pause for Awwal* → AFAN 8,222 → the single public row.
+- ⛔ **THE STORY'S DEFECT WAS THAT THE ANTI-ROLL-PADDING MECHANISM COULD NOT FLAG ANYBODY.** Built,
+  tested, recorded as closing the gap — and imports run ONE heuristic capped at `duplicate_weight`
+  20 while the lowest non-clean severity is **25**. All 8,278 rows would have stored `clean`, which
+  is hidden from the fraud list and never reaches an assessor. **The tests asserted a component
+  score; not one asserted a SEVERITY.** Fixed by normalising an import's composite
+  (`duplicate / duplicate_weight × 100`). Fifth instance of
+  [[pattern-ship-a-fix-that-never-fires]] in this epic.
+- ⭐ **AND THE RUN PROVED THE CODE EXECUTED, not merely that the count looked right** (§2aa). The
+  stored `duplicate_details` read `{"reason":"no_padding_signal","batchSize":56,"samePhoneCount":1,
+  "sameIdentityCount":1,"contactReuseMin":5}` — the engine loaded the cohort, computed both cluster
+  counts, and **read `contactReuseMin: 5`, a threshold row that did not exist on prod before this
+  deploy**. H3 closed end to end. `clean` here means *measured* clean.
+- 🐞 **Found at adjudication by the §2a0 debt gate:** 13-2 carries 16 unchecked task boxes. Fifteen
+  are the documented stale-checklist blind spot — but **Task 4's AC5.2 was genuinely unbuilt since
+  July** (*"surface `rows_inserted` vs the declared member count"*), because `import_batches` had no
+  declared-member column at all. It was closed this week **as a side effect of review proposal P1**,
+  and nobody noticed it was an AC. → [[pattern-a-record-about-the-work-is-not-the-work]]
+- ⚠️ **A HEALTH MONITOR CANNOT TELL "PROD IS DOWN" FROM "MY LAPTOP LOST DNS".** Three `CURL_FAIL`s
+  fired mid-run; the publish they were watching had **not started**, and `oslsr-api` showed 1,086
+  minutes of uptime with no restart. Gate the diagnosis on server-side evidence — `pm2` uptime, a
+  DB count — before acting on an alert (§2l).
+- ✅ **Ruled by Awwal 2026-09-13/14:** measure the severity scale before retuning it (done: 0 of
+  8,278 flagged); the review's proposal to withhold a CARD from a vouch-less row **withdrawn** as
+  re-litigating a settled 13-58 decision — *no vouch ⇒ no badge, never no card*; implement P1–P4
+  with nothing deferred; the runs belong to the adjudication agent.
+
+### Open after 13-2 R-A2
+| item | state |
+|---|---|
+| **13-2 → `done`?** | **Not yet.** Status stays `review`: R-A3…R-A6, R-A8…R-A10 remain open by design. R-A7 is DISCHARGED. Closing it needs the same treatment 13-58 got — resolve each row on substance, and **move any unbuilt AC rather than annotating it**. |
+| **R-A8 — the scale is uncalibrated** | The run produced **8,278 `clean` and zero flags**, exactly as predicted, so it calibrated nothing. The contact-reuse minimum is now sourced to the measured 345-shared-phone distribution, but it meets real data only **the day `needs-eyes` rows are imported** — import them as their own batch and read that distribution first. |
+| **The 1,482 held rows** | 1,329 flagged + 153 with no usable phone, still outside the registry. That is the next enrichment target — and the cohort R-A8 needs. |
+| **Tier-2 → 13-40** | Unchanged: the render half is live, the `member_confirmed` marker does not exist. |
+| **`/insights` (R-A3)** | Every association confirm is a public publish with **no staging step**. That is why 5a/5b/5c staged by batch. Permanent hazard, not a defect. |
+
+## 3-old6. Current state (2026-09-12) — superseded by §3 above
 
 **Prod `590cdbc`**, health 200, CI all 10 jobs green. `marketplace_profiles` **297**, of which
 **10 now carry an association vouch**. Registry: **8,289** respondents carry
