@@ -20,8 +20,32 @@ interface LiveSelfieCaptureProps {
 /** Uploaded files are re-encoded below this pixel bound before leaving the device. */
 const UPLOAD_MAX_DIMENSION = 1600;
 
-/** Matches the API's own 5MB ceiling; we downscale rather than let it 400. */
+/**
+ * Matches the API's own 5MB ceiling; we downscale rather than let it 400.
+ *
+ * ⚠️ CORRECTED 2026-09-14 — this comment used to be the whole story and it was
+ * not true. `photo-processing.service.ts` does cap the DECODED image at 5MB,
+ * but the image never reaches that check as bytes: it travels as BASE64 INSIDE
+ * A JSON BODY, and base64 costs ~33% on top. So the real ceiling is whatever
+ * the transport allows, and the transport allowed **1 MB** (nginx had no
+ * `client_max_body_size` at all; express capped at `1mb`). This constant was
+ * therefore promising the user ~6.7× more than the wire would carry, and the
+ * failure surfaced as "Failed to fetch" — not as "too large".
+ *
+ * Both server limits are now 8m/8mb, so 5MB of image (~6.7MB encoded) fits with
+ * headroom. The check below is on the ENCODED size for exactly that reason.
+ */
 const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Base64 grows a payload by 4/3 plus padding. The server limit is on the
+ * ENCODED body, so that is what the client must measure — checking raw bytes
+ * against a raw-byte constant silently permits a request the wire rejects.
+ */
+const BASE64_OVERHEAD = 4 / 3;
+
+/** Keep in step with `express.json({ limit })` and nginx `client_max_body_size`. */
+const TRANSPORT_MAX_BYTES = 8 * 1024 * 1024;
 
 const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
   const webcamRef = useRef<Webcam>(null);
@@ -235,8 +259,19 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
     setCaptureError(null);
     try {
       const prepared = await downscaleImage(file, UPLOAD_MAX_DIMENSION);
+      /*
+       * Check BOTH ceilings, and check the transport one against the ENCODED
+       * size — the payload is base64 in a JSON body, so raw bytes are not what
+       * the wire measures. Before 2026-09-14 only the raw check existed, and it
+       * let through requests nginx then killed mid-upload with a 413 the user
+       * saw as "Failed to fetch".
+       */
       if (prepared.size > UPLOAD_MAX_BYTES) {
         setCaptureError('That image is too large even after resizing. Please choose a smaller photo.');
+        return;
+      }
+      if (prepared.size * BASE64_OVERHEAD > TRANSPORT_MAX_BYTES) {
+        setCaptureError('That image is too large to upload. Please choose a smaller photo.');
         return;
       }
       onCapture(prepared, 'upload');
@@ -291,6 +326,36 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
                 width: { min: 480, ideal: 960 },
                 height: { min: 640, ideal: 1280 },
               }}
+              /*
+               * ⛔⛔ DO NOT REMOVE. Without this, `getScreenshot()` returns an
+               * image sized to the video's CSS WIDTH — not the camera's
+               * resolution — and activation fails with "Image resolution too
+               * low." Read react-webcam@7.2.0 `getCanvas()` if you doubt it:
+               *
+               *   if (!this.props.forceScreenshotSourceSize) {
+               *     var aspectRatio = canvasWidth / canvasHeight;   // real stream
+               *     canvasWidth  = props.minScreenshotWidth || this.video.clientWidth;
+               *     canvasHeight = canvasWidth / aspectRatio;
+               *   }
+               *
+               * The container is `max-w-md` (448px), narrower on a phone. A
+               * laptop camera that cannot do 3:4 portrait returns 16:9 (these
+               * constraints are `ideal`, not `exact`, deliberately — see above),
+               * so the screenshot came out ~400 × 225 and the server floor is
+               * 240 (`photo-processing.service.ts`: `minDim < 240`). It is
+               * VIEWPORT-WIDTH DEPENDENT, which is why it looked intermittent.
+               *
+               * Observed on prod 2026-09-14 on the operator's own activation:
+               * two POSTs to /auth/activate, both 400, both logged as
+               * `activation.selfie_failed … "Image resolution too low."` — and a
+               * VALIDATION_ERROR is re-thrown by design (13-60 AC1.4), so a bad
+               * photo fails the WHOLE activation, not just the photo.
+               *
+               * ⚠️ The 2026-08-09 fix below corrected the CONSTRAINTS so preview
+               * matched capture. It did not touch the screenshot SIZING, so
+               * "what you saw was never what was saved" was only half fixed.
+               */
+              forceScreenshotSourceSize
               width={960}
               height={1280}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -325,18 +390,30 @@ const LiveSelfieCapture: React.FC<LiveSelfieCaptureProps> = ({ onCapture }) => {
             {/*
               * Model failed — camera still works.
               *
-              * ⚠️ Story 13-60 AC5.5. The most likely cause in the field is not a
-              * bug: the model is fetched from a THIRD-PARTY CDN
-              * (cdn.jsdelivr.net) at activation time with a 15s timeout, so a
-              * field officer on poor connectivity lands here. It used to say
-              * only "unavailable", leaving them to guess whether their photo
-              * would count. Say what it means and what to do.
+              * ⚠️ Story 13-60 AC5.5 wrote this as "(poor connection?)" because
+              * the model is fetched from a third-party CDN with a 15s timeout,
+              * so connectivity was the assumed cause. **IT WAS NOT.**
+              *
+              * ⛔ CORRECTED 2026-09-14. On prod the model could never load AT
+              * ALL, on any connection: CSP `script-src` carried no
+              * `'wasm-unsafe-eval'`, so WebAssembly was blocked outright. The
+              * proof was sitting in our own logs, once per attempt:
+              *
+              *   csp_violation  blockedUri: "wasm-eval"
+              *   sourceFile: /assets/face-detection-*.js
+              *
+              * The operator debugging their activation read this banner and went
+              * to check their internet. **A diagnostic is a CLAIM**, and a
+              * confident wrong one sends the investigation to the wrong end
+              * (handoff §2l). CSP now permits wasm, so this banner should be
+              * rare — and when it does fire it no longer names a cause it has
+              * not established. Say what is unavailable and what to do instead.
               */}
             {modelFailed && (
               <div className="absolute top-4 left-2 right-2 text-center">
                 <span className="bg-warning-600 text-white px-2 py-1 rounded text-sm inline-block">
-                  Face detection unavailable (poor connection?) — capture still works. Centre your
-                  face in the oval.
+                  Face guide unavailable — your photo will still be captured and accepted. Centre
+                  your face in the oval.
                 </span>
               </div>
             )}

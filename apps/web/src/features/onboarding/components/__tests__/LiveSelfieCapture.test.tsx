@@ -41,7 +41,16 @@ vi.mock('react-webcam', () => {
         getScreenshot: () => Mock.__screenshot ?? 'data:image/jpeg;base64,fake',
       }));
       return (
-        <div data-testid="webcam-mock">
+        <div
+          data-testid="webcam-mock"
+          /*
+           * Surfaced so a test can assert it. react-webcam reads this prop
+           * INSIDE getCanvas(), which a mock cannot exercise — so the only thing
+           * a test can check is that we pass it. See the regression test below
+           * for why that is worth a data attribute.
+           */
+          data-force-screenshot-source-size={String(Boolean(props.forceScreenshotSourceSize))}
+        >
           Webcam Mock
           <button onClick={props.onUserMedia}>Simulate UserMedia</button>
         </div>
@@ -79,6 +88,40 @@ describe('LiveSelfieCapture', () => {
       render(<LiveSelfieCapture onCapture={() => {}} />);
     });
     expect(await screen.findByRole('button', { name: /capture/i })).toBeDefined();
+  });
+
+  /**
+   * ⛔ REGRESSION GUARD — the prod defect of 2026-09-14.
+   *
+   * Without `forceScreenshotSourceSize`, react-webcam@7.2.0 sizes the screenshot
+   * canvas to the video's **CSS width**, not the camera's resolution:
+   *
+   *   if (!this.props.forceScreenshotSourceSize) {
+   *     var aspectRatio = canvasWidth / canvasHeight;   // the real stream
+   *     canvasWidth  = props.minScreenshotWidth || this.video.clientWidth;
+   *     canvasHeight = canvasWidth / aspectRatio;
+   *   }
+   *
+   * The container is `max-w-md` (448px, narrower on a phone) and a laptop camera
+   * that cannot do 3:4 portrait returns 16:9 — so captures came out ~400 × 225
+   * against a server floor of 240, and activation died with
+   * `"Image resolution too low."` A VALIDATION_ERROR is re-thrown by design, so
+   * the WHOLE activation failed, not just the photo. It was viewport-dependent,
+   * which is why it read as intermittent.
+   *
+   * ⚠️ This asserts only that the prop is PASSED — the behaviour it unlocks
+   * lives inside react-webcam's `getCanvas()`, which a mock cannot run. That is
+   * a real limit of this test and the reason the defect survived: nothing here
+   * can prove the pixels. What it CAN do is fail the moment someone deletes the
+   * prop, which is exactly how this was introduced.
+   */
+  it('⛔ passes forceScreenshotSourceSize — or captures are sized to the CSS width and rejected', async () => {
+    await act(async () => {
+      render(<LiveSelfieCapture onCapture={() => {}} />);
+    });
+
+    const webcam = await screen.findByTestId('webcam-mock');
+    expect(webcam.getAttribute('data-force-screenshot-source-size')).toBe('true');
   });
 
   it('should disable capture button when no face detected', async () => {

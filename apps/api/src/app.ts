@@ -163,6 +163,26 @@ export const cspDirectives = {
       defaultSrc: ["'self'"],
       scriptSrc: [
         "'self'",
+        /*
+         * WebAssembly, for the activation face-detection guide ONLY.
+         *
+         * ⛔ ADDED 2026-09-14 because it was blocking a live onboarding defect.
+         * Without it the model could never load on ANY connection — prod logged
+         * `csp_violation blockedUri: "wasm-eval"` from
+         * /assets/face-detection-*.js on every activation attempt — and the UI
+         * blamed the user's internet for it.
+         *
+         * ⚠️ THIS IS NOT `'unsafe-eval'`, and the difference is the whole
+         * justification: `'wasm-unsafe-eval'` permits WebAssembly compilation
+         * and NOTHING else. It does not re-enable `eval()`, `new Function()`, or
+         * string-to-code for JavaScript. `scriptSrcAttr: 'none'` and the
+         * `'self'`-only origin list below are untouched.
+         *
+         * ⚖️ Ruled by Awwal 2026-09-14, choosing it over removing the feature.
+         * If the face guide is ever dropped, DROP THIS WITH IT — it exists for
+         * exactly one dependency.
+         */
+        "'wasm-unsafe-eval'",
         "https://accounts.google.com",
         "https://hcaptcha.com",
         "https://*.hcaptcha.com",
@@ -260,8 +280,34 @@ app.use(cors({
   credentials: true, // Allow cookies to be sent with requests
 }));
 app.use(cookieParser());
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ limit: '1mb', extended: true }));
+/*
+ * ⛔ 8mb, NOT 1mb — raised 2026-09-14, and the reason is a contract that did
+ * not add up.
+ *
+ * The activation selfie travels as BASE64 INSIDE THIS JSON BODY
+ * (`POST /auth/activate/:token`, `selfieBase64`). Three limits disagreed:
+ *
+ *   client  `UPLOAD_MAX_BYTES`            5 MB
+ *   express `json({ limit })`             1 MB   ← here
+ *   nginx   `client_max_body_size`        1 MB   (absent ⇒ nginx default)
+ *
+ * Base64 inflates by ~33%, so the client accepted photos ~6.7× larger than the
+ * transport would carry. Proven on prod with a 1.5 MB body: nginx returned
+ * **413 having read only 1,343,488 bytes** — it cuts the connection mid-upload,
+ * which a browser reports as "Failed to fetch", and answers in HTML, which the
+ * client's JSON error handler then mangles. Neither surface says "too big".
+ *
+ * ⚠️ This was MASKING, and being masked by, the screenshot-sizing defect that
+ * made captures far too SMALL (see `LiveSelfieCapture.tsx`). Fixing that one
+ * alone would have pushed real payloads straight into this ceiling and traded a
+ * clear error for an invisible one. Both were fixed together, deliberately.
+ *
+ * 8 MB ≈ 5 MB + base64 overhead + headroom, and `infra/nginx/oslsr.conf` now
+ * carries a matching `client_max_body_size 8m`. Keep the two in step: nginx
+ * fronts every /api call, so the smaller of the pair is the real limit.
+ */
+app.use(express.json({ limit: '8mb' }));
+app.use(express.urlencoded({ limit: '8mb', extended: true }));
 app.use(metricsMiddleware);
 
 // Health check endpoint
