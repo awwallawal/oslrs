@@ -1068,10 +1068,30 @@ association import is now fraud-scored. **No prod SHA in the header — D6.**
   re-litigating a settled 13-58 decision — *no vouch ⇒ no badge, never no card*; implement P1–P4
   with nothing deferred; the runs belong to the adjudication agent.
 
+### 3p. 🧭 STANDING PROPERTIES OF THE ASSOCIATION CHANNEL — not residuals, not debt
+*Promoted out of 13-2's ledger at its close-out, 2026-09-14, on Awwal's ruling.*
+
+⭐ **Why these moved.** A residual ledger means "work not yet done". These four can never be done —
+they are permanent facts about how the channel works, three of them deliberate. Left in the ledger
+they would block `done` forever and be re-litigated at every sweep, which is exactly the trap
+13-58's R6 set. They live here now; 13-2 keeps one-line pointers.
+
+| # | The property | Why it is permanent | What to do instead |
+|---|---|---|---|
+| **R-A3** | **`/insights` has no gate for imported rows.** `registry_unified` filters only `rolled_back`, so an association import is publicly visible the instant it confirms. | This is Awwal's 2026-07-19 ruling §2 working as intended. Association members are public by design. | ⛔ **Every association confirm IS a public publish, and there is no staging environment.** Dry-run → read the `predicted` integrity reading → confirm. Stage by BATCH (`--batch-id`), never by `--max-rows`, which stages only by insertion-order luck. |
+| **R-A5** | **One Appendix B box spans two trades.** 'Agriculture / Agro-processing' maps to `farming`, so an agro-processor is recorded as a farmer. | No rule can recover information the form never captured. A cleverer mapping would be a guess wearing a slug. | Split the box at the **next sheet re-print**. ⚠️ Not load-bearing today: the 8,222 farming rows came from machine extracts carrying verbatim labels ('Crop Farming', 'Food Processing/Preservation'), which resolve exactly and never touch the alias. It bites the day a coordinator fills the paper sheet by hand. |
+| **R-A6** | **Name ORDER is unreliable for the 5,301 NCARES rows.** `splitName` takes the first token as the given name; Yoruba registers are inconsistent about which comes first, so some are stored inverted. | The ambiguity is in the source, not the code. | ⛔ **Do NOT "fix" it by swapping the split rule** — that inverts the ones currently right. **It is recoverable, not lost:** `metadata.import_extra.full_name` holds the verbatim string on all 8,222 rows (verified on prod). Re-derive from that when a name-order signal appears (a head confirming, an SMS reply, a NIMC match); never re-import. |
+| **R-A10** | **Imported detections are invisible to supervisors by construction.** No `enumerator_id`, so every team-scoped query excludes them. | An import belongs to no supervisor's team, and `enumerator_warned` / `enumerator_suspended` are meaningless for one. | Super-admin and assessor surfaces see them (the assessor half was broken and fixed at 13-2's review, H2). If roll padding should ever reach a supervisor queue, that needs a deliberate **routing** decision — by LGA? by association? — never a relaxation of the scope check. |
+
+⚖️ **Owner for all four: Awwal.** They are ruled positions, not open questions.
+
 ### Open after 13-2 R-A2
 | item | state |
 |---|---|
-| **13-2 → `done`?** | **Not yet.** Status stays `review`: R-A3…R-A6, R-A8…R-A10 remain open by design. R-A7 is DISCHARGED. Closing it needs the same treatment 13-58 got — resolve each row on substance, and **move any unbuilt AC rather than annotating it**. |
+| ~~13-2 → `done`?~~ | ✅ **DONE 2026-09-14.** Every residual resolved on substance: R-A2 closed (its cell still claimed UNCOMMITTED/NOT RUN), R-A7 discharged, **R-A3/R-A5/R-A6/R-A10 promoted to §3p** as standing properties, R-A4/R-A8/R-A9 given named owners and real triggers, 16 boxes read and ticked. Guard run DIRECT and RED-verified (a planted R99 row marked OPEN fired it, naming the story, exit 1). |
+| ⏭️ **R-A8's calibration cohort** | **The next real piece of work on this channel.** The fraud run produced **zero flags over 8,278 rows**, so the thresholds are still reasoned rather than fitted. The only data that can calibrate them is the **1,482 held rows** (1,329 flagged + 153 no usable phone) — import them **as their own batch**, score with `--batch-id`, and read that distribution *before* acting on any detection. They are simultaneously the enrichment target and the calibration set. |
+| ⚖️ **Deferred ruling — the two captured registrants** | `faaizbadmus+test` and `oladokuncomfort77+test` each captured one respondent. **Runbook §0.9a records both as REAL, CONSENTING registrants** (that finding is what stopped a teardown on 2026-09-08); **Awwal stated 2026-09-14 that the 17 are test accounts and their submissions are test data.** The two readings disagree, and Awwal has deferred the ruling. ⛔ **Do not run any teardown until it is made** — §0.9a's rule stands meanwhile: produce a LIST, read the names, delete by explicit id, never by re-running a predicate. |
+| 🎬 **Enumerator trial re-run** | Awwal's `lawalkolade+test@gmail.com` invitation was **resent 2026-09-14 10:59 UTC** (new token, clock reset, `delivered` webhook confirmed) for an onboarding video. The 17 were deliberately NOT touched. When the re-run happens: **10 are `active`** (logged in — need delete+recreate for a clean trial) and **7 are still `invited`** with expired tokens (**a resend is enough** — same account, fresh 48h). |
 | **R-A8 — the scale is uncalibrated** | The run produced **8,278 `clean` and zero flags**, exactly as predicted, so it calibrated nothing. The contact-reuse minimum is now sourced to the measured 345-shared-phone distribution, but it meets real data only **the day `needs-eyes` rows are imported** — import them as their own batch and read that distribution first. |
 | **The 1,482 held rows** | 1,329 flagged + 153 with no usable phone, still outside the registry. That is the next enrichment target — and the cohort R-A8 needs. |
 | **Tier-2 → 13-40** | Unchanged: the render half is live, the `member_confirmed` marker does not exist. |
@@ -1103,7 +1123,7 @@ association import is now fraud-scored. **No prod SHA in the header — D6.**
     AC instructs a dev to contradict the story it sits in.
   ⚠️ **Known limit of the guard, found while using it:** `isOpenState` clears a row that merely
   *contains* `CLOSED`/`✅`/`RESOLVED`/`DISCHARGED`, so it cannot tell a real discharge from a tick.
-  It was still RED-verified here (a planted `R99 | OPEN` row fired it, naming the story, exit 1).
+  It was still RED-verified here (a planted R99 row marked OPEN fired it, naming the story, exit 1).
 - ⛔ **THE FINDING OF THE SESSION: a whole feature shipped with NO record.** R5
   (`association_name` in `search_vector` + an `?association=` filter) was built in the pre-crash
   pass and committed inside `27423ff` — whose own residual table said *"not built"*, §5a said
