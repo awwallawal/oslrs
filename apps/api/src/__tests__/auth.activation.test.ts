@@ -1259,3 +1259,53 @@ describe('Auth Activation Integration', () => {
     });
   });
 });
+
+/**
+ * ⛔ REGRESSION GUARD — the 100kb ceiling that governed the WHOLE API.
+ *
+ * `csp.routes.ts` is mounted at `app.use('/api/v1', cspRoutes)` — the entire API
+ * prefix — and it used to call `router.use(express.json({ type: [...] }))` with
+ * NO `limit`. Router-level middleware runs for every request passing through the
+ * router, so that parser consumed EVERY `/api/v1/*` JSON body at express's
+ * **100kb default**, and the global `express.json({ limit: '8mb' })` mounted
+ * later never saw them (a body already parsed is skipped).
+ *
+ * The activation selfie travels as base64 in a JSON body, so any real photo was
+ * rejected with `entity.too.large`. It stayed hidden because a SECOND defect was
+ * making captures far too small (~30kb) — the two masked each other, and fixing
+ * the capture size alone would have looked like it introduced this one.
+ *
+ * The assertion is deliberately about the PARSER, not the token: a bogus token
+ * must reach real validation and be refused as a TOKEN. If the body is rejected
+ * for its size instead, activation is broken for every photo, and this reds.
+ */
+describe('Activation body size — the parser must not cap the API at 100kb', () => {
+  it('⛔ accepts a JSON body far larger than 100kb and fails on the TOKEN, not the size', async () => {
+    // ~600kb of base64 — comfortably past the old 100kb default, comfortably
+    // under the 8mb ceiling. A realistic selfie sits in this band.
+    const payload = {
+      password: 'ValidPass123!',
+      nin: generateValidNin(),
+      dateOfBirth: '1990-01-01',
+      homeAddress: '1 Test Street, Ibadan',
+      bankName: 'Test Bank',
+      accountNumber: '0123456789',
+      accountName: 'Test Person',
+      nextOfKinName: 'Kin Person',
+      nextOfKinPhone: '+2348000000000',
+      selfieBase64: `data:image/jpeg;base64,${'A'.repeat(600_000)}`,
+    };
+
+    const res = await supertest(app)
+      .post('/api/v1/auth/activate/not-a-real-token')
+      .set('Content-Type', 'application/json')
+      .send(payload);
+
+    // The body was PARSED — that is the whole point of this test.
+    expect(res.status).not.toBe(413);
+    expect(JSON.stringify(res.body)).not.toContain('entity.too.large');
+
+    // And it got as far as real token validation.
+    expect(res.status).toBe(401);
+  });
+});

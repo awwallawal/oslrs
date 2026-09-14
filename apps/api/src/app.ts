@@ -306,8 +306,30 @@ app.use(cookieParser());
  * carries a matching `client_max_body_size 8m`. Keep the two in step: nginx
  * fronts every /api call, so the smaller of the pair is the real limit.
  */
-app.use(express.json({ limit: '8mb' }));
-app.use(express.urlencoded({ limit: '8mb', extended: true }));
+/**
+ * ⛔ THE 8MB WINDOW IS ONE ROUTE WIDE, ON PURPOSE.
+ *
+ * The activation selfie travels as base64 inside a JSON body, so activation
+ * genuinely needs several MB. **Everything else does not**, and raising the
+ * global limit to match would silently delete a deliberate security control:
+ * Story SEC2-3 AC2, asserted by `security.hardening.test.ts` —
+ * *"returns 413 for request body exceeding 1MB"*. That test is not stale
+ * paperwork; it is the control. Caught by running the full suite after taking
+ * the easier global route, which is exactly what it is there for.
+ *
+ * Mounted BEFORE the global parser because express.json skips a body that is
+ * already parsed — a route-level parser added later would never run. Same
+ * ordering reason as the webhook raw parser above.
+ *
+ * ⚠️ nginx must allow AT LEAST this much or it rejects first, in HTML, having
+ * cut the connection mid-upload — which a browser shows as "Failed to fetch"
+ * and no error handler can make sense of. `infra/nginx/oslsr.conf` carries
+ * `client_max_body_size 8m`. THE SMALLER OF THE TWO IS ALWAYS THE REAL LIMIT.
+ */
+app.use('/api/v1/auth/activate', express.json({ limit: '8mb' }));
+
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 app.use(metricsMiddleware);
 
 // Health check endpoint
