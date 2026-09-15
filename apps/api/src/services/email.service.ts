@@ -291,7 +291,37 @@ export class EmailService {
     <div style="background-color: #fff; padding: 15px; border-radius: 5px; border-left: 4px solid ${this.BRAND_COLOR}; margin: 20px 0;">
       <p style="margin: 10px 0;"><strong>Role:</strong> ${data.roleName}</p>
       ${lgaSection}
+      <p style="margin: 10px 0;"><strong>Your login:</strong> ${data.email}</p>
+      <!--
+        ⛔ THE LOGIN ADDRESS. Added 2026-09-15 after it locked seven field
+        enumerators out for nine days.
+
+        They were provisioned with plus-addressed accounts (name+test@...) so the
+        invitation would reach an existing inbox. THAT IS EXACTLY WHY THE SUFFIX
+        IS INVISIBLE: this email lands in their NORMAL inbox, so the address they
+        read it in looks like their username. It is not. They typed the normal
+        one and got user_not_found - 36 times across the cohort, one person 9
+        times, another typing name+@... because they remembered a plus but not
+        what followed.
+
+        ⚠️ The instruction DID exist - given in the operator's WhatsApp group
+        with the roster. It lived in a channel separated from the action by days
+        and a scroll, while the email they open AT the moment of acting said
+        nothing. PUT THE INSTRUCTION WHERE THE ACTION IS.
+
+        ⚠️ It is also invisible in the database: a wrong ADDRESS never reaches
+        a password check, so failed_login_attempts stays 0 and the row reads
+        "activated, never logged in" - which an operator reads as apathy.
+
+        ⛔ NO BACKTICKS IN THIS COMMENT. It sits inside a JS template literal,
+        so a backtick terminates the string and the file will not parse.
+      -->
     </div>
+
+    <p style="background-color: #fff8e1; padding: 12px; border-radius: 5px; border-left: 4px solid #f59e0b; margin: 20px 0; font-size: 14px;">
+      ⚠️ <strong>Sign in with the address shown above</strong> — <strong>${data.email}</strong> —
+      even if you received this email at a different address.
+    </p>
 
     <p>Click the button below to activate your account and complete your profile setup:</p>
 
@@ -334,7 +364,10 @@ Hello ${data.fullName},
 You have been invited to join the Oyo State Labour & Skills Registry as a staff member.
 
 Role: ${data.roleName}
-${lgaLine}
+${lgaLine}Your login: ${data.email}
+
+IMPORTANT: Sign in with the address above (${data.email}) even if you received this email at a different address.
+
 Click the link below to activate your account and complete your profile setup:
 ${data.activationUrl}
 
