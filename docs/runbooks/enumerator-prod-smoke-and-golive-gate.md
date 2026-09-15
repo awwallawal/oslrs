@@ -29,7 +29,7 @@ recorded below.
 | field | value | note |
 |---|---|---|
 | `fullName` | `Lawal Kolade (TEST ENUMERATOR)` | Put the word TEST in the NAME. It is the only marker visible to someone reading a dashboard who does not know the email convention. |
-| `email` | `lawalkolade+test@gmail.com` | **Plus-addressing.** Delivers to the existing inbox — no new mailbox to create. Survives the app's normalisation (emails are only lowercased and trimmed; nothing strips `+`). |
+| `email` | `lawalkolade+test@gmail.com` | **Plus-addressing.** Delivers to the existing inbox — no new mailbox to create. Survives the app's normalisation (emails are only lowercased and trimmed; nothing strips `+`). ⛔⛔ **AND IT LOCKED SEVEN REAL ENUMERATORS OUT — see §0.1a. DO NOT USE IT FOR PEOPLE WHO MUST LOG IN.** |
 | `phone` | `+2348000000001` | ⚠️ **`users.phone` is UNIQUE.** Every account needs its own. Reserved sentinel series for test staff: `+234800000000X`. Verified free before use. |
 | `roleId` | `019c899b-6ccf-7b55-8c04-49dec8280e45` | enumerator |
 | `lgaId` | `019c899b-6d7e-7ed3-bc7b-53b96b48a72d` | Ibadan North |
@@ -39,6 +39,48 @@ schema says `lgaId: z.string().uuid().optional()` — "optional for state-wide" 
 `staff.service.ts:866` throws `LGA_REQUIRED` for the enumerator role. Discovered by the create call
 failing, not by reading the type. **There is no state-wide enumerator.** Decide each person's LGA
 before you start; it is not a field you can leave for later.
+
+#### ⛔⛔ 0.1a — PLUS-ADDRESSING IS AN OPERATOR CONVENIENCE THAT COSTS THE USER THEIR LOGIN
+*Measured 2026-09-15, from a complaint. 36 failed logins, at least 7 of the 17 trial enumerators.*
+
+**The `+test` suffix is invisible to the person it belongs to.** The invitation lands in their
+NORMAL inbox — that is the entire point of plus-addressing — so their username appears to be their
+normal address. It is not. They type the address they read the email in, and get `user_not_found`.
+
+Retained logs, `auth.login_failed` by the address actually typed:
+
+| typed (wrong — no `+test`) | attempts |
+|---|---|
+| `ferdew31@gmail.com` | **9** |
+| `victoriakilanko023@gmail.com` | 6 |
+| `uthmanayo07@gmail.com` | 5 |
+| `oladokuncomfort77@gmail.com` | 4 |
+| `moboladeidrees@gmail.com` | 3 |
+| `callmezainab3000@gmail.com` | 2 |
+| `zjbadmus@gmail.com` | 1 |
+| `oladokuncomfort77+@gmail.com` | 1 ⟵ remembered a `+`, not what followed |
+
+**36 failures in total**, none of which reach a password check — which is why
+`users.failed_login_attempts` stays **0** and the account looks untouched. An operator reading the
+`users` table sees "activated, never logged in" and concludes apathy. **It was our naming.**
+
+⚠️ **AND IT CORRUPTS THE STATUS READ.** Two of the people filed under *"no activation attempt
+recorded"* — Victoria Kilanko (6) and Uthman Ayoola (5) — were trying repeatedly against an address
+that does not exist, so nothing reached a logged activation step. **Absence of an attempt in the
+logs is not absence of an attempt.**
+
+- ✅ **RULE: use plus-addressing ONLY for accounts nobody but the operator logs into.** For anyone
+  who must sign in themselves — every real enumerator — **provision their REAL address.** The
+  suffix buys tidy teardown by a `%+test%` grep; it costs the user the ability to log in, and that
+  trade is never worth it for a field cohort.
+- ✅ **If it is used anyway, the exact login address must appear in the onboarding material**, on
+  screen, spelled out. Nobody infers a plus-suffix from an email that arrived in their normal inbox.
+- ⚠️ **The teardown key is the user-id list (§0.9) regardless** — `%+test%` was already known not to
+  match `+enum1`. Using real addresses does not make teardown harder; it was never the safe key.
+- 🔎 **How to spot it next time:** `grep auth.login_failed` for `reason: user_not_found` and compare
+  the typed address against the provisioned one. A cohort that "never logged in" with **0 failed
+  attempts each** is the signature — a wrong password increments the counter, a wrong ADDRESS does
+  not.
 
 ### 0.2 The call
 
@@ -217,6 +259,61 @@ enumerator's rows. **Paste the ids. Do not re-derive the cohort by pattern.**
   '01a075cc-0bd7-7cfa-8b0c-b6c6f7462585',
   '01a075cc-0bea-7d3d-8092-268d8010d88d'
 ```
+
+#### 📋 COHORT STATUS AS AT 2026-09-15 — read this before contacting anyone
+
+Measured from `users` + retained logs. ⚠️ **Nobody in this cohort failed through apathy.** Every
+person who did not get in was blocked by one of our defects.
+
+**🟢 Working (5)** — activated and have logged in:
+
+| Name | LGA | Last login | Captured |
+|---|---|---|---|
+| Dorcas Comfort Oladokun | Lagelu | 09-06 20:07 | 1 |
+| Badmus Faaiz | Ibadan North | 09-07 14:43 | 1 |
+| Atitebi Esther Opeyemi | Ibadan South-West | **09-15 07:35** | 0 |
+| Ake Anuoluwapo | Ido | **09-15 08:08** | 0 |
+| Badmus Zainab Jumoke | Oluyole | **09-15 11:57** | 0 |
+
+**🟡 Activated, never logged in (5)** — setup finished, account unused. `last_login_at` is set ONLY
+by `createLoginSession`, so this is exact, not inferred:
+
+| Name | LGA | Note |
+|---|---|---|
+| Adedeji Adetola | Egbeda | one login 09-06 |
+| Badmus Jubril Adekunle | Ibadan North | one login 09-06 |
+| Badmus Aliyat Tolani | Oluyole | one login 09-06; 6 photo failures first |
+| **Ishola Adijat Olawumi** | Ona Ara | activated 09-06 21:07 (photo saved, via UPLOAD). **Never logged in — typing `ferdew31@gmail.com`, 9× `user_not_found`.** Requested a password reset 09-15 12:40, which cannot help: the address she is using does not exist. **This is §0.1a.** |
+| **Idris Mobolade** | Akinyele | activated; never logged in; 3× wrong-address failures |
+
+**🔴 Never activated (7)** — all still `invited`, invitations expired 09-08:
+
+| Name | LGA | What the evidence shows |
+|---|---|---|
+| **Kilanko Victoria Boluwatife** | Ibadan North-East | ⚠️ **75 photo failures** — tried hardest of anyone — **plus 6 wrong-address logins** |
+| Adebiyi Zainab Iyanuoluwa | Akinyele | 2 photo failures; 2 wrong-address logins |
+| Oladele Uthman Ayoola | Egbeda | **5 wrong-address logins** — was trying, never reached activation |
+| Fasasi Bashirat Oyeronke | Lagelu | no attempt in retained logs |
+| Asiwaju Folashade Asmau | Ibadan North-West | no attempt in retained logs |
+| Adeleke Kafayat Oyebimpe | Ido | no attempt in retained logs |
+| Olayiwola Mary Precious | Ibadan South-West | no attempt in retained logs |
+
+⛔ **"No attempt in retained logs" is NOT "did not try."** Three separate reasons a genuine attempt
+leaves no trace: logs retain only ~13 days (the invite week is gone); the **244 Opera Mini
+rate-limit refusals carry no user id**; and a wrong ADDRESS never reaches a logged activation step.
+
+**What blocked them, in order of damage:**
+1. **The selfie was sized to the video's CSS width** → *"Image resolution too low"* → the whole
+   activation failed. Fixed 2026-09-14.
+2. **Login/activation rate-limited per PROXY IP** — 244 refusals from six `opera-mini.net`
+   addresses. Fixed 2026-09-15 (keyed on the invitation token).
+3. **Plus-addressed logins** they cannot guess — §0.1a. **NOT yet fixed; it is a provisioning
+   decision, not code.**
+
+**Re-issue guidance:** the 7 `invited` need a **RESEND** (same account, fresh 48h) — not
+delete-and-recreate. The 10 `active` need recreating only if you want a clean trial from zero.
+⚠️ **Whichever you do, provision REAL addresses this time (§0.1a)**, or the same seven will be
+locked out again by the same suffix.
 
 #### Tracking onboarding — who has actually logged in
 

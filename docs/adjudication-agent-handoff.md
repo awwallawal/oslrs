@@ -1031,7 +1031,7 @@ than folding it into a neighbour.
 
 ## 3. Current state (2026-09-15) — READ THIS ONE
 
-**Prod `e5baf8d`**, health 200. Marketplace **8,576** listings. ⭐ **THE JINGLE READ IS DONE** (§9
+**Prod `b602591`** (pushed, CI green, deployed, process restarted — verified by pm2 uptime, not by the deploy log), health 200. Marketplace **8,576** listings. ⭐ **THE JINGLE READ IS DONE** (§9
 closed), and it turned up a live blocker that outranked the story it was meant to close.
 
 - ✅ **ENUMERATOR ONBOARDING WAS BROKEN ON PROD AND IS FIXED.** Four defects, three of them hiding
@@ -1070,6 +1070,41 @@ closed), and it turned up a live blocker that outranked the story it was meant t
   the campaign week rotated away. §9d item 2 — the after-count that would close **13-46 R8** — cannot
   be produced. The 9-52 traffic watch that should have captured it **never ran** (§9a). A second
   perishable input lost to the same absent cron.
+
+### 🔴 9h. THE THIRD ONBOARDING BLOCKER, AND IT IS NOT CODE — plus-addressed logins
+
+*Found 2026-09-15 by investigating ONE complaint. 36 failed logins; at least 7 of the 17.*
+
+The 17 trial enumerators were provisioned as `name+test@gmail.com` so invitations would land in
+their existing inboxes without creating mailboxes. **That is exactly why the suffix is invisible to
+them:** the email arrives in their normal inbox, so their username appears to be their normal
+address. They type it, and get `user_not_found`.
+
+`auth.login_failed` by the address actually typed — `ferdew31@gmail.com` **9**,
+`victoriakilanko023@gmail.com` **6**, `uthmanayo07@gmail.com` **5**,
+`oladokuncomfort77@gmail.com` **4**, `moboladeidrees@gmail.com` **3**,
+`callmezainab3000@gmail.com` **2**, `zjbadmus@gmail.com` **1**, and one
+`oladokuncomfort77+@gmail.com` — someone who remembered a `+` but not what followed.
+
+- ⛔ **It is invisible in the `users` table.** A wrong ADDRESS never reaches a password check, so
+  `failed_login_attempts` stays **0** and the row reads "activated, never logged in" — which an
+  operator reads as apathy. **The signature is a cohort with no logins AND zero failed attempts.**
+- ⚠️ **AND IT CORRUPTED MY OWN STATUS READ, which is the part worth carrying.** I reported two
+  people as *"no activation attempt recorded"*. Victoria Kilanko (6 attempts) and Uthman Ayoola (5)
+  were trying repeatedly against an address that does not exist. **Absence of an attempt in the logs
+  is not absence of an attempt** — three separate mechanisms erase one here: 13-day log retention,
+  rate-limit refusals that carry no user id, and a wrong address that never reaches a logged step.
+- ✅ **Rule, now in the runbook (§0.1a): plus-addressing ONLY for accounts nobody but the operator
+  signs into.** Anyone who must log in themselves gets their REAL address. The suffix buys a tidy
+  `%+test%` teardown grep — which was **already known not to be the safe teardown key** (§0.9 uses
+  the user-id list, because `+enum1` matches no `%+test%`). So it buys nothing and costs a login.
+- ⛔ **NOT FIXED IN CODE, and should not be** — it is a provisioning decision. It will recur on the
+  next cohort unless the re-issue uses real addresses.
+
+⭐ **The shape: the three blockers were all invisible in different ways.** The photo bug threw a
+loud error nobody saw; the rate limit refused people with no user id attached; this one leaves the
+database looking normal. **Only the complaint surfaced it** — and one person complaining stood for
+seven who did not.
 
 ### The jingle, measured (the durable half — DB, not Cloudflare)
 | | self-registrations/day |
