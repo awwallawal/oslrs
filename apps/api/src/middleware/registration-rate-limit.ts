@@ -150,8 +150,74 @@ export const registrationEmailRateLimit = rateLimit({
 // removed alongside the deleted `POST /auth/resend-verification` route.
 
 /**
+ * Key for the activation limiter: the INVITATION TOKEN, falling back to IP.
+ *
+ * ⛔ WHY NOT IP — measured on prod 2026-09-14/15, and it was blocking real
+ * enumerators. The old limiter was 10 attempts / 15 min **per IP**, and on
+ * 2026-09-07/08 it produced **244 `activation.rate_limit_exceeded` refusals from
+ * SIX addresses**:
+ *
+ *     114  185.26.181.66   →  n17-04-01-v04.opera-mini.net   (NO-OPERA-AMS-LB)
+ *      85  141.0.12.87     →  n24-01-11.opera-mini.net       (NO-OPERA-AMS-MINI)
+ *      22  141.0.13.64     →  opera-mini.net
+ *
+ * Confirmed by reverse DNS, not inferred. **Opera Mini proxies every user
+ * through a handful of servers**, and it is one of the most-used mobile browsers
+ * in Nigeria — so a per-IP budget is shared by strangers. The 17 field
+ * enumerators were invited on 2026-09-06; a few of them activating at once
+ * exhausted the allowance for everyone behind that proxy. The activation photo
+ * defect (fixed 2026-09-14) made it far worse by forcing repeated failed POSTs
+ * per person.
+ *
+ * ⚠️ AND KEYING ON THE TOKEN ALONE WOULD BE A REGRESSION, which is why the IP
+ * limiter below still exists. A token key gives an attacker spraying 1,000
+ * random tokens 1,000 separate buckets — i.e. no limit at all. The two run
+ * together: the token key protects the PERSON's experience, the IP key stops a
+ * FLOOD, and only the second is shared between strangers so only it is generous.
+ *
+ * ⚠️ `ipKeyGenerator` is mandatory for the fallback: an IPv6 subscriber holds a
+ * whole prefix, so keying the raw address lets them mint a fresh bucket per
+ * request. The library's `ERR_ERL_KEY_GEN_IPV6` warning is a `toString()` grep
+ * for `req.ip` and proves nothing — see `buildRegistrationEmailRateLimitKey`.
+ */
+export function buildActivationRateLimitKey(token: unknown, ip: string | undefined): string {
+  if (typeof token === 'string' && token.trim()) return `t:${token.trim()}`;
+  return `ip:${ipKeyGenerator(ip ?? 'unknown')}`;
+}
+
+/**
+ * Per-IP flood ceiling for activation — deliberately HIGH.
+ *
+ * This is the only activation key that strangers share, so it is sized for the
+ * worst legitimate case (many people behind one Opera Mini / CGNAT address),
+ * not for one person. It exists to stop a spray, not to shape a user's
+ * experience — that is the per-token limiter's job.
+ */
+export const activationIpFloodLimit = rateLimit({
+  store: isTestMode() ? undefined : new RedisStore({
+    // @ts-expect-error - Known type mismatch with ioredis
+    sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
+    prefix: 'rl:activation:ip:',
+  }),
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: {
+    status: 'error',
+    code: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many activation attempts. Please try again later.',
+  },
+  handler: (req, res, _next, options) => {
+    logger.warn({ event: 'activation.ip_flood_limit_exceeded', ip: req.ip });
+    res.status(429).json(options.message);
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: isTestMode() ? false : { xForwardedForHeader: false },
+});
+
+/**
  * Rate limiter for account activation endpoints
- * - 10 attempts per 15 minutes per IP
+ * - 20 attempts per 15 minutes per INVITATION TOKEN (not per IP — see above)
  * - Applies to both token validation (GET) and activation completion (POST)
  * - Tokens are UUIDv7 (high entropy) so brute-force is unlikely,
  *   but rate limiting prevents resource exhaustion from spam requests
@@ -163,7 +229,15 @@ export const activationRateLimit = rateLimit({
     prefix: 'rl:activation:',
   }),
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 attempts per 15 minutes per IP
+  // 20, not 10: the budget is now PER PERSON rather than per shared proxy, and a
+  // field officer legitimately spends several requests here — the page validates
+  // the token on load, and a photo that fails validation is a retry, not abuse.
+  max: 20,
+  // Destructured, not `req.ip` — see the note on `buildRegistrationEmailRateLimitKey`.
+  // `params.token` is populated because this is ROUTE-level middleware on
+  // `/activate/:token`, so express has already matched and parsed the path.
+  keyGenerator: ({ params, ip }) =>
+    buildActivationRateLimitKey((params as { token?: unknown } | undefined)?.token, ip),
   message: {
     status: 'error',
     code: 'RATE_LIMIT_EXCEEDED',
@@ -173,6 +247,9 @@ export const activationRateLimit = rateLimit({
     logger.warn({
       event: 'activation.rate_limit_exceeded',
       ip: req.ip,
+      // The key actually used, so a future investigation can tell a per-person
+      // limit from a per-proxy one WITHOUT reverse-DNSing six addresses first.
+      keyedBy: typeof req.params?.token === 'string' && req.params.token.trim() ? 'token' : 'ip',
     });
     res.status(429).json(options.message);
   },

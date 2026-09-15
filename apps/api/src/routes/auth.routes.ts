@@ -15,7 +15,7 @@ import { passwordResetRateLimit, passwordResetCompletionRateLimit } from '../mid
 // the middleware itself lives on in `registration-rate-limit.ts` and is used by
 // `/registration/wizard` via `registration.routes.ts`. `activationRateLimit`
 // retained here for the /activate routes.
-import { activationRateLimit } from '../middleware/registration-rate-limit.js';
+import { activationRateLimit, activationIpFloodLimit } from '../middleware/registration-rate-limit.js';
 import { reauthRateLimit } from '../middleware/reauth-rate-limit.js';
 import { magicLinkRateLimit } from '../middleware/magic-link-rate-limit.js';
 import { AppError } from '@oslsr/utils';
@@ -24,9 +24,9 @@ const router = Router();
 
 // Account activation (from Story 1.4) — rate limited to prevent resource exhaustion
 // Validate activation token - for frontend to check before showing wizard
-router.get('/activate/:token/validate', activationRateLimit, AuthController.validateActivationToken);
+router.get('/activate/:token/validate', activationIpFloodLimit, activationRateLimit, AuthController.validateActivationToken);
 // Complete activation with profile data
-router.post('/activate/:token', activationRateLimit, AuthController.activate);
+router.post('/activate/:token', activationIpFloodLimit, activationRateLimit, AuthController.activate);
 
 // Staff login - rate limited + CAPTCHA protected
 // Layer 1: strictLoginRateLimit (10/hour) - blocks sustained attacks

@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-09-14 · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-09-15 · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1029,7 +1029,64 @@ than folding it into a neighbour.
 
 ---
 
-## 3. Current state (2026-09-14) — READ THIS ONE
+## 3. Current state (2026-09-15) — READ THIS ONE
+
+**Prod `e5baf8d`**, health 200. Marketplace **8,576** listings. ⭐ **THE JINGLE READ IS DONE** (§9
+closed), and it turned up a live blocker that outranked the story it was meant to close.
+
+- ✅ **ENUMERATOR ONBOARDING WAS BROKEN ON PROD AND IS FIXED.** Four defects, three of them hiding
+  behind each other. Detail → §9f.
+  1. **Selfies were sized to the video's CSS WIDTH, not the camera** (`react-webcam` needs
+     `forceScreenshotSourceSize`) → ~400×225 against a 240 floor → *"Image resolution too low"* →
+     and that error is re-thrown by design, so the **whole activation** failed.
+  2. **The amber banner blamed the user's internet.** Real cause: CSP blocked `wasm-eval`, so face
+     detection could never load on ANY connection. → §2l, live on prod.
+  3. **nginx had no `client_max_body_size`** (1 MB default) — it cut uploads mid-stream, which a
+     browser reports as *"Failed to fetch"*, and answered in HTML the JSON handler then mangled.
+  4. ⛔ **`csp.routes.ts` capped the ENTIRE API at 100 kb** — `router.use(express.json(...))` with no
+     `limit`, mounted at `/api/v1`. Raising the global parser changed nothing because this one
+     consumed the body first. **Found only by re-running a size probe AFTER deploying.**
+- ⛔ **AND THE GLOBAL 8MB RAISE WAS WRONG — the full suite caught it.**
+  `security.hardening.test.ts` is SEC2-3 AC2 (*"413 for a body over 1MB"*): a deliberate control, not
+  stale paperwork. The 8 MB window is now **one route wide**
+  (`app.use('/api/v1/auth/activate', express.json({ limit: '8mb' }))`). **Do not "fix" a failing
+  security test to match your change.**
+- 🔴 **ACTIVATION WAS RATE-LIMITED PER PROXY IP — FIXED 2026-09-15, and this one was still live.**
+  244 `activation.rate_limit_exceeded` refusals on 09-07/08, right after the 17 enumerators were
+  invited, from **SIX addresses**. Reverse DNS named them: `opera-mini.net` / **`NO-OPERA-AMS-MINI`**.
+  **Opera Mini proxies every user through a handful of servers** and is among the most-used mobile
+  browsers in Nigeria, so a 10-per-15-min **per-IP** budget was shared between strangers. The photo
+  defect made it worse by forcing repeated failed POSTs. Now keyed on the **invitation token**, with
+  a separate high per-IP ceiling kept — ⚠️ **token-only keying would be a REGRESSION**: 1,000 sprayed
+  tokens would be 1,000 buckets. Same shape as the 2026-08-07 CGNAT fix on registration, one endpoint
+  over; **nobody swept the siblings then** (§2o).
+- ⚠️ **13-65's route (a) CANNOT be discharged by the real spot, and saying so is the point.** The gate
+  wants write-path capacity evidence **at the modelled jingle peak**. The measured peak was
+  **19 registrations in a day** — under one an hour. The system did not hold under load; **it never
+  saw load**. "No failures" + "no load" proves nothing about capacity (§2aa). Route **(c)** is now
+  dischargeable on a real number instead of a guess: one 60s spot on one station → 19/day, so the
+  11-station buy ≈ **209/day ≈ 9/hour**, against 13-3's measured headroom.
+- 🕳️ **THE JINGLE-WEEK TURN-AWAY DATA IS PERMANENTLY GONE.** pm2 logs retain only from **2026-09-02**;
+  the campaign week rotated away. §9d item 2 — the after-count that would close **13-46 R8** — cannot
+  be produced. The 9-52 traffic watch that should have captured it **never ran** (§9a). A second
+  perishable input lost to the same absent cron.
+
+### The jingle, measured (the durable half — DB, not Cloudflare)
+| | self-registrations/day |
+|---|---|
+| pre-jingle (16–23 Aug) | **0–1** |
+| jingle week 1 (24–30 Aug) | 4 · **19 peak** · 48 total |
+| Sept steady state | 1–3 |
+| 2026-09-15 | **12** ⚠️ unexplained — all `public`, all with an LGA, spread 07:27→10:17 at ~15-min intervals (a human cadence, not a bot). Worth a look; no cause asserted. |
+
+**Clean attribution, and worth not spoiling:** all **72** sends in the window were
+`thankyou-referral`; **zero marketing blasts** fired, so the lift is radio alone. Caps never bound —
+busiest day **19** against `MARKETING_DAILY_CAP` **2,000** (0.95%).
+
+⚠️ **§9c still holds and still matters: watch NG requests, not totals.** Total traffic ran
+1,423–8,001/day on noise alone, and threats swung 1→961 in a day.
+
+## 3-old7. Current state (2026-09-14) — superseded by §3 above
 
 **Prod `1fc9f62`**, health 200. ⭐ **THE MARKETPLACE WENT 297 → 8,576 LISTINGS**, and every
 association import is now fraud-scored. **No prod SHA in the header — D6.**
@@ -2902,7 +2959,78 @@ preview.
 
 > ✅ **R7 RULED 2026-08-18: PUBLISH** — measured first (8 of 235), then decided. See the story ledger.
 
-## 9. 📻 JINGLE WATCH — open the moment week 1 settles (written 2026-08-23, read ~2026-08-31)
+## 9. 📻 JINGLE WATCH — ✅ CLOSED 2026-09-15 (written 2026-08-23, read 3 weeks late)
+
+> ✅ **READ AND DISCHARGED 2026-09-15.** The comparison below was run; the outcome is in §3 and §9f.
+> **It was read 15 days after "week 1 settles", and that delay cost one of the five inputs** —
+> §9d item 2's turn-away count, which lived only in pm2 logs that retain 13 days. The campaign week
+> had already rotated away. ⚠️ **A perishable input needs a DATE, not a condition.** "Open when week
+> 1 settles" has no deadline in it; "read before 2026-09-07 or the logs are gone" does.
+> → [[pattern-verification-that-cannot-run-yet]], one step later in its life.
+>
+> **What the read produced:** the campaign lift is real and cleanly attributable (§3); route (a) of
+> the 13-65 gate is NOT dischargeable because the peak was 19/day (§3); and chasing item 2 surfaced
+> **244 activation refusals caused by Opera Mini's shared proxy IPs** — a live blocker for the
+> enumerator rollout that nothing else was looking for (§9f).
+>
+> ⭐ **The finding that generalises: the most valuable thing here was not on the checklist.** Items
+> 1–5 were a comparison; the blocker came from asking *why* a count was 244 rather than recording it.
+
+### 9f. 📻 WHAT THE READ ACTUALLY FOUND — enumerator onboarding was broken, four ways
+
+The jingle read was the errand; this was the discovery. Recorded here because the shapes recur.
+
+| # | Defect | How it hid |
+|---|---|---|
+| 1 | **Selfie sized to the video's CSS width**, not the camera (`react-webcam` needs `forceScreenshotSourceSize`) → ~400×225 vs a 240 floor | **Viewport-dependent**, so it looked intermittent. The 2026-08-09 fix corrected the camera CONSTRAINTS and never touched the screenshot SIZING — *"what you saw was never what was saved"* was only half fixed. |
+| 2 | **CSP blocked `wasm-eval`**, so face detection could never load | The banner said *"poor connection?"* and sent the operator to check their internet. The proof — `csp_violation blockedUri: "wasm-eval"` — was in our own logs, once per attempt. **A diagnostic is a CLAIM** (§2l). |
+| 3 | **nginx had no `client_max_body_size`** → 1 MB default | It cuts the connection MID-UPLOAD, so the browser says *"Failed to fetch"*, and answers in HTML, which the JSON error handler mangles. **Neither surface ever says "too big".** |
+| 4 | ⛔ **`csp.routes.ts` capped the WHOLE API at 100 kb** — `router.use(express.json())`, no `limit`, mounted at `/api/v1` | Router-level middleware runs for every request through the router. Raising the GLOBAL parser did nothing, because this one parsed first and `express.json` skips an already-parsed body. **Found only by re-running the probe after deploying.** |
+
+⭐ **THEY WERE MASKING EACH OTHER, AND THAT IS THE LESSON.** #1 made captures far too SMALL (~30 kb),
+which fits under #4's 100 kb. Fixing #1 alone would have turned *"resolution too low"* into
+*"entity too large"* — a NEW error, on the same button, immediately after a fix, looking exactly like
+the fixer broke it. → §2z(b): **check whether two defects are masking each other before fixing
+either.**
+
+⚠️ **AND THE OBVIOUS DIAGNOSIS WAS WRONG.** A 413 reproduced perfectly against prod and matched every
+reported symptom. The **nginx access log** is what refused it: the operator's two attempts returned
+**400**, and the only 413 in the file was the investigator's own curl. → §2x(b): *before asserting a
+cause, query for the actual request.*
+
+⛔ **AND THE FIRST FIX BROKE A SECURITY CONTROL.** Raising `express.json` globally to 8mb silently
+deleted SEC2-3 AC2 (*"413 for a body over 1MB"*), and the FULL SUITE caught it. The window is now one
+route wide. **Do not edit a failing security test to match your change** — that test IS the control.
+
+### 9g. 🔴 ACTIVATION WAS RATE-LIMITED PER PROXY IP — the blocker nobody was looking for
+
+244 `activation.rate_limit_exceeded` refusals on 2026-09-07/08, immediately after the 17 enumerators
+were invited, from **six addresses**. Reverse DNS, not inference:
+
+```
+114  185.26.181.66  →  n17-04-01-v04.opera-mini.net   (NO-OPERA-AMS-LB)
+ 85  141.0.12.87    →  n24-01-11.opera-mini.net       (NO-OPERA-AMS-MINI)
+ 22  141.0.13.64    →  opera-mini.net
+```
+
+**Opera Mini proxies every user through a handful of servers**, and it is among the most-used mobile
+browsers in Nigeria. A 10-per-15-minute **per-IP** budget was therefore shared between strangers: a
+few enumerators activating at once exhausted it for everyone behind that proxy. Defect #1 above made
+it far worse by forcing repeated failed POSTs per person.
+
+- ✅ **Fixed**: keyed on the **invitation token** (per person, high-entropy), max 20/15min.
+- ⚠️ **A separate high per-IP ceiling (300/15min) was KEPT DELIBERATELY.** Token-only keying is a
+  REGRESSION: an attacker spraying 1,000 random tokens gets 1,000 buckets, i.e. no limit at all. Two
+  keys, two threats — the token protects the PERSON, the IP stops a FLOOD, and only the second is
+  shared between strangers so only it is generous.
+- ⭐ **THIS IS THE THIRD TIME THIS EXACT SHAPE HAS BITTEN.** Registration was fixed for CGNAT on
+  2026-08-07 (5→50 + a per-email key) after 36 real citizens were turned away. **Nobody swept the
+  siblings**, and activation sat one endpoint away with the same flaw for five weeks. → §2o: *fix the
+  class, not the cohort in front of you.*
+- ⚠️ **The handler now logs `keyedBy`**, so the next investigation can tell a per-person limit from a
+  per-proxy one without reverse-DNSing six addresses first.
+
+
 
 **Why this section exists:** the first radio spot airs **Monday 24 August** (Fresh FM, Ibadan 1 & 2,
 one 60-second spot x3). Everything below was true on 23 August and is the *before* half of a

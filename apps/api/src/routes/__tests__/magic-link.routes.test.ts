@@ -57,6 +57,11 @@ vi.mock('../../middleware/password-reset-rate-limit.js', () => ({
 }));
 vi.mock('../../middleware/registration-rate-limit.js', () => ({
   activationRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  // ⚠️ `auth.routes.ts` imports BOTH activation limiters, so a factory that omits
+  // one makes it `undefined` and `router.get(..., undefined, ...)` throws at
+  // IMPORT time — the whole file then reports "no tests", not a failed assertion.
+  // Added 2026-09-15 with the per-token activation limiter (the Opera Mini fix).
+  activationIpFloodLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 vi.mock('../../middleware/reauth-rate-limit.js', () => ({
   reauthRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),

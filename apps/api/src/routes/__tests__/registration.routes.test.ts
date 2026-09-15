@@ -99,6 +99,12 @@ vi.mock('../../middleware/registration-rate-limit.js', () => ({
   // middleware's real surface rather than silently testing a stale shape.
   registrationEmailRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
   activationRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  // 2026-09-15 — the per-IP flood ceiling that runs alongside the per-token
+  // activation limiter (the Opera Mini fix). This file does not import
+  // `auth.routes.ts` today, so omitting it would not break anything YET — added
+  // anyway, for the reason stated above: the mock mirrors the module's real
+  // surface, or it is quietly testing a shape that no longer exists.
+  activationIpFloodLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 
 vi.mock('../../services/magic-link.service.js', () => ({
