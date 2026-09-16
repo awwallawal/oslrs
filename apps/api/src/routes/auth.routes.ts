@@ -5,7 +5,7 @@ import { MagicLinkController } from '../controllers/magic-link.controller.js';
 import { SmsOtpController } from '../controllers/sms-otp.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
-import { loginRateLimit, strictLoginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
+import { loginRateLimit, loginIpFloodLimit, strictLoginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
 import { mfaRateLimit } from '../middleware/mfa-rate-limit.js';
 import { requireFreshReAuth } from '../middleware/require-fresh-reauth.js';
 import { passwordResetRateLimit, passwordResetCompletionRateLimit, passwordResetCompletionIpFloodLimit } from '../middleware/password-reset-rate-limit.js';
@@ -29,20 +29,30 @@ router.get('/activate/:token/validate', activationIpFloodLimit, activationRateLi
 router.post('/activate/:token', activationIpFloodLimit, activationRateLimit, AuthController.activate);
 
 // Staff login - rate limited + CAPTCHA protected
-// Layer 1: strictLoginRateLimit (10/hour) - blocks sustained attacks
-// Layer 2: loginRateLimit (5/15min) - blocks burst attacks
+// Story 13-68 — two axes, because a shared proxy IP is not a person. ⛔ THE ORDER IS THE CONTROL (review 2026-09-16):
+// 1. loginIpFloodLimit (100/IP/15min, ALL responses) - first, so it bounds everything behind it, the hCaptcha
+//    verification call included; the only layer bounding successful volume per IP
+// 2. verifyCaptcha - BEFORE the per-email budget, or a request with no captcha could spend anyone's budget and
+//    hold their login shut for free (review H1)
+// 3. loginRateLimit (5 FAILED/EMAIL/15min) - one person's budget; IP fallback when no email (MFA step 2)
+// 4. strictLoginRateLimit (60 FAILED/IP/hour) - LAST, so it is charged only for captcha-passing attempts a person's
+//    own budget allowed: one person spends at most 20/hour of it, which is what makes 60 = 3 people x 20 (review M1)
+// Account lockout (AuthService: 10 failures → 30 min, cleared on expiry) and MFA sit behind these.
+// login-rate-limit.binding.test.ts mounts THIS stack, read from the router, and pins each property.
 router.post('/staff/login',
-  strictLoginRateLimit,
-  loginRateLimit,
+  loginIpFloodLimit,
   verifyCaptcha,
+  loginRateLimit,
+  strictLoginRateLimit,
   AuthController.staffLogin
 );
 
 // Public user login - rate limited + CAPTCHA protected
 router.post('/public/login',
-  strictLoginRateLimit,
-  loginRateLimit,
+  loginIpFloodLimit,
   verifyCaptcha,
+  loginRateLimit,
+  strictLoginRateLimit,
   AuthController.publicLogin
 );
 
@@ -171,21 +181,23 @@ router.post('/mfa/regenerate-codes',
 );
 
 // Login step-2 with TOTP — UNAUTHENTICATED, gated by challenge token + rate limits + CAPTCHA.
-// Mirrors the /staff/login layering: strict + standard rate limits + CAPTCHA + per-IP MFA limit.
+// Mirrors the /staff/login layering and ORDER (flood → captcha → burst → strict), then the per-IP MFA limit.
 router.post('/login/mfa',
-  strictLoginRateLimit,
-  loginRateLimit,
-  mfaRateLimit,
+  loginIpFloodLimit,
   verifyCaptcha,
+  loginRateLimit,
+  strictLoginRateLimit,
+  mfaRateLimit,
   MfaController.loginMfa
 );
 
 // Login step-2 with backup code — same protection layering.
 router.post('/login/mfa-backup',
-  strictLoginRateLimit,
-  loginRateLimit,
-  mfaRateLimit,
+  loginIpFloodLimit,
   verifyCaptcha,
+  loginRateLimit,
+  strictLoginRateLimit,
+  mfaRateLimit,
   MfaController.loginMfaBackup
 );
 

@@ -371,6 +371,25 @@ fresh token and a fresh 48h. It is rate-limited per user (`RESEND_LIMIT_TTL` = 2
 button to lean on for a whole cohort — which is the argument for provisioning the morning people are
 ready, per 0.5.
 
+#### 🔒 Staff report they are locked out — attacked, or forgot password? (Story 13-68)
+
+Every incident in this family reached us as a complaint. Run this first; it separates a lock from everything else:
+
+```sql
+SELECT email, failed_login_attempts, locked_until FROM users WHERE locked_until > now();
+```
+
+Their row present → the account is locked (10 failures → 30 min; the counter clears when the lock expires,
+since 13-68). Several rows at once, for people who did not all fumble → suspect a lockout run, and check
+`grep '"reason":"invalid_password"' ~/.pm2/logs/oslsr-api-out.log` for many distinct `email`s from one
+`ipAddress`. Row absent → not a lock: check the address they are typing (§0.1a), then the 429 events in the
+same log. `auth.rate_limit_exceeded` with `keyedBy: email` = five failed attempts on THEIR address in 15 min —
+usually their own retries, but anyone who solves a captcha per attempt can spend it too, so if they insist they
+did not retry, look for `invalid_password` / `user_not_found` lines with their `email` from an unfamiliar
+`ipAddress`. `keyedBy: ip` = the MFA step-2 budget on their IP. `auth.ip_blocked` = their proxy address hit 60
+failed logins in the hour (strangers included); `auth.login_ip_flood_limit_exceeded` = 100 requests of any kind
+in 15 min from that address. The last two clear on their own within the hour.
+
 #### ⛔⛔ 0.9b — NEVER DELETE AN ENUMERATOR ACCOUNT THAT HAS CAPTURES. Observed 2026-09-16.
 
 **`submitter_id` is a plain TEXT column with NO foreign key.** On both `respondents` and

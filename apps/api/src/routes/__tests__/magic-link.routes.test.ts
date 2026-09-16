@@ -40,6 +40,9 @@ vi.mock('../../middleware/captcha.js', () => ({
 }));
 vi.mock('../../middleware/login-rate-limit.js', () => ({
   loginRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  // Story 13-68 — every export auth.routes.ts imports must be listed, or the router throws at import
+  // and this file reports "no tests" instead of failing.
+  loginIpFloodLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
   strictLoginRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
   refreshRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
   isTestMode: () => true,

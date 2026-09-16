@@ -56,10 +56,55 @@ const MFA_CHALLENGE_TTL_SECONDS = 5 * 60;
 
 const logger = pino({ name: 'auth-service' });
 
-// Login attempt tracking constants
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
-const EXTENDED_LOCKOUT_THRESHOLD = 10;
+// Login attempt tracking constants — the ACCOUNT lockout (users.lockedUntil), independent of IP.
+// Exported only so rate-limit-coverage.test.ts can pin them (Story 13-68 AC8): the login rate
+// limiters are keyed per email / per IP on the assumption that this lock is unchanged.
+export const MAX_FAILED_ATTEMPTS = 5;
+export const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+export const EXTENDED_LOCKOUT_THRESHOLD = 10;
+
+/**
+ * Story 13-68 (adversarial review 2026-09-16, L2) — spend one bcrypt compare on a login for an email with no
+ * account. `user_not_found` used to throw before any hashing, so an attacker could tell which addresses have
+ * ACTIVE accounts from response time alone. (Locked / invited / suspended accounts still answer with their own
+ * codes — that is a product decision about the error copy, not this timing channel.) The hash is minted once,
+ * at the same cost as a real one, so the compare takes as long as a real wrong-password check.
+ */
+let timingEqualiserHash: Promise<string> | undefined;
+async function spendPasswordCompareTime(password: string): Promise<void> {
+  timingEqualiserHash ??= hashPassword('timing-equaliser — never a real password');
+  await comparePassword(password, await timingEqualiserHash);
+}
+
+/**
+ * Story 13-68 — lockout DECAY. When an account's lock has expired, clear the failure counter (and the stale
+ * lock) before this attempt is judged, and update the in-memory row to match.
+ *
+ * Without this, `failedLoginAttempts` was reset only by a successful login or a password reset. An account
+ * that had ever reached EXTENDED_LOCKOUT_THRESHOLD stayed there, so ONE further wrong password re-locked it
+ * for another 30 minutes — two requests an hour held it locked forever, and the per-IP login limiter became
+ * the only meter on a mass account-lockout DoS. With decay, every new lock costs ten fresh failures.
+ *
+ * Deliberately NOT escalating the lock duration: counting repeat locks needs a column `users` does not have
+ * (a migration with its own security review — a tracked residual). Plain decay leaves ~10 guesses per 30
+ * minutes (~480/day) against bcrypt, the password policy and MFA, which the PM ruling of 2026-09-16 assessed
+ * as immaterial.
+ *
+ * Acts ONLY on an expired lock: an active lock is refused before this runs, and a counter below the threshold
+ * with no lock keeps accumulating. `auth.service.lockout-decay.test.ts` pins all three.
+ */
+async function decayExpiredLockout(user: {
+  id: string;
+  lockedUntil: Date | null;
+  failedLoginAttempts: number | null;
+}): Promise<void> {
+  if (!user.lockedUntil || new Date() < new Date(user.lockedUntil)) return;
+  await db.update(users)
+    .set({ failedLoginAttempts: 0, lockedUntil: null, updatedAt: new Date() })
+    .where(eq(users.id, user.id));
+  user.failedLoginAttempts = 0;
+  user.lockedUntil = null;
+}
 
 /**
  * Story 13-60 — the reason we STORE and SHOW when the photo step fails on our
@@ -469,6 +514,7 @@ export class AuthService {
     );
 
     if (!user) {
+      await spendPasswordCompareTime(password); // Story 13-68 review L2 — no existence timing oracle
       logger.warn({
         event: 'auth.login_failed',
         reason: 'user_not_found',
@@ -493,6 +539,8 @@ export class AuthService {
         429
       );
     }
+    // Story 13-68 — an expired lock no longer leaves the account one failure away from re-locking.
+    await decayExpiredLockout(user);
 
     // Check account status
     if (user.status === 'invited') {
@@ -556,6 +604,9 @@ export class AuthService {
         event: 'auth.login_failed',
         reason: 'invalid_password',
         userId: user.id,
+        // Story 13-68 — the same field the user_not_found branch logs, so distinct-identifier-per-IP over
+        // auth.login_failed is ONE field on every failure branch, never a union of email and userId.
+        email: normalizedEmail,
         failedAttempts: newFailedAttempts,
         ipAddress,
       });
@@ -684,6 +735,7 @@ export class AuthService {
     );
 
     if (!user) {
+      await spendPasswordCompareTime(password); // Story 13-68 review L2 — see loginStaff
       logger.warn({
         event: 'auth.login_failed',
         reason: 'user_not_found',
@@ -702,6 +754,8 @@ export class AuthService {
         429
       );
     }
+    // Story 13-68 — an expired lock no longer leaves the account one failure away from re-locking.
+    await decayExpiredLockout(user);
 
     if (user.status === 'suspended' || user.status === 'deactivated') {
       throw new AppError(
@@ -754,6 +808,7 @@ export class AuthService {
         event: 'auth.login_failed',
         reason: 'invalid_password',
         userId: user.id,
+        email: normalizedEmail, // Story 13-68 — see loginStaff
         ipAddress,
         loginType: 'public',
       });

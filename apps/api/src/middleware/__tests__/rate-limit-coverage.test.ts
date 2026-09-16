@@ -23,14 +23,16 @@
  *
  *   | Limiter                          | Threshold      | Source        |
  *   |----------------------------------|----------------|---------------|
- *   | loginRateLimit                   | 5/IP/15min FAILED ONLY | NFR4.4 line 1 + Story 9-13 close-out (skipSuccessfulRequests:true 2026-06-03) |
- *   | strictLoginRateLimit             | 10/IP/1hr (all responses counted) | defense-in-depth |
+ *   | loginIpFloodLimit                | 100/IP/15min (ALL responses) | Story 13-68 — mounted FIRST; LOAD-BEARING: the only login limiter counting successes, so the only bound on successful volume per IP; also bounds captcha-refused traffic |
+ *   | loginRateLimit                   | 5/EMAIL/15min FAILED ONLY (IP fallback when no email — MFA step 2) | NFR4.4 + Story 9-13 close-out (skipSuccessfulRequests:true 2026-06-03) + Story 13-68 re-key (2026-09-16); mounted AFTER verifyCaptcha; key is a sha256 of the email |
+ *   | strictLoginRateLimit             | 60 FAILED/IP/1hr | Story 13-68 (was 10/IP/1hr, all responses) — mounted LAST; derived: 3 strangers/address × 20 failures/person/hr; failed-only is an availability fix, not a security one; the binding bound on failure sprays and non-existent-account enumeration |
  *   | refreshRateLimit                 | 10/IP/1min     | sensible default |
  *   | passwordResetRateLimit (IP)      | 200/IP/1hr     | FLOOD CEILING only (2026-09-16). The per-person budget is the row below. |
  *   | PasswordResetService.checkRate   | 3/email/1hr    | NFR4.4 line 5 (service layer) |
  *   | passwordResetCompletionRateLimit | 20/TOKEN/15min | keyed on the reset token (2026-09-16) — a shared proxy IP is not a person |
  *   | passwordResetCompletionIpFlood   | 300/IP/15min   | FLOOD CEILING only |
- *   | registrationRateLimit            | 5/IP/15min     | sensible default (used by /registration/wizard) |
+ *   | registrationRateLimit            | 50/IP/15min    | FLOOD CEILING (2026-08-07, was 5) — /registration/wizard, not an auth route |
+ *   | registrationEmailRateLimit       | 3/email/15min  | per-person budget on the wizard submit (2026-08-07) |
  *   | activationRateLimit              | 20/TOKEN/15min | keyed on the invitation token (2026-09-15) — 244 Opera Mini refusals |
  *   | activationIpFloodLimit           | 300/IP/15min   | FLOOD CEILING only |
  *   | googleAuthRateLimit              | 10/IP/1hr      | sensible default |
@@ -46,7 +48,9 @@
  *
  * Behavioral verification (N+1 → 429) is out of scope for this audit-coverage
  * test; that belongs in a separate integration test suite using supertest +
- * Redis test fixtures.
+ * Redis test fixtures. For the three login limiters it exists:
+ * `login-rate-limit.binding.test.ts` asserts each threshold and key in both
+ * directions (Story 13-68), so their table rows ARE pinned behaviourally.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -80,9 +84,9 @@ export const AUTH_RATE_LIMIT_COVERAGE: CoverageEntry[] = [
   { method: 'GET',  path: '/activate/:token/validate', rateLimiters: ['activationRateLimit'], expectedHandlerCount: { min: 2 } },
   { method: 'POST', path: '/activate/:token',          rateLimiters: ['activationRateLimit'], expectedHandlerCount: { min: 2 } },
 
-  // Login (layered: strict + standard + captcha)
-  { method: 'POST', path: '/staff/login',  rateLimiters: ['strictLoginRateLimit', 'loginRateLimit'], expectedHandlerCount: { min: 4 } },
-  { method: 'POST', path: '/public/login', rateLimiters: ['strictLoginRateLimit', 'loginRateLimit'], expectedHandlerCount: { min: 4 } },
+  // Login (in mount order: IP flood ceiling → captcha → per-EMAIL burst → strict IP failure ceiling) — Story 13-68
+  { method: 'POST', path: '/staff/login',  rateLimiters: ['loginIpFloodLimit', 'loginRateLimit', 'strictLoginRateLimit'], expectedHandlerCount: { min: 5 } },
+  { method: 'POST', path: '/public/login', rateLimiters: ['loginIpFloodLimit', 'loginRateLimit', 'strictLoginRateLimit'], expectedHandlerCount: { min: 5 } },
 
   // Google OAuth — RETIRED (Story 9-12 Task 10.1). Route returns 404
   // unconditionally. Code review L7 (2026-05-11) — wrapped in
@@ -132,8 +136,8 @@ export const AUTH_RATE_LIMIT_COVERAGE: CoverageEntry[] = [
   { method: 'POST', path: '/mfa/regenerate-codes', rateLimiters: ['mfaRateLimit'], expectedHandlerCount: { min: 5 } },
 
   // Login step-2 (TOTP / backup code) — full layered stack
-  { method: 'POST', path: '/login/mfa',        rateLimiters: ['strictLoginRateLimit', 'loginRateLimit', 'mfaRateLimit'], expectedHandlerCount: { min: 5 } },
-  { method: 'POST', path: '/login/mfa-backup', rateLimiters: ['strictLoginRateLimit', 'loginRateLimit', 'mfaRateLimit'], expectedHandlerCount: { min: 5 } },
+  { method: 'POST', path: '/login/mfa',        rateLimiters: ['loginIpFloodLimit', 'loginRateLimit', 'strictLoginRateLimit', 'mfaRateLimit'], expectedHandlerCount: { min: 6 } },
+  { method: 'POST', path: '/login/mfa-backup', rateLimiters: ['loginIpFloodLimit', 'loginRateLimit', 'strictLoginRateLimit', 'mfaRateLimit'], expectedHandlerCount: { min: 6 } },
 
   // Story 9-12 magic-link endpoints
   { method: 'POST', path: '/public/magic-link', rateLimiters: ['magicLinkRateLimit'], expectedHandlerCount: { min: 2 } },
@@ -247,6 +251,36 @@ describe('Auth route rate-limit coverage (Story 9-9 AC#4)', () => {
       actualRoutes.length,
       `Coverage map has ${AUTH_RATE_LIMIT_COVERAGE.length} entries but router has ${actualRoutes.length} routes. Inspect orphan/stale tests above for details.`,
     ).toBe(AUTH_RATE_LIMIT_COVERAGE.length);
+  });
+
+  // Story 13-68. The handler-count check above cannot tell WHICH middleware is mounted — a limiter
+  // exported and never wired passes it. This asserts the actual function objects, in order, on
+  // every route that takes a login attempt. The ORDER is part of the control (adversarial review
+  // 2026-09-16): the captcha before the per-email budget (H1), strict after it (M1).
+  // `login-rate-limit.binding.test.ts` mounts these same stacks, read from the router, and proves why.
+  it('every login route mounts loginIpFloodLimit → verifyCaptcha → loginRateLimit → strictLoginRateLimit, in that order', async () => {
+    const { strictLoginRateLimit, loginIpFloodLimit, loginRateLimit } = await import('../login-rate-limit.js');
+    const { verifyCaptcha } = await import('../captcha.js');
+    const expected = [loginIpFloodLimit, verifyCaptcha, loginRateLimit, strictLoginRateLimit];
+    const loginPaths = ['/staff/login', '/public/login', '/login/mfa', '/login/mfa-backup'];
+
+    const router = authRouter as unknown as { stack: Array<{ route?: { path: string; stack: Array<{ handle: unknown }> } }> };
+    for (const path of loginPaths) {
+      const layer = router.stack.find((l) => l.route?.path === path);
+      expect(layer, `no route ${path}`).toBeDefined();
+      const handles = layer!.route!.stack.map((s) => s.handle);
+      expect(handles.slice(0, 4), `${path}: first four middleware`).toEqual(expected);
+    }
+  });
+
+  // Story 13-68 AC8. Re-keying the login limiters leans on the account lockout for the one-account
+  // brute-force case, so the lockout is ASSERTED unchanged rather than assumed. Changing any of these
+  // at the source fails here and forces the reviewer to re-read the 13-68 security table.
+  it('account lockout is unchanged: warn at 5 failures, 30-minute account lock at 10', async () => {
+    const mod = await import('../../services/auth.service.js');
+    expect(mod.MAX_FAILED_ATTEMPTS).toBe(5);
+    expect(mod.EXTENDED_LOCKOUT_THRESHOLD).toBe(10);
+    expect(mod.LOCKOUT_DURATION_MS).toBe(30 * 60 * 1000);
   });
 
   it('NFR4.4 password-reset 3/email/hour is enforced at the service layer', async () => {

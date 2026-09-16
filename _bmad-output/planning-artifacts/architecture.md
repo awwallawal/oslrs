@@ -2811,11 +2811,25 @@ The original ADR-015 (Google OAuth primary, Hybrid Magic-Link/OTP fallback) was 
 
 | Layer | Middleware / source | Limit | Counts |
 |---|---|---|---|
-| **Burst limiter** (per-IP) | `loginRateLimit` (`login-rate-limit.ts:25-58`) | 5 / 15 min | **Failed responses only** (4xx/5xx) — 2xx successful logins skipped via `skipSuccessfulRequests: true` |
-| **Sustained limiter** (per-IP) | `strictLoginRateLimit` (`login-rate-limit.ts:60-87`) | 10 / 1 hour | **All responses** — catches sustained activity incl. successful brute-forces |
+| **Burst limiter** (per **EMAIL** — *amended 2026-09-16, Story 13-68; was per-IP*) | `loginRateLimit` | 5 / 15 min | **Failed responses only** — 2xx skipped via `skipSuccessfulRequests: true`. Keyed on `sha256(normalised email)`, IP fallback when the body carries none (MFA step-2). |
+| **IP flood ceiling** (per-IP) — *added 2026-09-16, Story 13-68* | `loginIpFloodLimit` | 100 / 15 min | **All responses.** Mounted FIRST, ahead of `verifyCaptcha`, so it bounds the hCaptcha siteverify call too. The only login limiter counting successes. |
+| **Sustained limiter** (per-IP) | `strictLoginRateLimit` | **60 / 1 hour** (*was 10*) | **Failed responses only** (*amended 2026-09-16, Story 13-68 — was all responses*). ⛔ The old "catches successful brute-forces" claim is WITHDRAWN: a per-IP counter cannot do that job — the account lockout and MFA do. It is the spray bound, and the meter on how fast an attacker can deliberately FAIL. |
 | **Edge gate** (per-IP) | `mfaRateLimit` (`mfa-rate-limit.ts`) | 10 / 1 minute | **All responses** — gates burst attacks at the edge (Story 9-13 AC#7) |
 | **Per-user lockout** | `users.mfa_locked_until` via `mfa.service.ts recordFailure` | 5 failures / 15 min → 15-min lock | **Failed TOTP verifies only** — final stop on the per-user axis |
 
+⚠️ **MOUNT ORDER IS LOAD-BEARING (ratified at adjudication 2026-09-16, Story 13-68 D1):**
+`loginIpFloodLimit → verifyCaptcha → loginRateLimit → strictLoginRateLimit` on all four login routes
+(MFA step-2 then adds `mfaRateLimit`). The order is not cosmetic and two proven holes depend on it:
+a captcha-less request must not reach the per-email limiter (or a stranger spends a victim's budget for
+free), and a person's own 429s must not reach the sustained limiter (or one user's retries block their
+whole proxy). Pinned by an ordered-identity assertion in `login-rate-limit.binding.test.ts`.
+
+⚠️ **Account lockout now DECAYS** (Story 13-68): `failedLoginAttempts` resets when `lockedUntil`
+expires. Before, an account that had once reached 10 was re-locked by every further failure — two
+requests an hour held it locked indefinitely. Duration does not yet escalate (residual R2a).
+
+**Attacker model — the 2026-06-03 paragraph below is retained as history; the 2026-09-16 amendment
+supersedes its per-IP framing of the burst limiter and its all-response framing of the sustained one.**
 **Attacker model unchanged.** A brute-force attacker spamming wrong passwords or wrong TOTP codes produces 401/403/429 responses on every attempt. ALL FOUR layers continue to count those: the attacker still hits `mfaRateLimit` first (1-minute window), then `loginRateLimit` (15-minute window of failures), then `strictLoginRateLimit` (1-hour window of all responses), and the per-user lockout eventually fires on the credential-abuse axis. The attacker's path through the stratified defence is unaltered by the 2026-06-03 amendment.
 
 **Legitimate-operator model.** An operator using correct credentials produces 2xx responses on every attempt. The burst limiter (which would otherwise have caught friendly fire from a UAT iteration session — the failure mode surfaced by Story 9-13 close-out) now skips these. The other three layers continue to track activity at their respective windows — the sustained limiter at 10/hour is well outside any legitimate iteration session, the MFA edge gate at 10/minute is permissive for a human operator, and the per-user lockout only counts FAILED TOTP verifies so legitimate operators never trip it.
