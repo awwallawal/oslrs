@@ -325,7 +325,10 @@ rate-limit refusals carry no user id**; and a wrong ADDRESS never reaches a logg
    the link spent a slot. Fixed `1e7b878`. → handoff §9j, and SCP 2026-09-16 for the PRD change.
 
 **Re-issue guidance:** the 7 `invited` need a **RESEND** (same account, fresh 48h) — not
-delete-and-recreate. The 10 `active` need recreating only if you want a clean trial from zero.
+delete-and-recreate. ⛔ **The 10 `active` must NOT be recreated — see §0.9b.** Eight of them
+have logged in and five have captured **24 real registrants** between them; deleting those
+accounts orphans the attribution silently, because `submitter_id` has no foreign key. Reset
+them IN PLACE instead.
 ⚠️ **Whichever you do, provision REAL addresses this time (§0.1a)**, or the same seven will be
 locked out again by the same suffix.
 
@@ -367,6 +370,59 @@ at the login screen, and the two are different support problems.
 fresh token and a fresh 48h. It is rate-limited per user (`RESEND_LIMIT_TTL` = 24h), so it is not a
 button to lean on for a whole cohort — which is the argument for provisioning the morning people are
 ready, per 0.5.
+
+#### ⛔⛔ 0.9b — NEVER DELETE AN ENUMERATOR ACCOUNT THAT HAS CAPTURES. Observed 2026-09-16.
+
+**`submitter_id` is a plain TEXT column with NO foreign key.** On both `respondents` and
+`submissions`:
+
+```
+submitterId: text('submitter_id'),   // respondents.ts:295 — no .references(), no FK
+```
+
+`user_id` has `ON DELETE SET NULL`. **`submitter_id` has nothing.** Delete the user row and the
+value simply dangles — no error, no cascade, no cleanup code anywhere in the repo (verified
+2026-09-16).
+
+⛔ **And this RE-ARMS §0.9a through a different door.** Three things join users to submitter_id in
+TEXT space, **all INNER joins**:
+
+| consumer | what breaks |
+|---|---|
+| `§0.9a`'s own safety query (`JOIN users u ON u.id::text = r.submitter_id`) | ⛔ **orphaned rows VANISH from the list a human is supposed to review.** Delete the account first and the real registrants it captured become invisible to the exact query that exists to protect them. |
+| `supervisor.controller.ts:156`, `survey-analytics.service.ts:2096` | supervisor views and analytics silently drop the work |
+| `productivity.service.ts` (keys on `submissions.submitterId`) | **pay and performance attribution for work already done is destroyed** |
+
+**⚠️ THIS IS NO LONGER HYPOTHETICAL. Measured 2026-09-16:**
+
+| | |
+|---|---|
+| respondents captured by `+test` accounts | **24** (was **2** on 09-08 — and still climbing hourly) |
+| distinct LGAs | 6 |
+| carrying a NIN | **24 / 24** |
+| distinct phone numbers | **24** |
+| consented to the marketplace | **24 / 24** |
+
+24 distinct NINs and 24 distinct phones is not practice data. **All 24 consented to appear in the
+marketplace** — they expect to be findable. Adedeji Adetola alone captured 14 in one morning.
+
+✅ **THE RULE, and it changes the re-run plan written above:**
+
+- **A `+test` account that has captures is NOT disposable.** Do not delete it, do not "recreate it
+  for a clean trial". The suffix in its address does not make the work it did test work.
+- **To give someone a fresh start, reset the ACCOUNT IN PLACE** — re-issue an invitation or a
+  password on the existing `users` row. The user id is the attribution key; preserve it.
+- **If an account genuinely must go, NULL OUT or re-point `submitter_id` on its rows FIRST**, in the
+  same transaction, and record where the work went. An orphan is worse than a wrong pointer: a wrong
+  pointer is visible, an orphan is invisible.
+- ⚠️ **Run §0.9a's review query BEFORE touching any account, never after.** After is too late —
+  the inner join has already hidden the rows.
+
+⭐ **The general shape, worth carrying beyond this runbook:** an attribution column with no foreign
+key looks exactly like one that has a foreign key, right up to the moment the parent is deleted —
+and then it fails SILENTLY and INVISIBLY, because every consumer inner-joins. **The deletion does
+not lose the data; it loses the ability to SEE the data.** Sibling of §0.1a and the per-proxy
+rate limits: all three make real work look like no work at all.
 
 #### ⛔ 0.9a — THE TEARDOWN CANNOT RUN BLIND. Observed 2026-09-08, 48 hours in.
 
