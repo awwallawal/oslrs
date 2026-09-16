@@ -6,6 +6,7 @@ import { users, roles, auditLogs } from '../db/schema/index.js';
 import { eq } from 'drizzle-orm';
 import { purgeUsersWithAuditDrain, withAuditLogsMutable } from './helpers/audit-safe-teardown.js';
 import { hashPassword } from '@oslsr/utils';
+import type { ResetPasswordRequest } from '@oslsr/types';
 import { PasswordResetService } from '../services/password-reset.service.js';
 import { Redis } from 'ioredis';
 import { createHash } from 'node:crypto';
@@ -138,40 +139,48 @@ describe('Auth Password Reset Integration', () => {
     });
 
     it('should reject password not meeting complexity requirements', async () => {
+      const payload: ResetPasswordRequest = {
+        token: freshToken,
+        newPassword: 'weak', // Too short, no uppercase, no number, no special char
+      };
       const res = await request
         .post('/api/v1/auth/reset-password')
-        .send({
-          token: freshToken,
-          newPassword: 'weak', // Too short, no uppercase, no number, no special char
-          confirmPassword: 'weak',
-        });
+        .send(payload);
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('VALIDATION_ERROR');
     });
 
-    it('should reset password with valid token and strong password', async () => {
+    // REGRESSION (2026-09-15): this payload is EXACTLY what apps/web builds in
+    // usePasswordReset.ts, and it is typed as the wire contract ON PURPOSE - TypeScript
+    // rejects an excess property, so nobody can quietly re-add `confirmPassword` here to
+    // make a failure go away. From 3d84842 (2026-01-14) the server schema required
+    // `confirmPassword`, no client ever sent it, and every real password reset died with
+    // 400 "Invalid request data". The suite stayed green because these tests were written
+    // from the schema instead of from the caller.
+    it('should reset password with the payload the WEB CLIENT actually sends', async () => {
+      const payload: ResetPasswordRequest = {
+        token: freshToken,
+        newPassword: 'NewSecurePass123!',
+      };
       const res = await request
         .post('/api/v1/auth/reset-password')
-        .send({
-          token: freshToken,
-          newPassword: 'NewSecurePass123!',
-          confirmPassword: 'NewSecurePass123!',
-        });
+        .send(payload);
 
+      expect(res.body.code).not.toBe('VALIDATION_ERROR');
       expect(res.status).toBe(200);
       expect(res.body.data.message).toContain('Password reset successful');
     });
 
     it('should reject used token', async () => {
       // The token should be invalidated after use
+      const payload: ResetPasswordRequest = {
+        token: freshToken,
+        newPassword: 'AnotherPass123!',
+      };
       const res = await request
         .post('/api/v1/auth/reset-password')
-        .send({
-          token: freshToken,
-          newPassword: 'AnotherPass123!',
-          confirmPassword: 'AnotherPass123!',
-        });
+        .send(payload);
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('AUTH_RESET_TOKEN_INVALID');
@@ -266,13 +275,13 @@ describe('Auth Password Reset Integration', () => {
     });
 
     it('should reject expired token on reset', async () => {
+      const payload: ResetPasswordRequest = {
+        token: expiredToken,
+        newPassword: 'NewPass123!',
+      };
       const res = await request
         .post('/api/v1/auth/reset-password')
-        .send({
-          token: expiredToken,
-          newPassword: 'NewPass123!',
-          confirmPassword: 'NewPass123!',
-        });
+        .send(payload);
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('AUTH_RESET_TOKEN_EXPIRED');

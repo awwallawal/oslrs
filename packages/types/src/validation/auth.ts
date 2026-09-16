@@ -60,19 +60,38 @@ export const forgotPasswordRequestSchema = z.object({
 
 export type ForgotPasswordRequestInput = z.infer<typeof forgotPasswordRequestSchema>;
 
-// Reset password request schema
+// Reset password REQUEST schema - the wire contract, and ONLY the wire contract.
+//
+// 2026-09-15: this schema used to require `confirmPassword`, and the server parses
+// the request body with it. No client has ever sent that field - `ResetPasswordRequest`
+// in ../auth.ts is `{ token, newPassword }` - so EVERY real password reset was rejected
+// with 400 "Invalid request data" from 3d84842 (2026-01-14) until this fix. The API
+// tests all passed because they were written from THIS schema rather than from the
+// payload the client actually builds.
+//
+// NEVER add a field here that `ResetPasswordRequest` does not carry. A password
+// confirmation is a UI concern: the client controls both boxes, so re-checking equality
+// server-side proves nothing and only doubles the secret in the payload.
 export const resetPasswordRequestSchema = z.object({
   token: z.string()
     .min(32, 'Invalid reset token')
     .max(64, 'Invalid reset token'),
   newPassword: passwordSchema,
+});
+
+export type ResetPasswordRequestInput = z.infer<typeof resetPasswordRequestSchema>;
+
+// Reset password FORM schema - the request contract plus the UI-only confirmation box.
+// Used by the web form to validate before submit; the extra field is stripped by the
+// client when it builds the request, which is exactly why it must not be required above.
+export const resetPasswordFormSchema = resetPasswordRequestSchema.extend({
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: 'Passwords do not match',
   path: ['confirmPassword'],
 });
 
-export type ResetPasswordRequestInput = z.infer<typeof resetPasswordRequestSchema>;
+export type ResetPasswordFormInput = z.infer<typeof resetPasswordFormSchema>;
 
 // Re-authentication request schema
 export const reAuthRequestSchema = z.object({

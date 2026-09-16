@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toSafeInternalPath } from '../../../lib/safe-redirect';
 import {
   forgotPasswordRequestSchema,
-  resetPasswordRequestSchema,
+  resetPasswordFormSchema,
 } from '@oslsr/types';
 import * as authApi from '../api/auth.api';
 import { AuthApiError } from '../api/auth.api';
@@ -242,7 +242,7 @@ export function useResetPassword({ token, redirectTo = '/login' }: UseResetPassw
     }
 
     // Validate form data
-    const validation = resetPasswordRequestSchema.safeParse(formData);
+    const validation = resetPasswordFormSchema.safeParse(formData);
 
     if (!validation.success) {
       const fieldErrors: ResetPasswordErrors = {};
