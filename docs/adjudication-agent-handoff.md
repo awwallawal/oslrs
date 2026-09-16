@@ -3136,6 +3136,54 @@ endpoint was deliberately left unlimited with this rationale: *"a per-IP limiter
 tuning to avoid blocking legitimate users on shared NATs."* Correct, written down, and never applied
 to the neighbouring routes.
 
+#### ✅ 9k. WHAT THE PM RULING CHANGED — and the case for briefing a reviewer from EVIDENCE
+
+*2026-09-16. The SCP went to the BMAD PM agent, deliberately briefed from the PRD, the raw limiter
+sweep and the incident logs — **not** from my argument — and explicitly tasked to break it.*
+
+⭐ **That design choice is the finding.** Handing a reviewer your conclusion gets your reasoning
+back wearing their hat; it is §2ak (the test written from the schema) applied to people. Briefed
+from primary evidence, the PM broke the proposal in four places in one pass:
+
+| my claim | ruling |
+|---|---|
+| a flat **≥100/window** floor on IP budgets | ❌ **14 of 20 per-IP limiters fail it**, and §0 of my own SCP simultaneously blessed and forbade `registrationRateLimit` at 50. Replaced by exposure tiers + a response-mode clause. |
+| `strictLoginRateLimit` → **200**/IP/hr | ❌ withdrawn → **60 with `skipSuccessfulRequests`** |
+| failed-only counting bounds spray **tighter** | ❌ **wrong — mine.** An attacker generates no successes, so all-response counting never throttled a spray. It is an AVAILABILITY fix, not a security one. |
+| **20/hour** as a safer ceiling (my late idea) | ❌ **wrong in this project's signature way.** `loginRateLimit` allows 5 failures/email/15min = 20/hour, so ONE enumerator at full legitimate allowance consumes the entire IP budget — NFR4.4.b's own defect. **I would have closed four incidents by legislating a fifth.** |
+
+➕ **And the thing neither of us had modelled — MASS ACCOUNT-LOCKOUT DoS.** `failedLoginAttempts`
+is reset in only three places and **never when `lockedUntil` expires**, so an account that has once
+reached 10 failures is **permanently re-lockable by a single attempt**; holding it locked costs two
+requests an hour. The SCP judged the sustained limiter purely as an anti-brute-force control,
+correctly found it useless there, and proposed raising it 20× — missing that it is also **the meter
+on how fast an attacker can deliberately FAIL.** ~200 accounts, emails public via
+`/verify-staff/:id`. **Lockout decay replaced the monitor as 13-68's blocking precondition** — it
+removes the DoS's *persistence* multiplicand, is provable on a test DB, and closes today; a monitor
+only makes the attack visible and cannot close today.
+
+⚠️ **Escalating lock duration is NOT ~10 lines** (the PM's estimate): `users` carries only
+`failedLoginAttempts` and `lockedUntil` — no lock-count column, no jsonb — so escalation needs a
+migration. Deferred as residual R2a on the PM's own arithmetic (~480 guesses/day is immaterial
+against bcrypt + password policy + MFA). Plain decay ships in 13-68.
+
+⭐ **THE TOOL BUILT TO FIND THE DEFECT CLASS CONTAINED IT.** `audit-rate-limit-keys.ts` asked *"is
+there a `keyGenerator`?"* and filed every yes as a person key. `registrationStatusRateLimit` hand-
+rolls `(req) => ipKeyGenerator(req.ip)` — a pure per-IP limiter, public and unauthenticated,
+**invisible to the census written to find exactly that**. True count **20 of 33**, not 19 of 32.
+Found by the PM reading the script's OUTPUT, not by the script. Fixed `67846d0`, and fixing it took
+**two wrong answers first** — a version classifying on the call site rather than the callee reported
+23 (`keyGenerator: keyByUser` resolves to a person key), and its repair built the pattern with
+`new RegExp` inside a template literal, where `\s` is `s` and `` is a backspace, so it matched
+nothing and kept the wrong total. **Neither threw. Both printed a confident green total.**
+→ [[pattern-census-counts-sites-not-callers]], applied to my own instrument.
+
+✅ **Marketplace search: RULED, and now on data.** I flagged it in the SCP as the weakest-evidence
+item so it could be discounted — and it was. `marketplace.search_rate_limit_exceeded` = **0** across
+the full 14-day pm2 window against **16,825** marketplace log lines, positive control passed (same
+grep finds the known 244 activation refusals). **Leave at 30/IP/min.** ⭐ Flagging your own weakest
+claim is what let the process delete it instead of shipping it.
+
 #### ⛔ THE SWEEP THAT SHOULD HAVE HAPPENED THREE FIXES AGO
 
 Registration was fixed 2026-08-07 and its siblings were never swept — activation carried the same

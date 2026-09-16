@@ -8,6 +8,29 @@
 
 ---
 
+## ⛔ STATUS: PARTLY SUPERSEDED BY THE PM RULING — read this first
+
+*2026-09-16. John (PM) ruled on this proposal in
+`pm-ruling-2026-09-16-nfr4-4-rate-limit-axis.md` and its Addendum A. He was deliberately briefed
+from the PRIMARY EVIDENCE rather than from this document, and asked to break it. He did. The
+sections below are kept as written — a proposal edited to match its own review teaches nothing
+about which way the error ran.*
+
+| this SCP proposed | ruling | why |
+|---|---|---|
+| **Rule 2: a flat ≥100/window floor on IP budgets** | ❌ **REJECTED** | 14 of 20 per-IP limiters fail it, nine unscheduled for change. It also contradicts my own §0, which blesses `registrationRateLimit` at 50/IP/15min *and* forbids it. Replaced by exposure tiers keyed on **what a refusal costs the person**, plus a response-mode clause. |
+| `strictLoginRateLimit` → **200**/IP/hr | ❌ **WITHDRAWN as moot** | → **60/IP/hr with `skipSuccessfulRequests: true`.** |
+| the re-key is a **security** improvement | ⚠️ **half wrong** | The re-key tightens the per-account axis, yes. But failed-only counting is an **AVAILABILITY** fix: an attacker generates no successes, so all-response counting never throttled a spray. Attacker capacity at a fixed number is identical before and after. |
+| — (not considered) | ➕ **MASS ACCOUNT-LOCKOUT DoS** | `failedLoginAttempts` is never cleared when `lockedUntil` expires, so an account that has once reached 10 failures is **permanently re-lockable by one attempt**. Holding it locked costs two requests an hour. This SCP assessed the sustained limiter purely as anti-brute-force and proposed raising it 20× — it is also **the meter on how fast an attacker can deliberately FAIL**. **Lockout decay is now the blocking precondition on 13-68.** |
+| — (not mentioned once) | ➕ **`magicLinkRateLimit`** | 3/IP/hour pooled across routes; `/magic/consume` and `/magic/login` carry no email so they ALWAYS take the IP branch — on the primary public auth channel. ⚠️ **Measured since: 0 refusals on that branch in 14 days** (80 issued / 30 redeemed ≈ 2/day). A real SCALING risk against 13-65's projected 9/hour; **not** a live incident. Lane C. |
+| **marketplace search: raise on principle** (flagged as my weakest evidence) | ❌ **LEAVE at 30/IP/min** — and now on DATA | `marketplace.search_rate_limit_exceeded` = **0** across the full 14-day pm2 window against **16,825** marketplace log lines. Positive control passed (same method finds the known 244 activation refusals). It has never fired. ⭐ **I flagged this as unevidenced so it could be discounted, and it was.** |
+| **"32 limiters, 19 per-IP"** | ❌ **wrong: 20 of 33** | `registrationStatusRateLimit` hand-rolls `(req) => ipKeyGenerator(req.ip)`, so the audit script filed a pure per-IP limiter under "custom key". **The tool built to find this defect class contained it.** Caught by the PM reading the script's output, not by the script. Fixed in `67846d0`. |
+
+⭐ **The one thing this SCP got right that survived every round:** the two-axis model itself. John
+hunted across all 38 controls for one that fits neither axis and could not find it.
+
+---
+
 ## Section 0 — ⚡ DECOUPLING: this proposal does NOT gate the enumerator re-run
 
 **Added 2026-09-16 on Awwal's direction: the field work must not wait on PM concurrence.**
