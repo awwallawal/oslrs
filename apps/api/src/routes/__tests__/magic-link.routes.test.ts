@@ -54,6 +54,7 @@ vi.mock('../../middleware/require-fresh-reauth.js', () => ({
 vi.mock('../../middleware/password-reset-rate-limit.js', () => ({
   passwordResetRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
   passwordResetCompletionRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
+  passwordResetCompletionIpFloodLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),
 }));
 vi.mock('../../middleware/registration-rate-limit.js', () => ({
   activationRateLimit: vi.fn((_req: unknown, _res: unknown, next: () => void) => next()),

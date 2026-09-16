@@ -8,7 +8,7 @@ import { verifyCaptcha } from '../middleware/captcha.js';
 import { loginRateLimit, strictLoginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
 import { mfaRateLimit } from '../middleware/mfa-rate-limit.js';
 import { requireFreshReAuth } from '../middleware/require-fresh-reauth.js';
-import { passwordResetRateLimit, passwordResetCompletionRateLimit } from '../middleware/password-reset-rate-limit.js';
+import { passwordResetRateLimit, passwordResetCompletionRateLimit, passwordResetCompletionIpFloodLimit } from '../middleware/password-reset-rate-limit.js';
 // Story 9-12 Task 10.3 (2026-05-11 session 8) — `resendVerificationRateLimit`,
 // `verifyEmailRateLimit`, and `registrationRateLimit` (the auth-route consumer
 // of it) deleted alongside the legacy verification routes. `registrationRateLimit`
@@ -91,12 +91,14 @@ router.post('/forgot-password',
 
 // Validate password reset token
 router.get('/reset-password/:token',
+  passwordResetCompletionIpFloodLimit,
   passwordResetCompletionRateLimit,
   AuthController.validateResetToken
 );
 
 // Complete password reset - rate limited
 router.post('/reset-password',
+  passwordResetCompletionIpFloodLimit,
   passwordResetCompletionRateLimit,
   AuthController.resetPassword
 );

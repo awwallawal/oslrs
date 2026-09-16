@@ -26,11 +26,13 @@
  *   | loginRateLimit                   | 5/IP/15min FAILED ONLY | NFR4.4 line 1 + Story 9-13 close-out (skipSuccessfulRequests:true 2026-06-03) |
  *   | strictLoginRateLimit             | 10/IP/1hr (all responses counted) | defense-in-depth |
  *   | refreshRateLimit                 | 10/IP/1min     | sensible default |
- *   | passwordResetRateLimit (IP)      | 10/IP/1hr      | defense-in-depth |
+ *   | passwordResetRateLimit (IP)      | 200/IP/1hr     | FLOOD CEILING only (2026-09-16). The per-person budget is the row below. |
  *   | PasswordResetService.checkRate   | 3/email/1hr    | NFR4.4 line 5 (service layer) |
- *   | passwordResetCompletionRateLimit | 5/IP/15min     | sensible default |
+ *   | passwordResetCompletionRateLimit | 20/TOKEN/15min | keyed on the reset token (2026-09-16) — a shared proxy IP is not a person |
+ *   | passwordResetCompletionIpFlood   | 300/IP/15min   | FLOOD CEILING only |
  *   | registrationRateLimit            | 5/IP/15min     | sensible default (used by /registration/wizard) |
- *   | activationRateLimit              | 10/IP/15min    | sensible default |
+ *   | activationRateLimit              | 20/TOKEN/15min | keyed on the invitation token (2026-09-15) — 244 Opera Mini refusals |
+ *   | activationIpFloodLimit           | 300/IP/15min   | FLOOD CEILING only |
  *   | googleAuthRateLimit              | 10/IP/1hr      | sensible default |
  *   | mfaRateLimit                     | 10/IP/1min     | Story 9-13 AC#7 |
  *   | reauthRateLimit                  | 5/IP/15min     | AC#4 audit fix  |
@@ -248,7 +250,9 @@ describe('Auth route rate-limit coverage (Story 9-9 AC#4)', () => {
   });
 
   it('NFR4.4 password-reset 3/email/hour is enforced at the service layer', async () => {
-    // The route-level passwordResetRateLimit is per-IP (10/IP/hour, defense-in-depth).
+    // The route-level passwordResetRateLimit is a per-IP FLOOD CEILING (200/IP/hour since
+    // 2026-09-16 — it was 10, which many strangers behind one Opera Mini / CGNAT address
+    // shared). Raising it does NOT weaken NFR4.4: that budget is per-EMAIL, below.
     // NFR4.4 specifies 3/email/hour — that lives in PasswordResetService.checkRateLimit.
     // Sentinel: directly assert the exported constants match NFR4.4 spec.
     const mod = await import('../../services/password-reset.service.js');
