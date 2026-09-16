@@ -1027,13 +1027,50 @@ than folding it into a neighbour.
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
+### 2ak. ⭐ A REQUEST TEST MUST SEND THE PAYLOAD THE *CLIENT BUILDS*, NOT THE ONE THE SCHEMA DESCRIBES
+
+*Earned 2026-09-16 (§9i). Cost: eight months of a completely dead password-reset flow, under four
+green integration tests — including a happy path asserting `200` and "Password reset successful".*
+
+The server parsed `{ token, newPassword, confirmPassword }`. The client has always sent
+`{ token, newPassword }`. **All four tests sent the server's shape**, because the person writing
+them read the schema — the same document the endpoint was written from. **That is the same
+assumption asserted twice, not a verification.** The client's payload builder is the only
+independent witness on the wire, because it is the only artefact written from the CALLER's side.
+
+**How to apply, in order of strength:**
+
+1. ✅ **Copy the payload out of the client** — literally, from the `fetch`/`api` call — into the
+   request test. If you cannot point at the line the test payload came from, the test is decorative.
+2. ✅ **Type it as the wire interface** (`const payload: ResetPasswordRequest = {…}`). TypeScript
+   then rejects an excess property, so a later failure cannot be greened by quietly adding a field.
+   This is what makes the guard durable rather than a one-off.
+3. ✅ **Pin the whole class once**: one test per request schema asserting it accepts the MINIMUM its
+   own interface can construct. Cheap (10 cases here), and it catches the next divergence at the
+   commit that introduces it. `packages/types/src/__tests__/auth-wire-contract.test.ts`.
+4. ⚠️ **When the two sides are born in the SAME commit, there is no regression to bisect to** — the
+   feature never worked. Do not look for "what broke it"; check whether it was ever alive. `git log
+   -L` on **both** the schema and the interface answers that in one command.
+
+⛔ **The smell, stated generally: a contract with two authorities and no test that crosses between
+them.** A zod schema and a TypeScript interface describing the same request are two sources of
+truth; nothing in the toolchain relates them. The same shape recurs wherever a validator and a type
+sit on opposite sides of a boundary — and the far side of a boundary is exactly where all four of
+2026-09's production defects lived (§9i, closing paragraph).
+
 ---
 
-## 3. Current state (2026-09-15) — READ THIS ONE
+## 3. Current state (2026-09-16) — READ THIS ONE
 
 **Prod `b602591`** (pushed, CI green, deployed, process restarted — verified by pm2 uptime, not by the deploy log), health 200. Marketplace **8,576** listings. ⭐ **THE JINGLE READ IS DONE** (§9
 closed), and it turned up a live blocker that outranked the story it was meant to close.
 
+- 🔴 **PASSWORD RESET HAS NEVER WORKED — 8 MONTHS — FIXED `6284d19` (needs deploy).** The server
+  required `confirmPassword`; no client has ever sent it, so every reset returned
+  **400 "Invalid request data"** since `3d84842` (2026-01-14). Four API tests covered this route and
+  **all four sent the server's shape**, because they were written from the schema instead of from
+  the caller. ⭐ New playbook **§2ak**: *a request test must send the payload the CLIENT BUILDS.*
+  Detail → §9i. ⚠️ **Not deployed yet** — until it is, a reset link cannot be completed by anyone.
 - ✅ **ENUMERATOR ONBOARDING WAS BROKEN ON PROD AND IS FIXED.** Four defects, three of them hiding
   behind each other. Detail → §9f.
   1. **Selfies were sized to the video's CSS WIDTH, not the camera** (`react-webcam` needs
@@ -3070,6 +3107,60 @@ it far worse by forcing repeated failed POSTs per person.
 **Why this section exists:** the first radio spot airs **Monday 24 August** (Fresh FM, Ibadan 1 & 2,
 one 60-second spot x3). Everything below was true on 23 August and is the *before* half of a
 comparison that only exists if someone writes it down now.
+
+### 🔴 9i. PASSWORD RESET HAS NEVER WORKED — 8 MONTHS, AND THE SUITE WAS GREEN THROUGHOUT
+
+*Found 2026-09-16 from ONE complaint. Fixed `6284d19`. Born broken in `3d84842`, 2026-01-14.*
+
+`resetPasswordRequestSchema` **required `confirmPassword`**. The wire type
+`ResetPasswordRequest` is `{ token, newPassword }` — and that is exactly what
+`apps/web/.../usePasswordReset.ts` builds. The client validated the full form locally, then
+**stripped the confirmation field when constructing the request**, which is correct. The server
+then rejected the body it received. Every real password reset, for eight months, died as
+**400 "Invalid request data"** — the toast Awwal saw.
+
+Proven on prod BEFORE changing anything, two arms, same random token:
+
+| payload | response |
+|---|---|
+| `{ token, newPassword }` — what the app sends | `VALIDATION_ERROR`, `errors[0].path = confirmPassword` |
+| `{ token, newPassword, confirmPassword }` | `AUTH_RESET_TOKEN_INVALID` |
+
+The second arm reaches the token lookup; the first never gets there. **The only difference is a
+field the client cannot send.**
+
+⛔ **WHY EIGHT MONTHS OF GREEN TESTS MISSED IT — THIS IS THE PART TO CARRY.** There were four
+API integration tests on this route, including a happy path that asserted `200` and
+*"Password reset successful"*. **All four sent `confirmPassword`,** because they were written
+from the schema, not from the caller. A test that agrees with the server about a contract the
+client never signed is not a witness — it is the same assumption, asserted twice. Both sides
+were born divergent in **one commit**, so there is no bisect point where this worked.
+
+⭐ **THE GENERAL RULE: a request test must send the payload the CLIENT BUILDS, not the payload
+the schema describes.** The two are written by the same person from the same belief; only the
+client's own payload builder is independent evidence. Where practical, **type the test payload as
+the wire interface** — TypeScript then rejects an excess property, so nobody can quietly add a
+field to green a failure.
+
+✅ **Fix + guards** (both RED-verified by restoring the defect):
+- `resetPasswordRequestSchema` = the wire contract. `resetPasswordFormSchema` extends it with the
+  UI-only confirmation box + the match refinement; the web form uses that. A password confirmation
+  is a UI concern — the client owns both boxes, so server-side equality proves nothing.
+- `packages/types/src/__tests__/auth-wire-contract.test.ts` — **every** auth request schema must
+  accept the MINIMUM its own interface can construct. 2 of 10 fail on the defect.
+- the API tests now send the client's literal payload, typed. 5 of 13 fail on the defect.
+- **A sweep of all 29 request schemas against their wire interfaces found this to be the only
+  instance** — the class is closed, not just the case.
+
+⚠️ **It does not by itself get ferdew31 in.** She is typing `ferdew31@gmail.com`, which does not
+exist (§0.1a). This unblocks the reset link; the address is still the other half.
+
+⭐ **FOUR blockers now, all found in 72 hours, all from complaints rather than monitoring**
+(§9f photo, §9g proxy-IP rate limit, §9h plus-addressed logins, §9i this). **Not one of them was
+visible in a dashboard, a test run, or an error budget.** The common property is not a technology
+— it is that each failure happened on the far side of a boundary the system never looks across:
+browser→server sizing, proxy→origin identity, invitation→inbox naming, and here
+client→schema shape. ⭐ **Whatever else the next audit does, it should walk the boundaries.**
 
 ### 9a. ⛔ THE TRAFFIC WATCH IS NOT RUNNING, AND ITS DOCUMENTED CRON LINE IS BROKEN
 
