@@ -1065,6 +1065,11 @@ sit on opposite sides of a boundary — and the far side of a boundary is exactl
 **Prod `b602591`** (pushed, CI green, deployed, process restarted — verified by pm2 uptime, not by the deploy log), health 200. Marketplace **8,576** listings. ⭐ **THE JINGLE READ IS DONE** (§9
 closed), and it turned up a live blocker that outranked the story it was meant to close.
 
+- 🔴 **AND THE LIMITER BEHIND IT WAS PER-PROXY TOO — FOURTH TIME — FIXED `1e7b878` (needs deploy).**
+  Reset completion was 5/15min per **IP**, on both the validate and the complete, so *opening the
+  page* spent a slot. Now keyed on the token. ⚠️ **A sweep of all 32 limiters found 4 more on
+  unauthenticated routes**, worst being `strictLoginRateLimit` (10/IP/hour, **counts successes**) —
+  NOT fixed, it is a security budget and Awwal's call. Detail → §9j.
 - 🔴 **PASSWORD RESET HAS NEVER WORKED — 8 MONTHS — FIXED `6284d19` (needs deploy).** The server
   required `confirmPassword`; no client has ever sent it, so every reset returned
   **400 "Invalid request data"** since `3d84842` (2026-01-14). Four API tests covered this route and
@@ -3107,6 +3112,51 @@ it far worse by forcing repeated failed POSTs per person.
 **Why this section exists:** the first radio spot airs **Monday 24 August** (Fresh FM, Ibadan 1 & 2,
 one 60-second spot x3). Everything below was true on 23 August and is the *before* half of a
 comparison that only exists if someone writes it down now.
+
+### 🔴 9j. AND BEHIND IT, THE FOURTH PER-PROXY RATE LIMIT — plus a sweep of all 32
+
+*Found 2026-09-16 immediately after §9i. Fixed `1e7b878`.*
+
+§9i was masking this, the same way the selfie-sizing bug masked the 413 (§2z(b)). With validation
+fixed, the next thing in the path was `passwordResetCompletionRateLimit`: **5 attempts / 15 min per
+IP, mounted on BOTH the GET validate and the POST complete.** So **opening the reset page spent a
+slot**, a refresh spent another, and each rejected retry spent another — until the error silently
+became *"Too many attempts. Please request a new password reset link"*, **which loops the user
+straight back to the start.** The three `auth.password_reset_completion_rate_limited` events on
+09-15 are exactly that sequence.
+
+✅ Fixed: keyed on the **reset token** (params for the GET, body for the POST), 20/15min, with a
+separate `passwordResetCompletionIpFloodLimit` at 300/IP/15min. `passwordResetRateLimit` went
+10 → 200/IP/hour — its own comment called 10 *"generous for shared IPs"*, and it was ten requests
+for an entire proxy. **NFR4.4 is untouched**: that budget is 3/EMAIL/hour in the service, still
+sentinelled by `expect(RESET_RATE_LIMIT).toBe(3)`.
+
+⭐ **The knowledge already existed in this repo and never travelled.** In May, the magic-link peek
+endpoint was deliberately left unlimited with this rationale: *"a per-IP limiter would need careful
+tuning to avoid blocking legitimate users on shared NATs."* Correct, written down, and never applied
+to the neighbouring routes.
+
+#### ⛔ THE SWEEP THAT SHOULD HAVE HAPPENED THREE FIXES AGO
+
+Registration was fixed 2026-08-07 and its siblings were never swept — activation carried the same
+flaw for five weeks. Activation was fixed 2026-09-15 and **its** siblings were not swept either —
+password reset surfaced the next day. So this time, all 32 limiters were enumerated:
+**19 are per-IP.** Most are fine (flood ceilings, or admin routes). **Four are not:**
+
+| limiter | budget | risk |
+|---|---|---|
+| `strictLoginRateLimit` | **10/IP/hour, ALL responses counted** | ⛔ worst. 17 enumerators on one Opera Mini proxy — the 11th to log in that hour is refused **for succeeding** |
+| `loginRateLimit` | 5/IP/15min, failed only | the 36 wrong-address failures (§9h) ran through this; anyone sharing their proxy was locked out by their mistakes |
+| `refreshRateLimit` | 10/IP/min | token refresh, shared across a whole proxy |
+| `editTokenRequestRateLimit` / `editTokenUseRateLimit` | 10/hr, 30/min | public flow, and the **edit token is a ready-made per-person key** |
+
+⚠️ **NOT FIXED — deliberately.** Login budgets are a security control and Awwal's call, and this is
+a story rather than a bug fix. **But it is time-critical:** the enumerator re-run puts 17 first-time
+logins through `strictLoginRateLimit`, and that one counts successes.
+
+⭐ **The durable rule: a limiter fix is not done until every OTHER limiter has been read.** The
+defect is never one endpoint — it is a habit of reaching for `req.ip` because it is always there.
+The sweep is one script and takes a minute; skipping it has now cost three separate incidents.
 
 ### 🔴 9i. PASSWORD RESET HAS NEVER WORKED — 8 MONTHS, AND THE SUITE WAS GREEN THROUGHOUT
 
