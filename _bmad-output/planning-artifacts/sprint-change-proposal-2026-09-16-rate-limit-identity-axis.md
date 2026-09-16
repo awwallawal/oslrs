@@ -67,7 +67,7 @@ Adequate; **watch it, do not widen it speculatively.**
 
 ### Lane A: the two options, and why the cheap one is the bad one
 
-- **(a) Raise the IP ceilings only** (~30 min). `strictLoginRateLimit` 10 → 200/IP/hr,
+- ~~**(a) Raise the IP ceilings only** (~30 min).~~ ⛔ **BOTH OPTIONS BELOW ARE SUPERSEDED — the final position is 60/IP/hr WITH `skipSuccessfulRequests`, plus lockout decay as the blocking precondition. Do not act on either.** Kept for the reasoning only. `strictLoginRateLimit` 10 → 200/IP/hr,
   `loginRateLimit` 5 → 50/IP/15min. ⛔ **This genuinely trades security for availability**: at 50,
   an attacker gets 50 accounts per 15 min at one password each — a real credential-spray window.
   The per-account lockout still bounds attacks on ONE account, but the spray across MANY is what
@@ -77,7 +77,7 @@ Adequate; **watch it, do not widen it speculatively.**
   protection gets *tighter* (5 failed per email beats 5 failed per IP shared among strangers),
   spray stays bounded by the ceiling, account lockout untouched.
 
-⭐ **RECOMMENDED: (b).** It is slower by ~2 hours and is the only option that costs nothing. And it
+~~⭐ **RECOMMENDED: (b).**~~ ⛔ **SUPERSEDED — (b)'s re-key was approved, but its 200/IP/hr ceiling was withdrawn as moot and the sustained limiter also became failed-only. See the status banner.** It is slower by ~2 hours and is the only option that costs nothing. And it
 invents nothing — `registration.routes.ts` already ships this exact shape and calls it a
 *"CGNAT-tolerant flood-stop"* in its own comments. Lane A copies a shipped pattern onto one more
 route.
@@ -113,7 +113,8 @@ A sweep of **all 32 limiters** (`apps/api/scripts/audit-rate-limit-keys.ts`) sho
 | Contact Reveal — 50 / **authenticated user** / 24h | person | none |
 | API General — 100 / **user** / min | person | none (not yet implemented) |
 | MFA per-user lockout — 5 / **user** / 15 min | person | none |
-| Login burst / sustained / MFA gate / cumulative block | **IP** | ⚠️ open risk |
+| Login burst / sustained / MFA gate | **IP** | ⚠️ open risk |
+| ~~Cumulative block~~ | ❌ **MY ERROR — it is per-ACCOUNT** | writes `users.lockedUntil` keyed on the user; a per-IP cumulative block **has never existed in the code**. The PRD said "on the IP" from the day it was written; 13-68 corrected it. |
 | Marketplace Search — 30 / IP / min | IP | none (generous enough so far) |
 
 **Wherever the PRD named a person axis, the implementation honoured it — in the service layer — and then someone ALSO bolted a small per-IP limiter onto the route as "defense-in-depth".** `PasswordResetService.checkRateLimit` really does enforce 3/email/hour; `marketplace-edit.service.ts:66` really does enforce 3/day/NIN. **Every one of the four incidents came from a bolted-on IP limiter that NFR4.4 never specified, never risk-assessed, and never counted.**
@@ -165,7 +166,7 @@ Every rate limit serves exactly one of two jobs, and the job determines the key:
 ### The three normative rules
 
 1. ⭐ **Every rate limit MUST declare its axis.** No limiter ships without a row in the NFR4.4 table naming its key. The blanket "IP Throttling" licence is withdrawn.
-2. ⛔ **An IP-keyed budget small enough for one person to exhaust is a defect.** Floor: **≥ 100 per window**. If a limit needs to be tighter than that, it is a person-axis limit and needs a person key.
+2. ~~⛔ **An IP-keyed budget small enough for one person to exhaust is a defect.** Floor: **≥ 100 per window**.~~ ❌ **REJECTED BY THE PM RULING — 14 of 20 per-IP limiters fail this floor, and §0 of this very document blesses `registrationRateLimit` at 50 while this rule forbids it. Replaced by exposure tiers + a response-mode clause.** Original text: Floor: **≥ 100 per window**. If a limit needs to be tighter than that, it is a person-axis limit and needs a person key.
 3. ⚠️ **Both axes, not one.** Dropping the IP ceiling when adding a person key is a *regression* — an attacker spraying 1,000 random tokens would get 1,000 separate buckets, i.e. no limit at all. The person key shapes experience; the IP key stops floods.
 
 Two supporting requirements:

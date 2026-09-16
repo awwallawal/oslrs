@@ -3178,6 +3178,26 @@ Found by the PM reading the script's OUTPUT, not by the script. Fixed `67846d0`,
 nothing and kept the wrong total. **Neither threw. Both printed a confident green total.**
 → [[pattern-census-counts-sites-not-callers]], applied to my own instrument.
 
+⛔ **AND I "CORRECTED" THE PM WRONGLY — by reading the working tree instead of `HEAD`.**
+I told Awwal one of the PM's five findings was a misread: it reported the coverage table recording
+`registrationRateLimit` as **5** when the tree plainly read `50/IP/15min (was 5)`. I concluded it
+had mistaken the annotation for the value.
+
+```
+git show HEAD:...rate-limit-coverage.test.ts  →  | 5/IP/15min  | sensible default |
+working tree                                  →  | 50/IP/15min | FLOOD CEILING (2026-08-07, was 5) |
+```
+
+**The `(was 5)` I read as the annotation WAS the repair** — landed in the dev agent's *uncommitted*
+13-68 changeset, after the finding. At `HEAD` the row said 5. **Five weeks of real drift, and all
+five PM findings held.**
+
+⭐ **A REPAIRED ARTEFACT MAKES THE ORIGINAL FINDING LOOK LIKE A MISREAD.** This is
+[[pattern-baseline-sampled-from-the-working-tree]] inverted, and I walked into it **in a tree I had
+already flagged as hazardous because another agent was writing to it**. In a shared tree,
+`git show HEAD:<path>` is the only honest baseline, and a finding should **cite the ref it was
+measured against**. I had been enforcing exactly this discipline on others all session.
+
 ✅ **Marketplace search: RULED, and now on data.** I flagged it in the SCP as the weakest-evidence
 item so it could be discounted — and it was. `marketplace.search_rate_limit_exceeded` = **0** across
 the full 14-day pm2 window against **16,825** marketplace log lines, positive control passed (same
