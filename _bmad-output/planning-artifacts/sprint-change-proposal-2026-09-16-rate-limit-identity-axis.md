@@ -8,6 +8,64 @@
 
 ---
 
+## Section 0 — ⚡ DECOUPLING: this proposal does NOT gate the enumerator re-run
+
+**Added 2026-09-16 on Awwal's direction: the field work must not wait on PM concurrence.**
+
+This SCP contains two changes of different urgency, risk and approver. They are separable, and
+separating them costs nothing because **the fast half is a strict SUBSET of the slow half's target
+state** — no rework, no divergence.
+
+| Lane | Content | Approver | Blocks the re-run? |
+|---|---|---|---|
+| **A — Login axis** | `loginRateLimit` IP → email + a 100/15min IP ceiling; `strictLoginRateLimit` → 200/IP/hr. ONE endpoint, TWO lines of NFR4.4. | Awwal + a dev-story | ✅ **the only blocker** |
+| **B — Field ops** | the re-run itself: resend the 7 `invited`, recreate the 10 `active`, **provision REAL addresses (§0.1a)** | Awwal | — |
+| **C — Governance (this SCP, §1–5)** | the normative two-axis rule, IP floor ≥100, reclassifying all 32 limiters, coverage-test enforcement, `mfa`/`refresh`/`edit-token` re-keys, doc reconciliation | **John (PM)** | ❌ no |
+
+### Why Lane A does not need the restructure agreed first
+
+**NFR4.4 already contains a precedent for exactly this shape of change.** The 2026-06-03
+`skipSuccessfulRequests` amendment was a UAT-driven, mid-flight change to a login limiter, written
+into NFR4.4 with its rationale, without a restructure. Lane A is the same class: a threshold-and-key
+amendment to one named control, with evidence. It is **not** the normative rule — that is Lane C.
+
+### The re-run path, traced end-to-end — login is the ONLY broken link
+
+| step | control | state |
+|---|---|---|
+| invitation → activation | `activationIpFloodLimit` 300/IP + `activationRateLimit` 20/**token** | ✅ fixed 2026-09-15 |
+| **login** | `strictLoginRateLimit` **10/IP/hr counting successes** + `loginRateLimit` 5 failed/IP/15min | ⛔ **Lane A** |
+| capture (wizard submit) | `registrationRateLimit` 50/IP/15min → `registrationEmailRateLimit` 3/email/15min | ✅ already two-axis |
+| password reset (recovery) | token-keyed 20/15min + 300/IP ceiling | ✅ fixed `1e7b878` |
+
+⚠️ **Capture headroom is real but not generous:** 17 enumerators at Adedeji Adetola's *measured*
+rate (14 captures in 2h48m ≈ 1 per 12 min) is ≈21 submits/15min against a 50 ceiling — **2.4×**.
+Adequate; **watch it, do not widen it speculatively.**
+
+### Lane A: the two options, and why the cheap one is the bad one
+
+- **(a) Raise the IP ceilings only** (~30 min). `strictLoginRateLimit` 10 → 200/IP/hr,
+  `loginRateLimit` 5 → 50/IP/15min. ⛔ **This genuinely trades security for availability**: at 50,
+  an attacker gets 50 accounts per 15 min at one password each — a real credential-spray window.
+  The per-account lockout still bounds attacks on ONE account, but the spray across MANY is what
+  the 5/IP burst was uniquely buying.
+- **✅ (b) Re-key `loginRateLimit` to the submitted email** + a 100/15min IP flood ceiling, and
+  raise `strictLoginRateLimit` to 200/IP/hr (~2–3 h with tests). **No trade at all.** Per-account
+  protection gets *tighter* (5 failed per email beats 5 failed per IP shared among strangers),
+  spray stays bounded by the ceiling, account lockout untouched.
+
+⭐ **RECOMMENDED: (b).** It is slower by ~2 hours and is the only option that costs nothing. And it
+invents nothing — `registration.routes.ts` already ships this exact shape and calls it a
+*"CGNAT-tolerant flood-stop"* in its own comments. Lane A copies a shipped pattern onto one more
+route.
+
+⚠️ **Process note:** a login rate-limit change is a substantive security-behaviour change, so per
+`[[feedback_code_review_no_story_dev]]` it routes to a **dev-story + adversarial code review**, not
+an inline adjudication fix. The two already-shipped fixes (activation, reset) were live production
+incidents; this one is a *foreseeable* incident, which is a different bar.
+
+---
+
 ## Section 1 — Issue Summary
 
 **NFR4.4 licenses "IP Throttling" as a blanket technique. In this market an IP is not a person, and that licence has turned real users away four times.**
