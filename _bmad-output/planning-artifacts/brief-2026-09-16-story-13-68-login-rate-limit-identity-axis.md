@@ -7,6 +7,35 @@
 
 ---
 
+> ## ⚠️ SUPERSEDED IN THREE PLACES — read this before anything below
+>
+> *Amended 2026-09-16 after the PM ruling (`pm-ruling-2026-09-16-nfr4-4-rate-limit-axis.md`,
+> Addendum A) and my adjudication of it. **Two of the three corrections are reversals of my own
+> instructions**, and a dev following the original text would write false statements into the code.*
+>
+> | # | This brief originally said | Now |
+> |---|---|---|
+> | 1 | `strictLoginRateLimit` → **200**/IP/hr, later amended to 60 | **60, plus `skipSuccessfulRequests: true`.** 200 withdrawn as moot. |
+> | 2 | ⚠️ *"document `loginIpFloodLimit` as NON-BINDING"* | ⛔ **REVERSED. It is LOAD-BEARING.** Once strict stops counting successes, the flood ceiling is the only control bounding successful request volume per IP. Delete any "non-binding" wording. |
+> | 3 | ⚠️ *"do NOT add lockout-counter decay"* | ⛔ **REVERSED. Decay IS the blocking precondition**, replacing the cardinality monitor. Escalation stays out (residual R2a — it needs a migration). |
+>
+> **⛔ And one claim in my own reasoning was simply wrong.** I argued failed-only counting would
+> bound spray *tighter* than today. It does not. **An attacker generates no successes**, so their
+> traffic was never throttled by all-response counting — at any fixed number they already had the
+> full budget. `skipSuccessfulRequests` is an **availability** improvement, not a security one.
+> Attacker capacity at 60 is identical before and after. The story must not claim otherwise.
+>
+> **⛔ And 20/hour, which I floated as a lower ceiling, was wrong in this project's signature way.**
+> `loginRateLimit` permits 5 failures per email per 15 min = **20/hour**. One enumerator fumbling at
+> their full legitimate allowance would consume the entire IP budget, leaving zero headroom for a
+> second person behind the same address — which is NFR4.4.b's own defect definition. I would have
+> closed four incidents by legislating a fifth. **60 is what the population rule derives**
+> (3 strangers per address × 20 failures/person/hour) and it is the number in the tree.
+>
+> ⭐ **Why this banner exists rather than a silent edit:** this brief is committed, the dev has been
+> working from it, and two of its instructions are now known-wrong. A record that quietly becomes
+> correct teaches nobody which way the error ran.
+
 ## The job-to-be-done (the why)
 
 **Seventeen enumerators are about to log in for the first time, and the login limiter counts their traffic by proxy IP.**
@@ -25,7 +54,7 @@ This is **the fourth instance** of one defect class. Registration (2026-08-05, 3
 
 **FR2 — NEW `loginIpFloodLimit`, 100 / IP / 15 min.** The only key strangers share, so it is sized for the worst legitimate case behind one address. Mounted BEFORE the per-email limiter on both `/auth/staff/login` and `/auth/public/login` (and the two `/login/mfa*` routes, which carry the same pair).
 
-**FR3 — `strictLoginRateLimit` 10 → 200 / IP / hour.** It becomes a pure flood ceiling. Its stated purpose — *"catches sustained activity including successful brute-forces"* — is not something a per-IP counter can do: by definition the attacker already has the password. What stops that is the per-account lockout and MFA, both untouched.
+**FR3 — `strictLoginRateLimit` 10 → 60 / IP / hour, PLUS `skipSuccessfulRequests: true`** *(amended — 200 withdrawn, see banner).* It becomes a pure flood ceiling. Its stated purpose — *"catches sustained activity including successful brute-forces"* — is not something a per-IP counter can do: by definition the attacker already has the password. What stops that is the per-account lockout and MFA, both untouched.
 
 **FR4 — the 429 log records `keyedBy: 'email' | 'ip'`.** Without it the next investigation has to reverse-DNS a handful of addresses to discover a limit was per-proxy — which is literally how the activation defect was found.
 
@@ -38,6 +67,7 @@ This is **the fourth instance** of one defect class. Registration (2026-08-05, 3
 | threat | control | effect of this story |
 |---|---|---|
 | brute-force ONE account | per-email burst (FR1) + `users.lockedUntil` (5 → warn, 10 → 30-min lock, `auth.service.ts`) | **TIGHTER.** 5 failed per *email* beats 5 failed per *IP shared among many* |
+| **holding accounts locked indefinitely** | ⛔ **was UNPROTECTED — added by amendment.** `failedLoginAttempts` was never cleared on lock expiry, so one attempt per 30 min held an account locked forever, at ~200 accounts registry-wide with emails public via `/verify-staff/:id` | **decay closes it** |
 | credential spray across MANY accounts from one host | `loginIpFloodLimit` 100/15min (FR2) | bounded, and sized deliberately |
 | sustained successful brute-force | per-account lockout + MFA | unchanged — and never was the IP counter's job |
 | enumeration of accounts that DON'T exist | `loginIpFloodLimit` | ⚠️ **the one real gap: a `user_not_found` attempt increments NOTHING account-side** — which is exactly why 36 failed enumerator logins left `failed_login_attempts = 0` on every row. The IP ceiling is the only bound here, so **do not remove it and do not raise it further.** |
@@ -50,8 +80,8 @@ This is **the fourth instance** of one defect class. Registration (2026-08-05, 3
 2. One email from two different IPs shares ONE budget (a phone changing network mid-session).
 3. The per-IP flood ceiling still fires at 100/15min — prove the limiter is alive, not merely absent.
 4. `skipSuccessfulRequests` still holds: successful logins do not consume the per-email budget.
-5. `strictLoginRateLimit` fires at 200, not 10.
-6. Account lockout behaviour is unchanged (`MAX_FAILED_ATTEMPTS = 5`, `EXTENDED_LOCKOUT_THRESHOLD = 10`) — assert it, do not assume it.
+5. `strictLoginRateLimit` fires at **60**, not 10 — and counts **failures only**, so a successful login does not consume it.
+6. ⛔ **AMENDED — lockout behaviour is NO LONGER unchanged.** The thresholds stay (`MAX_FAILED_ATTEMPTS = 5`, `EXTENDED_LOCKOUT_THRESHOLD = 10`) and must still be asserted, but **decay is now added**: when `now >= lockedUntil`, `failedLoginAttempts` resets to 0. RED-verify it — a test that fails if the reset line is deleted. Without decay, an account that has ever reached 10 failures is **permanently re-lockable by one further attempt**, which is the blocking precondition this story exists to discharge.
 7. A 429 from either limiter logs `keyedBy`.
 8. `rate-limit-coverage.test.ts` still passes, and its doc table is corrected in the same commit.
 
