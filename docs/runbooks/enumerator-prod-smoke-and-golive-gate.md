@@ -265,26 +265,34 @@ enumerator's rows. **Paste the ids. Do not re-derive the cohort by pattern.**
 Measured from `users` + retained logs. ⚠️ **Nobody in this cohort failed through apathy.** Every
 person who did not get in was blocked by one of our defects.
 
-**🟢 Working (5)** — activated and have logged in:
+**⚠️ RE-MEASURED 2026-09-16 12:30 — the picture moved a lot in 24 hours, and the earlier version
+of this table was both stale AND mislabelled.** The old "Activated, never logged in" section listed
+people whose note read *"one login 09-06"* — which contradicts its own heading. `last_login_at` is
+set ONLY by `createLoginSession`, so a timestamp means they DID log in. Restated precisely below.
 
-| Name | LGA | Last login | Captured |
+**🟢 Logged in at least once (8 of 17)** — and five of them have captured:
+
+| Name | account | LGA | Last login | Captured |
+|---|---|---|---|---|
+| **Adedeji Adetola** | `checkadetola+test` | Egbeda | **09-16 04:59** | **17** (3 on 09-15, **14 on 09-16**) |
+| Atitebi Esther Opeyemi | `atitebiesther948+test` | Ibadan South-West | 09-15 21:28 | 1 |
+| Ake Anuoluwapo | `anuoluwapo568+test` | Ido | 09-15 20:04 | 1 |
+| Badmus Zainab Jumoke | `zjbadmus+test` | Oluyole | 09-15 11:57 | 1 |
+| Badmus Faaiz | `faaizbadmus+test` | Ibadan North | 09-07 14:43 | 1 |
+| Dorcas Comfort Oladokun | `oladokuncomfort77+test` | Lagelu | 09-06 20:07 | 1 |
+| Badmus Aliyat Tolani | `badmusalia2+test` | Oluyole | **09-16 06:24** | 0 |
+| Badmus Jubril Adekunle | `badmusboluwatife22+test` | Ibadan North | 09-06 20:30 | 0 |
+
+⭐ **The trial is running.** Adedeji Adetola captured **14 people between 05:06 and 07:54 on 09-16**
+— roughly one every 12 minutes, all in Egbeda. That is the first evidence of sustained field work
+from this cohort, and it arrived within 48 hours of the onboarding fixes.
+
+**🟡 Activated but has NEVER logged in (2)** — both are §0.1a, not apathy:
+
+| Name | account | LGA | Note |
 |---|---|---|---|
-| Dorcas Comfort Oladokun | Lagelu | 09-06 20:07 | 1 |
-| Badmus Faaiz | Ibadan North | 09-07 14:43 | 1 |
-| Atitebi Esther Opeyemi | Ibadan South-West | **09-15 07:35** | 0 |
-| Ake Anuoluwapo | Ido | **09-15 08:08** | 0 |
-| Badmus Zainab Jumoke | Oluyole | **09-15 11:57** | 0 |
-
-**🟡 Activated, never logged in (5)** — setup finished, account unused. `last_login_at` is set ONLY
-by `createLoginSession`, so this is exact, not inferred:
-
-| Name | LGA | Note |
-|---|---|---|
-| Adedeji Adetola | Egbeda | one login 09-06 |
-| Badmus Jubril Adekunle | Ibadan North | one login 09-06 |
-| Badmus Aliyat Tolani | Oluyole | one login 09-06; 6 photo failures first |
-| **Ishola Adijat Olawumi** | Ona Ara | activated 09-06 21:07 (photo saved, via UPLOAD). **Never logged in — typing `ferdew31@gmail.com`, 9× `user_not_found`.** Requested a password reset 09-15 12:40, which cannot help: the address she is using does not exist. **This is §0.1a.** |
-| **Idris Mobolade** | Akinyele | activated; never logged in; 3× wrong-address failures |
+| **Ishola Adijat Olawumi** | `ferdew31+test` | Ona Ara | activated 09-06 21:07 (photo saved, via UPLOAD). **Typing `ferdew31@gmail.com`, 9× `user_not_found`.** Requested a reset 09-15 12:40 — which ALSO could not have worked, because password reset was broken platform-wide until `6284d19` (§9i). **Two separate defects on one person.** |
+| **Idris Mobolade** | `moboladeidrees+test` | Akinyele | activated; never logged in; 3× wrong-address failures |
 
 **🔴 Never activated (7)** — all still `invited`, invitations expired 09-08:
 
@@ -308,7 +316,13 @@ rate-limit refusals carry no user id**; and a wrong ADDRESS never reaches a logg
 2. **Login/activation rate-limited per PROXY IP** — 244 refusals from six `opera-mini.net`
    addresses. Fixed 2026-09-15 (keyed on the invitation token).
 3. **Plus-addressed logins** they cannot guess — §0.1a. **NOT yet fixed; it is a provisioning
-   decision, not code.**
+   decision, not code.** (Mitigated for FUTURE invitations by `eb9d165`, which prints the exact
+   login address in the email — but that does not reach anyone already invited.)
+4. **Password reset was broken platform-wide** — the server required a field no client sends, so
+   every reset since 2026-01-14 returned *"Invalid request data"*. Fixed `6284d19`. ⚠️ This closed
+   the ONE escape hatch a locked-out enumerator had, which is why #3 above was unrecoverable.
+5. **Reset completion was ALSO rate-limited per proxy IP**, and mounted on the page load, so opening
+   the link spent a slot. Fixed `1e7b878`. → handoff §9j, and SCP 2026-09-16 for the PRD change.
 
 **Re-issue guidance:** the 7 `invited` need a **RESEND** (same account, fresh 48h) — not
 delete-and-recreate. The 10 `active` need recreating only if you want a clean trial from zero.
