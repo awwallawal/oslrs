@@ -4,7 +4,7 @@
  * Uses shadcn/ui DropdownMenu for proper keyboard navigation and a11y
  */
 
-import { MoreHorizontal, Mail, Shield, UserX, UserCheck, CreditCard, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Mail, Shield, UserX, UserCheck, CreditCard, Loader2, Eye } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -21,6 +21,7 @@ interface StaffActionsMenuProps {
   onDeactivate: (staff: StaffMember) => void;
   onReactivate: (staff: StaffMember) => void;
   onDownloadIdCard: (userId: string) => void;
+  onViewDetail: (staff: StaffMember) => void;
   isResendingInvitation?: boolean;
   isReactivating?: boolean;
   isDownloadingIdCard?: boolean;
@@ -73,16 +74,15 @@ export function StaffActionsMenu({
   onDeactivate,
   onReactivate,
   onDownloadIdCard,
+  onViewDetail,
   isResendingInvitation = false,
   isReactivating = false,
   isDownloadingIdCard = false,
 }: StaffActionsMenuProps) {
   const actions = getAvailableActions(staff.status);
-  const hasAnyAction = Object.values(actions).some(Boolean);
-
-  if (!hasAnyAction) {
-    return <span className="text-neutral-300 px-2">-</span>;
-  }
+  // No early return any more: View Details is available for EVERY status, so a
+  // row whose status offers no mutating action must still open a menu. The old
+  // guard rendered a dash and would now hide the one item that always applies.
 
   return (
     <DropdownMenu>
@@ -96,6 +96,16 @@ export function StaffActionsMenu({
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-48">
+        {/*
+          Always first and never status-gated: "what are this person's details?"
+          is the one question that applies to every row, including an `invited`
+          account nobody can act on yet.
+        */}
+        <DropdownMenuItem onClick={() => onViewDetail(staff)} className="text-neutral-700">
+          <Eye className="w-4 h-4" />
+          View Details
+        </DropdownMenuItem>
+
         {actions.resendInvitation && (
           <DropdownMenuItem
             onClick={() => onResendInvitation(staff.id)}

@@ -78,6 +78,7 @@ const defaultProps = {
   onDeactivate: vi.fn(),
   onReactivate: vi.fn(),
   onDownloadIdCard: vi.fn(),
+  onViewDetail: vi.fn(),
 };
 
 describe('StaffTable', () => {

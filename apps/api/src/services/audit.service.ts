@@ -235,6 +235,11 @@ export const AUDIT_ACTIONS = {
    * precedent.
    */
   STAFF_ID_CARD_DOWNLOADED: 'staff.id_card_downloaded',
+  // Reading one staff record returns NIN, date of birth, home address and bank
+  // details in a single payload, so the READ is audited, not just the writes.
+  // "Who looked at the bank details" is asked after a payment dispute, and the
+  // answer has to already exist.
+  STAFF_DETAIL_VIEWED: 'staff.detail_viewed',
   STAFF_BRIEFING_DOWNLOADED: 'staff.briefing_downloaded',
   /*
    * Story 13-51 (AC2.6) — CLOSING A LIVE VOCABULARY DRIFT, not minting new words.

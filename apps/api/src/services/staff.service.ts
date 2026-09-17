@@ -7,7 +7,7 @@ import pino from 'pino';
 import { staffImportRowSchema, createStaffSchema, type StaffImportRow, type CreateStaffDto, type EmailStatus, type PhotoStatus, type PhotoSource } from '@oslsr/types';
 import { AppError, generateInvitationToken, hashInvitationToken } from '@oslsr/utils';
 import { db } from '../db/index.js';
-import { users, roles, lgas } from '../db/schema/index.js';
+import { users, roles, lgas, respondents } from '../db/schema/index.js';
 import { assertCanAssignRole } from '../constants/role-rank.js';
 import { AuditService, AUDIT_ACTIONS } from './audit.service.js';
 // Story 13-59 — the artefact rules are IMPORTED, never re-listed (review H3).
@@ -374,6 +374,105 @@ export class StaffService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  /**
+   * Full record for ONE staff member, for the Staff Management detail view.
+   *
+   * Why this exists: every field an enumerator fills in at activation — bank
+   * name, account number, account name, NIN, date of birth, home address, next
+   * of kin — was collected and stored and displayed NOWHERE. The list shows
+   * name/email/role/LGA/status, and there was no detail route at all, so the
+   * operator could not read the account details needed to pay somebody without
+   * going to the database.
+   *
+   * ⛔ CITIZENS ARE NOT STAFF — the same rule `listUsers` enforces as a service
+   * default, enforced here too and for the same reason. Without it this becomes
+   * a citizen-PII lookup by UUID that bypasses the list's guard entirely: pass
+   * any respondent's user id and read their NIN and address from a *staff*
+   * endpoint. The list learned this in 2026-08 when it surfaced 114 citizens on
+   * the Staff Management page; a detail route is the sharper version of the same
+   * mistake, because it returns MORE per row.
+   *
+   * ⚠️ Reading this is an auditable event. It returns NIN, date of birth, home
+   * address and bank details in one payload, so the access is logged the way
+   * `downloadIdCard` already logs its own — not because a super-admin is
+   * untrusted, but because "who looked at the bank details" is a question that
+   * gets asked after a payment dispute, and the answer has to exist beforehand.
+   */
+  static async getDetail(userId: string, actorId: string) {
+    const row = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      with: { role: true, lga: true },
+    });
+
+    if (!row) {
+      throw new AppError('USER_NOT_FOUND', 'Staff member not found', 404);
+    }
+
+    // See the docblock: a public_user is a citizen, not staff. 404 rather than
+    // 403 — a staff endpoint should not confirm that some other user id exists.
+    if (row.role?.name === 'public_user') {
+      throw new AppError('USER_NOT_FOUND', 'Staff member not found', 404);
+    }
+
+    // Captures attributed to this person. `submitter_id` is TEXT with no foreign
+    // key (runbook §0.9b), so this is a text comparison, not a join on a relation.
+    const [captures] = await db
+      .select({ n: count() })
+      .from(respondents)
+      .where(eq(respondents.submitterId, userId));
+
+    AuditService.logAction({
+      actorId,
+      action: AUDIT_ACTIONS.STAFF_DETAIL_VIEWED,
+      targetResource: 'users',
+      targetId: userId,
+      details: { email: row.email },
+    });
+
+    return {
+      id: row.id,
+      fullName: row.fullName,
+      email: row.email,
+      phone: row.phone,
+      status: row.status,
+      roleName: row.role?.name ?? null,
+      lgaName: row.lga?.name ?? null,
+      nin: row.nin,
+      dateOfBirth: row.dateOfBirth,
+      homeAddress: row.homeAddress,
+      bankName: row.bankName,
+      accountNumber: row.accountNumber,
+      accountName: row.accountName,
+      nextOfKinName: row.nextOfKinName,
+      nextOfKinPhone: row.nextOfKinPhone,
+      liveSelfieOriginalUrl: row.liveSelfieOriginalUrl,
+      invitedAt: row.invitedAt,
+      lastLoginAt: row.lastLoginAt,
+      createdAt: row.createdAt,
+      capturedCount: captures?.n ?? 0,
+      /**
+       * A bank will reject a transfer whose account name does not match the
+       * name on the account, so the operator needs to SEE the two side by side
+       * before a batch, not after a bounce. Measured 2026-09-17: of 11 activated
+       * enumerators, four differ — a dropped letter ("Badmus Alia Tolani"), a
+       * typo ("Oladokun Comfort Docas"), a partial and an extra given name.
+       * Compared case- and order-insensitively so "Badmus Zainab Jumoke" vs
+       * "Zainab Jumoke Badmus" is NOT flagged: reordering is how Nigerian banks
+       * routinely hold names, and flagging it would train the operator to ignore
+       * the warning.
+       */
+      accountNameMatchesFullName: StaffService.namesAgree(row.fullName, row.accountName),
+    };
+  }
+
+  /** Case- and order-insensitive name comparison. See `getDetail`. */
+  private static namesAgree(fullName: string | null, accountName: string | null): boolean | null {
+    if (!fullName || !accountName) return null;
+    const parts = (s: string) =>
+      s.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+    return parts(fullName) === parts(accountName);
   }
 
   /**

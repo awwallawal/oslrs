@@ -8,6 +8,7 @@ import { Search, UserPlus, Upload, ChevronDown, RefreshCw, CameraOff, DownloadCl
 import { getRoleDisplayName } from '@oslsr/types';
 import { Card, CardContent } from '../../../components/ui/card';
 import { StaffTable, RoleChangeDialog, DeactivateDialog, ReactivateDialog, BulkImportModal, AddStaffModal } from '../components';
+import { StaffDetailModal } from '../components/StaffDetailModal';
 import {
   useStaffList,
   useRoles,
@@ -66,6 +67,7 @@ export default function StaffManagementPage() {
   const pageSize = 20;
 
   // Dialog state
+  const [detailUserId, setDetailUserId] = useState<string | null>(null);
   const [roleChangeStaff, setRoleChangeStaff] = useState<StaffMember | null>(null);
   const [deactivateStaff, setDeactivateStaff] = useState<StaffMember | null>(null);
   const [reactivateStaff, setReactivateStaff] = useState<StaffMember | null>(null);
@@ -326,6 +328,7 @@ export default function StaffManagementPage() {
             onDeactivate={setDeactivateStaff}
             onReactivate={setReactivateStaff}
             onDownloadIdCard={handleDownloadIdCard}
+            onViewDetail={(staff) => setDetailUserId(staff.id)}
             resendingUserId={resendingUserId}
             reactivatingUserId={reactivatingUserId}
             downloadingUserId={downloadingUserId}
@@ -334,6 +337,8 @@ export default function StaffManagementPage() {
       </Card>
 
       {/* Role Change Dialog */}
+      <StaffDetailModal userId={detailUserId} onClose={() => setDetailUserId(null)} />
+
       <RoleChangeDialog
         staff={roleChangeStaff}
         isOpen={roleChangeStaff !== null}

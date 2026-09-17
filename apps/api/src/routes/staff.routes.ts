@@ -47,4 +47,14 @@ router.post('/:userId/reactivate', requireFreshReAuth, StaffController.reactivat
 // Story 2.5-3, AC7: Download ID card for staff member
 router.get('/:userId/id-card', StaffController.downloadIdCard);
 
+/**
+ * Full record for the detail view (bank details, NIN, DOB, address, next of kin,
+ * capture count). Super-admin + UUID validation are inherited from above.
+ *
+ * ⚠️ MUST stay below `GET /import/:jobId`. Express matches in declaration order,
+ * and `/:userId` would otherwise swallow `/import/<jobId>` — the param guard
+ * would reject the non-UUID and turn a valid import-status poll into a 400.
+ */
+router.get('/:userId', StaffController.getDetail);
+
 export default router;

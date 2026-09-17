@@ -249,8 +249,18 @@ describe('AuditService', () => {
       //   The one-shot backfill writes a provenance record (raw → merged → held → clean) onto
       //   the two association batches that predate the column. It is a compliance fact about
       //   a batch written after the fact, so it must leave its own trace.
+      // Staff detail view (THIS commit, 2026-09-17) added 1:
+      //   STAFF_DETAIL_VIEWED ('staff.detail_viewed') → 67.
+      //   The staff detail view returns bank + next-of-kin + contact details in one
+      //   payload, so the READ is audited, not just the writes — "who looked at the
+      //   bank details" is asked after a payment dispute, and the answer has to
+      //   already exist. Same reasoning as STAFF_ID_CARD_DOWNLOADED above.
+      //   ⚠️ Count bumped 2026-09-18 during 13-69's review: that change added the
+      //   constant without bumping this assertion, which is the one thing this test
+      //   exists to catch, so `main` was RED for ~24h. The fix is this line; the
+      //   finding is that the suite was not run after that commit.
       // Future stories: bump this count + comment when adding new audit actions.
-      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(66);
+      expect(Object.keys(AUDIT_ACTIONS)).toHaveLength(67);
     });
 
     /**

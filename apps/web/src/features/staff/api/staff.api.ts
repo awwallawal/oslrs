@@ -40,6 +40,42 @@ export async function listStaff(params: ListStaffParams = {}): Promise<StaffList
 }
 
 /**
+ * Full record for one staff member — the detail view.
+ * GET /api/v1/staff/:userId
+ *
+ * Returns the fields collected at activation (bank, NIN, DOB, address, next of
+ * kin) plus the capture count. Super-admin only; the read is audited server-side.
+ */
+export interface StaffDetail {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  status: string;
+  roleName: string | null;
+  lgaName: string | null;
+  nin: string | null;
+  dateOfBirth: string | null;
+  homeAddress: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  nextOfKinName: string | null;
+  nextOfKinPhone: string | null;
+  liveSelfieOriginalUrl: string | null;
+  invitedAt: string | null;
+  lastLoginAt: string | null;
+  createdAt: string;
+  capturedCount: number;
+  /** null = no account name on file yet (not a mismatch). */
+  accountNameMatchesFullName: boolean | null;
+}
+
+export async function getStaffDetail(userId: string): Promise<{ data: StaffDetail }> {
+  return apiClient(`/staff/${userId}`);
+}
+
+/**
  * Update a user's role
  * PATCH /api/v1/staff/:userId/role
  */

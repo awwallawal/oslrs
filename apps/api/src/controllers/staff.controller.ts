@@ -171,6 +171,26 @@ export class StaffController {
    * Download ID card for a staff member (Super Admin only).
    * Story 2.5-3, AC7
    */
+  /**
+   * GET /api/v1/staff/:userId — full record for the detail view.
+   *
+   * Super-admin only and UUID-validated by the router (`router.use` + the
+   * `userId` param guard), so neither is re-checked here. The service refuses
+   * `public_user` rows: a staff endpoint must not become a citizen-PII lookup.
+   */
+  static async getDetail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId } = req.params;
+      const actorId = req.user!.sub;
+
+      const data = await StaffService.getDetail(userId, actorId);
+
+      res.status(200).json({ data });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async downloadIdCard(req: Request, res: Response, next: NextFunction) {
     try {
       const { userId } = req.params;
