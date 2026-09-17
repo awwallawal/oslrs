@@ -476,5 +476,39 @@ To avoid clobbering 13-68, whoever applies this must split by sub-clause.
 | **2 — login** | ✅ **5 FAILED/email/15min + 100/IP/15min ALL + 60/IP/hour FAILED-ONLY.** The only limiter change is one line: `skipSuccessfulRequests` on the sustained limiter; **60 stays**, derived as 3 strangers/address × 20 failures/person/hour. ❌ **20/hour rejected** — equal to one person's own failure allowance, i.e. the defect class. ❌ ~~200/hour withdrawn as moot.~~ ⛔ **Blocking: lockout decay + `email` on the `invalid_password` line.** ✅ **Escalation deferred to R2a — concurred** (needs a migration; 480 guesses/day is immaterial). ⏳ Monitor → dated follow-up, stricter AC, **2026-10-15**. |
 | **3 — marketplace search** | ❌ **LEAVE at 30/IP/min — now on data.** 0 refusals across 16,825 marketplace log lines in 14 days, with a **passing positive control** (the same method finds the known 244 activation and 12 reset-completion refusals). Trigger + **2026-12-31** date pre-registered. |
 
+---
+
+# ADDENDUM B — 2026-09-17: Lane C APPLIED
+
+13-68 landed (`4a3279d`), so the Part 8 handoff executed. **NFR4.4.a/.b/.c/.d/.f are now in `prd.md`**; 13-68's login block is renumbered **NFR4.4.e** and its wording is untouched, as Part 8 specified. The five legacy bullets and the "IP Throttling with the following thresholds" preamble are deleted, their values carried into the .c register unchanged.
+
+### Ruling on A3 — flood-ceiling divergence (300 vs 100)
+
+**Login stays at 100/15 min. The divergence is permitted, and the permission is dated.**
+
+Login's ceiling mounts ahead of the CAPTCHA, so it uniquely bounds the external hCaptcha `siteverify` call and the bcrypt work behind it — a per-attempt cost activation and reset-completion do not carry. That is a real asymmetry and it justifies a tighter number.
+
+⚠️ **But the justification is unmeasured, and an unverified assumption may not do normative work indefinitely.** Neither hCaptcha's own rate limit at 400 verifications/IP/hour nor bcrypt p95 on the 2 GB VPS has been measured (A2). Both are now **required by 2026-10-15**; if neither constrains, login harmonises to 300 and the exception is deleted. The general rule written into .c: **a flood ceiling may diverge from its tier's peers only where its register row records the cost it is bounding.** Three numbers with three derivations is engineering; three numbers with none is drift.
+
+### A1 — generalised into a normative rule
+
+A1 is not a login bug, it is a class. Written into NFR4.4.d as **"a refusal is not a request"**: a 429 emitted by one limiter must not be counted by any other limiter on the same route. CAPTCHA refusals (400) stay counted, so the ceiling still bounds the verification call. **This needs a code change I did not make** — `loginIpFloodLimit` requires a predicate excluding 429s.
+
+### New findings while applying
+
+1. ⛔ **`revealStepUpRateLimit` needs a re-ORDER, not just a re-key.** It is mounted *ahead of* `authenticate`, so `user.sub` does not exist when it keys. My earlier register row said "re-key to `user.sub`" — as written that instruction would have **silently fallen back to IP and changed nothing**: `[[pattern-ship-a-fix-that-never-fires]]`, authored by me. Row corrected; it is why the mount-order rule is normative rather than advisory.
+2. ⛔ **A third unimplemented PRD threshold.** *"CAPTCHA required after 10 queries in 5 minutes"* on marketplace search is **not implemented** — `verifyCaptcha` is mounted on contact-reveal and edit-token-request only; `GET /marketplace/search` carries its limiter alone. Flagged in place. **This matters for Q3:** had the CAPTCHA existed, it would have been a second control justifying the 30/min ceiling. It does not, so 30 is the *only* control on that route — which strengthens the case for the dated review while leaving the measured-zero ruling intact.
+3. ✅ **F2's own "API general not implemented" note was accurate in May and still is** — reaffirmed rather than corrected, and now carried as NFR4.4.f.
+
+### Evidence folded in
+
+The 32 `user_not_found` failures across seven enumerators — two typing a bare `+` — now sit in **NFR4.4.b** as the measured proof that this control class is invisible in the database: a cohort failing 32 times while production shows exactly **one** account with any failure count. It is stronger evidence than the argument it replaces, and it converts .b from a claim into a citation. The response-side/log-side disclosure boundary (R8) is stated explicitly in .b.
+
+### Applied elsewhere
+
+`security-posture-stride-mapping-2026-04-20.md` — all three NFR4.4 claims re-stated; the availability failure mode added to the threat model, including that the per-account lockout is attacker-usable and that `D` is **bidirectional** for this control class. `bmad-compliance-restoration-2026-05-10.md` — F2 correction note. `rate-limit-coverage.test.ts` — the false `googleAuthRateLimit` row deleted (comment only; suite 8/8 green).
+
+---
+
 **Signed:** John, Product Manager — 2026-09-16 (harmonised)
 **Status:** uncommitted. `prd.md` untouched by me. `sprint-change-proposal-…md` untouched by me — corrections flagged at Part 5 #1/#2/#5 for its author. No code changed.

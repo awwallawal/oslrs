@@ -35,10 +35,16 @@
  *   | registrationEmailRateLimit       | 3/email/15min  | per-person budget on the wizard submit (2026-08-07) |
  *   | activationRateLimit              | 20/TOKEN/15min | keyed on the invitation token (2026-09-15) — 244 Opera Mini refusals |
  *   | activationIpFloodLimit           | 300/IP/15min   | FLOOD CEILING only |
- *   | googleAuthRateLimit              | 10/IP/1hr      | sensible default |
  *   | mfaRateLimit                     | 10/IP/1min     | Story 9-13 AC#7 |
  *   | reauthRateLimit                  | 5/IP/15min     | AC#4 audit fix  |
- *   | magicLinkRateLimit               | 3/email/1hr    | Story 9-12 AC#6 (NFR4.4 budget) |
+ *   | magicLinkRateLimit               | 3/email/1hr    | Story 9-12 AC#6 (NFR4.4 budget) — per-EMAIL only on the request route; the seven token-bearing routes sharing this prefix key per-IP at 3/hr pooled (NFR4.4.c) |
+ *
+ * REMOVED 2026-09-17 (Lane C, R4): a `googleAuthRateLimit | 10/IP/1hr | sensible default`
+ * row stood here naming a limiter that exists NOWHERE in `apps/api/src`. `POST /google/verify`
+ * is wrapped in `magicLinkRateLimit` (see the coverage entry below). The row was never
+ * asserted — this table is a comment — so it survived every green run since 2026-05-10.
+ * Per NFR4.4.d, `axis`/`key`/`tier`/`mode`/`budget` move into the coverage map as ASSERTED
+ * fields; until they do, a reviewer reading this table is the only check that it is true.
  *
  * If ANY of those values are changed at the source-file level, update this
  * table AND run `pnpm vitest run apps/api/src/middleware/__tests__/rate-limit-coverage.test.ts`

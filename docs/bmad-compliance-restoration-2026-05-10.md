@@ -237,6 +237,20 @@ _(Each completed task appends a one-line entry here when its checkbox flips to `
 
 ## §F 9-9 Forward Roadmap (after R1-R5 close)
 
+> ### ⚠️ Correction note on F2 (added 2026-09-17, Lane C)
+>
+> **The F2 audit closed above was correctly executed against a specification that was itself wrong. This note does not reopen it; it records what it could not have found.**
+>
+> F2 verified that each of 22 auth endpoints **had** a rate limiter, and that each limiter matched its **documented threshold** in NFR4.4. Both checks were sound, and they caught a real defect (AC#4-M1, the unlimited `POST /auth/reauth`). What F2 never asked — because NFR4.4 did not require anyone to state it — is **whose traffic each threshold counts**. The axis, not the number, was the defect.
+>
+> Between 2026-08-05 and 2026-09-16 four production incidents followed from that gap: registration (36 citizens blocked), activation (244 refusals from six `opera-mini.net` addresses), password-reset completion, and login (open risk). Every one came from a per-IP limiter that NFR4.4 **never specified, never risk-assessed and never counted** — and the coverage suite F2 created stayed green through all four, because a limiter that refuses the wrong people is still *present* at its *documented* threshold.
+>
+> ⭐ **The transferable lesson: a coverage audit that never asks "whose traffic is this counting?" is measuring a different property from the one that matters.** Presence and threshold-match are necessary and jointly insufficient. Leaving this uncorrected would imply the axis property had been verified in May, when it was not examined at all.
+>
+> **Now remedied:** NFR4.4 was restructured 2026-09-17 (clauses .a–.f) to require a declared axis, tiered flood floors, a recorded population model and mount-order assessment for every limiter; `rate-limit-coverage.test.ts` gains `axis`/`key`/`tier`/`mode`/`budget` as **asserted** fields. Two stale rows in that suite's reviewer-facing comment table — `registrationRateLimit` recorded as 5 against code of 50 for five weeks, and a `googleAuthRateLimit` row naming a limiter absent from `src` since it was written — are the reason NFR4.4.d now insists on assertions over comment tables. See `_bmad-output/planning-artifacts/pm-ruling-2026-09-16-nfr4-4-rate-limit-axis.md`.
+>
+> **One F2 finding is reaffirmed, not corrected:** its note that *"NFR4.4 'API Endpoints (General): 100/user/min' not implemented as global limiter"* was accurate in May and remains accurate today. It is now carried explicitly as NFR4.4.f, an open requirement with an owning story — not a satisfied threshold.
+
 These are the **remaining Story 9-9 ACs** + adjacent technical debt. They are NOT restoration tasks (the past commits are clean) — they are **forward work that the restored discipline will be applied to**. Sequenced after R1-R5 because R1-R5 establishes the canonical template (Subtask File List block, pre-commit code-review divider, Dev Agent Record per-subtask) that F1+F2 will simply slot into.
 
 **Sequence rationale**: AC#7 first (smallest, proves the restored template); AC#4 second (largest surface, benefits most from discipline being already in place); AC#9 runs in parallel (passive observation, no file collision). E2E skips after the 9-9 ACs since they're a separate prep-7 concern and don't gate field-readiness.

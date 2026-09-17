@@ -105,7 +105,18 @@ For each STRIDE category: threat class, controls implemented (with evidence), at
 
 - **DMARC / SPF not configured** — Story 9-4 `deferred` pending domain purchase. Mitigation: OSLRS doesn't accept inbound user email; phishing risk is limited to outbound domain reputation attacks. Closure: same sprint as domain finalization.
 
-**Cross-framework:** OWASP A07 (Identification and Authentication Failures) = PASS. NDPA NFR4.4 (Defense-in-Depth rate limiting) = PASS. NFR4.6 (Role conflict prevention) = PASS. NIST CSF: PR.AA (Identity Authentication & Access Control).
+**Cross-framework:** OWASP A07 (Identification and Authentication Failures) = PASS. NDPA NFR4.4 (Defense-in-Depth rate limiting) = **PASS, re-stated 2026-09-17 against the restructured NFR4.4 (Lane C)** — see the availability note below. NFR4.6 (Role conflict prevention) = PASS. NIST CSF: PR.AA (Identity Authentication & Access Control).
+
+> ⚠️ **NFR4.4 availability failure mode — added 2026-09-17; this model did not previously consider it.**
+>
+> This STRIDE mapping scores rate limiting only under **S** (spoofing) and **D** (denial of service *by* an attacker). It never asked whether the control itself denies service to legitimate users — and in this operating environment it repeatedly has. Four production incidents (registration 2026-08-05, activation 2026-09-07/08, password-reset completion 2026-09-16, login open-risk) all arose from per-IP budgets shared between strangers behind CGNAT and Opera Mini proxies. **244 refusals came from six addresses; 36 citizens were blocked across five carrier ranges in one morning.**
+>
+> Two consequences for this document's threat model:
+>
+> 1. **`D` is bidirectional for this control class.** A rate limit is both a mitigation for denial of service and a *source* of it. Every rate-limit row below should be read as carrying a residual availability risk proportional to how small its per-IP budget is, and inversely to how many strangers share one address.
+> 2. ⛔ **The per-account lockout is attacker-usable.** `users.locked_until` (10 failures → 30-minute lock) is a genuine anti-brute-force control, but an attacker who can generate failures against many accounts converts it into a registry-wide denial of service — the per-IP failure ceiling is the only thing metering that rate. At the shipped 60 failures/IP/hour this is ~6 new locks per IP-hour against a ~200-account staff registry (NFR2.2). Story 13-68's lockout-counter decay bounds the *persistence* of each lock; nothing yet bounds the *cardinality* of the attempt, which is why NFR4.4.d requires distinct-identifier-per-IP monitoring (dated follow-up, 2026-10-15).
+>
+> **Evidentiary note:** refusals and misdirected attempts in this class are **invisible in the database** — they carry no user id, so a victim's row reads "activated, never logged in", which an operator reads as apathy. Measured: 32 `user_not_found` failures across seven enumerators in two days left production showing exactly **one** account with any failure count. **This control class MUST be assessed against logs, never against the absence of database evidence.**
 
 ---
 
@@ -295,7 +306,9 @@ For each STRIDE category: threat class, controls implemented (with evidence), at
 - **No Cloudflare WAF / L7 DDoS mitigation** — rate limiting exists per endpoint but a volumetric L3/L4 flood would saturate the 2GB VPS bandwidth before rate limits engage. **Story 9-9 P0, 30-min DNS change, free tier closes this.** *This is the single largest residual risk; the field-readiness verdict explicitly accepts it as bounded given target profile.*
 - **Single-VPS SPOF** — no redundancy or failover. Mitigation: DO snapshots available, PM2 auto-restart, current RAM headroom.
 
-**Cross-framework:** OWASP A04 (Insecure Design) = PASS for in-scope controls. NDPA NFR4.4 (Defense-in-Depth) = PARTIAL until Cloudflare lands. NIST CSF: PR.IR (Infrastructure Resilience) + DE.CM (Security Continuous Monitoring).
+**Cross-framework:** OWASP A04 (Insecure Design) = PASS for in-scope controls. NDPA NFR4.4 (Defense-in-Depth) = PARTIAL until Cloudflare lands — **and, as re-stated 2026-09-17, also PARTIAL on the availability axis until the distinct-identifier-per-IP monitor lands (NFR4.4.d, dated 2026-10-15)**. NIST CSF: PR.IR (Infrastructure Resilience) + DE.CM (Security Continuous Monitoring).
+
+> **2026-09-17 note on this section's framing.** "Rate limiting exists per endpoint" was true and was also the problem: 26 of 33 limiters had no NFR4.4 entry, so nothing required an author to state *whose* traffic a limit bounded and the default was `req.ip`. NFR4.4.a–d now require a declared axis, a tiered floor, and a recorded population model per limiter. A per-endpoint inventory is no longer sufficient evidence for this row; the axis register (NFR4.4.c) is.
 
 ---
 
@@ -479,7 +492,7 @@ For auditors familiar with one framework but not another:
 |---|---|---|---|---|
 | RBAC + scope chain | E, I | A01 Broken Access Control | NFR4.6 | PR.AC |
 | bcrypt + JWT + refresh rotation | S | A07 Auth Failures | NFR4.4 | PR.AA |
-| Rate limiting | S, D | A04 Insecure Design | NFR4.4 | PR.IR |
+| Rate limiting | S, D — **and a *source* of D against legitimate users; see the 2026-09-17 availability note** | A04 Insecure Design | NFR4.4 (axis register .c) | PR.IR |
 | hCaptcha + device fingerprint | S, D | A04 | NFR4.4 | DE.AE |
 | TLS 1.2+, CSP, Helmet headers | I, T | A02, A05 | NFR4.7, NFR8.4 | PR.DS |
 | Zod validation + Drizzle params | T | A03 Injection | NFR4.5 | PR.DS |
