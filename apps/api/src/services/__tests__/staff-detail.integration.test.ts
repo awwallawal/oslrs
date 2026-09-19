@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '../../db/index.js';
-import { users, roles } from '../../db/schema/index.js';
+import { users, roles, auditLogs } from '../../db/schema/index.js';
 import { StaffService } from '../staff.service.js';
+import { AUDIT_ACTIONS } from '../audit.service.js';
+import { purgeUsersWithAuditDrain } from '../../__tests__/helpers/audit-safe-teardown.js';
 
 /**
  * `StaffService.getDetail` — the Staff Management detail view (2026-09-17).
@@ -28,7 +30,14 @@ const tag = randomUUID().slice(0, 8);
 const createdIds: string[] = [];
 let enumeratorId = '';
 let citizenId = '';
-const ACTOR = randomUUID();
+// ⛔ THE ACTOR MUST BE A REAL USER ROW.
+// Until 2026-09-19 this was a bare `randomUUID()` that was never inserted into
+// `users`, so EVERY audit write in this file died on
+// `audit_logs_actor_id_users_id_fk`. `AuditService.logAction` is fire-and-forget
+// by design (the 9-26 lesson: audit must never sink a request), so it swallowed
+// the failure and every test here stayed green while the audit trail — the whole
+// compliance rationale for a PII detail view — was never written once.
+let ACTOR = '';
 
 async function roleIdFor(name: string): Promise<string> {
   const row = await db.query.roles.findFirst({ where: eq(roles.name, name) });
@@ -68,6 +77,7 @@ beforeAll(async () => {
     nextOfKinName: 'Next Of Kin',
     nextOfKinPhone: '+2348000000002',
   });
+  ACTOR = await makeUser(`actor-${tag}@example.test`, `Operator ${tag}`, 'super_admin');
   citizenId = await makeUser(`citizen-${tag}@example.test`, `Citizen ${tag}`, 'public_user', {
     nin: '99999999999',
     homeAddress: 'A citizen home address',
@@ -77,7 +87,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (createdIds.length) await db.delete(users).where(inArray(users.id, createdIds));
+  // Audit rows now REFERENCE these users (actor_id FK is NO ACTION) and `audit_logs`
+  // is append-only behind a trigger, so a plain delete raises 23503. This is the
+  // canonical teardown primitive (13-30/13-32) — it takes FOR UPDATE on the users
+  // first to close the fire-and-forget insert race, then drains the audit rows under
+  // an advisory lock. Do not hand-roll another one.
+  if (createdIds.length) await purgeUsersWithAuditDrain(createdIds);
 });
 
 describe('StaffService.getDetail', () => {
@@ -93,6 +108,49 @@ describe('StaffService.getDetail', () => {
     // Nobody captured anything for this fixture; the field must still be present
     // rather than undefined, so the UI renders "0" and not a blank.
     expect(d.capturedCount).toBe(0);
+  });
+
+  /**
+   * ⛔ THE AUDIT ROW IS THE FEATURE'S COMPLIANCE RATIONALE, and nothing asserted it
+   * until 2026-09-19. The detail view returns bank details, NIN, date of birth and
+   * next of kin in one payload, so the READ is audited, not just the writes —
+   * "who looked at the bank details" is asked after a payment dispute, and the
+   * answer has to already exist.
+   *
+   * ⛔ RED-VERIFY: delete the `AuditService.logAction({...})` call in
+   * `StaffService.getDetail` and this test MUST fail. Before this test existed,
+   * deleting it changed nothing — every other test in this file asserts the
+   * RETURN VALUE, which is identical whether or not the trail was written.
+   * → [[pattern-test-that-passes-over-a-hole]]
+   */
+  it('WRITES the audit row — a PII read has to be answerable afterwards', async () => {
+    await StaffService.getDetail(enumeratorId, ACTOR);
+
+    // logAction is fire-and-forget: it opens its own transaction and resolves
+    // after getDetail has already returned. Poll rather than assert into the race.
+    const deadline = Date.now() + 5000;
+    let rows: Array<typeof auditLogs.$inferSelect> = [];
+    for (;;) {
+      rows = await db
+        .select()
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.actorId, ACTOR),
+            eq(auditLogs.action, AUDIT_ACTIONS.STAFF_DETAIL_VIEWED),
+            eq(auditLogs.targetId, enumeratorId),
+          ),
+        );
+      if (rows.length > 0 || Date.now() >= deadline) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
+    expect(
+      rows.length,
+      'no staff.detail_viewed audit row was written — the PII read left no trail',
+    ).toBeGreaterThan(0);
+    expect(rows[0]!.targetResource).toBe('users');
+    expect(rows[0]!.actorId).toBe(ACTOR);
   });
 
   // ⛔ THE REGRESSION. Delete the public_user guard in getDetail and this passes
