@@ -2,7 +2,7 @@
 
 **Print this. Read it before your first day. Keep it in the bag.**
 
-Version 2026-08-07 · Oyo State Labour & Skills Registry
+Version 2026-09-18 · Oyo State Labour & Skills Registry
 
 ---
 
@@ -43,7 +43,31 @@ you do not need to do anything for them.
 
 **If they gave no email, you are the only way they will ever learn their number.**
 
-## 3. Households sharing one phone — read the number back, always
+## 3. Location — press **Capture location** at every interview
+
+The **first screen** of the survey asks for the GPS location. It does nothing until you press
+**Capture location**. Pressing **Next** without it submits the form perfectly happily — which is
+why, out of the first 36 field surveys, only 4 carried a location.
+
+**Press it at the door, where the interview happens** — not later in the car, and not back at the
+office. The point is to record where the work was done.
+
+- The first time, your phone asks **"Allow location?"** — choose **Allow**. If you choose Block,
+  the phone remembers, and someone has to fix it in your phone settings before it will ask again.
+- If it says location is unavailable, **move outside or near a window and press it again**. Inside
+  a concrete building it often fails on the first try.
+- If it still will not capture, **tell your supervisor the same day** and say where you were. Do
+  not abandon the interview over it — a survey without a location is still a real registration.
+
+**Why it matters:** the location is how the office knows which areas have been covered and which
+have not, and it is what protects you — it is the record that you were there.
+
+> ### Coming soon
+> The app will capture the location automatically when you open a survey, and will then ask you
+> to either capture it or say why it could not be captured before you submit. Nothing changes for
+> you if you are already pressing the button at every interview.
+
+## 4. Households sharing one phone — read the number back, always
 
 Several people in one compound often share a handset. That is normal and the system expects it:
 **each person gets their own record**, even on the same phone.
@@ -57,7 +81,7 @@ But it has one consequence you must know:
 **So for anyone on a shared handset, their OSLRS number is the ONLY way back to their record.**
 Write it on their slip. Say it out loud. Make sure they have it somewhere they will not lose.
 
-## 4. Discarding an interview
+## 5. Discarding an interview
 
 If a respondent changes their mind, or you realise it is the wrong person, or you have mis-entered
 a name badly — use **"Discard this interview"** at the bottom of the form.
@@ -69,7 +93,7 @@ a name badly — use **"Discard this interview"** at the bottom of the form.
 Use it. **Do not** carry on filling a form the person has withdrawn from, and **do not** leave a
 half-finished form sitting on the device — the next respondent needs a clean start.
 
-## 5. If a survey fails to upload
+## 6. If a survey fails to upload
 
 Open **Sync Status**. If an entry is marked as rejected:
 
@@ -79,7 +103,7 @@ Open **Sync Status**. If an entry is marked as rejected:
 
 **Always try Reopen before Discard.**
 
-## 6. Questions people ask
+## 7. Questions people ask
 
 **"Do I need my NIN?"**
 No. They can register without it and add it later — the system will email them a link. Use
@@ -92,11 +116,12 @@ and they can decline and still be registered.
 **"Can I change my answers later?"**
 Yes, using their OSLRS number at **oyoskills.com** → check registration.
 
-## 7. Before you go out — checklist
+## 8. Before you go out — checklist
 
 - [ ] Phone charged, and a way to charge it in the field
 - [ ] Logged in and the app opens **without** asking you to log in again
 - [ ] You have completed **one practice survey** and seen where the number appears
+- [ ] Location permission set to **Allow**, and you have seen coordinates appear on the first screen of a practice survey (§3)
 - [ ] Slips or notebook for writing numbers onto
 - [ ] You know how to reach your supervisor if something looks wrong
 
@@ -108,5 +133,5 @@ Yes, using their OSLRS number at **oyoskills.com** → check registration.
 and phone numbers, and tell the office so the rows can be removed. Test entries left in the register
 become real-looking records that nobody can tell apart from citizens.
 
-**Watch for:** enumerators reading out numbers before they exist (§1), and entries sitting unsynced
+**Watch for:** enumerators reading out numbers before they exist (§1), surveys arriving with no location (§3 — ask where they were and whether the phone refused), and entries sitting unsynced
 for days — those are people who have not been told their number.

@@ -426,7 +426,9 @@ export class SubmissionProcessingService {
     });
 
     // Story 13-27 (AC1/AC2) — ALL post-submission side-effects (auto-emails +
-    // GPS-gated fraud detection + consent-gated marketplace extraction) now route
+    // fraud detection, UNCONDITIONAL since 13-69 — it was GPS-gated, and 13-27 AC4
+    // is superseded; see the side-effect audit note — + consent-gated
+    // marketplace extraction) now route
     // through ONE shared entrypoint so the enumerator/clerk QUEUE path (here) and
     // the public WIZARD path (registration.controller.submitWizard — which writes
     // its submission as processed:true and DELIBERATELY bypasses this worker) run
@@ -1286,13 +1288,22 @@ export class SubmissionProcessingService {
    *      (13-21). Fire-and-forget; each send self-gates + is fail-soft.
    *   4. Marketplace extraction (consent-gated) — SHARED (13-27, the fix). Was
    *      queue-path-only → the whole public channel produced 0 profiles.
-   *   5. Fraud detection (GPS-gated) — SHARED here but a NO-OP for the wizard:
-   *      public wizard submissions carry no GPS (gps=null), so the gate never
-   *      fires. AC4 (product, 2026-07-12): the GPS-clustering/speed-run engine
-   *      keys on enumerator field-collection signals that don't exist for an
-   *      anonymous public submission; NIN partial-unique is the duplicate defense.
-   *      The controller.ts:658 skip is CORRECT — routing it through here keeps the
-   *      code path uniform and future-proofs a wizard that ever captures GPS.
+   *   5. Fraud detection — SHARED and UNCONDITIONAL since 13-69. ⛔ The GPS gate
+   *      that used to stand here is GONE, and 13-27 AC4 (product, 2026-07-12 —
+   *      "the GPS-clustering engine keys on signals an anonymous public submission
+   *      does not have") is SUPERSEDED on evidence that did not exist in July.
+   *      What the ruling missed is that four of the five detectors never needed
+   *      GPS at all: duplicate, straight-lining, timing and speed score behaviour
+   *      and content, not location. One over-broad `if` disabled all four in order
+   *      to protect one, and the result was measured on 2026-09-17: across all
+   *      8,282 detections ever written, `gps_score`, `timing_score` and
+   *      `straightline_score` had NEVER been non-zero and `speed_score` had fired
+   *      exactly once. Exactly 3 submissions in the system carry GPS and exactly
+   *      3 were ever scored — the correspondence is what makes it a diagnosis.
+   *      See 13-69 for the per-channel coverage this actually buys (an enumerator
+   *      submission reaches all four; a public one reaches timing + speed, because
+   *      the public form has no straight-lining battery and the wizard writes no
+   *      enumerator id for the duplicate history to key on).
    *   6. PII normalisation / form-schema resolution — wizard is structured +
    *      pre-validated (controller.ts:658); INTENTIONALLY not run for the wizard.
    *
@@ -1326,35 +1337,103 @@ export class SubmissionProcessingService {
     consentMarketplace: boolean;
     gps?: { latitude: number; longitude: number } | null;
   }): Promise<void> {
-    // 3. Registration auto-emails — an ENQUEUE (13-65), awaited like the other two queue ops so an
-
-    // 5. Fraud detection — GPS-gated (no GPS ⇒ skipped; see AC4 note above).
-    if (args.gps) {
-      await queueFraudDetection({
-        submissionId: args.submissionId,
-        respondentId: args.respondentId,
-        gpsLatitude: args.gps.latitude,
-        gpsLongitude: args.gps.longitude,
-      });
-      logger.info({
-        event: 'submission_processing.fraud_queued',
-        submissionId: args.submissionId,
-        respondentId: args.respondentId,
-      });
-    }
+    /*
+     * ⚠️ 13-69 REVIEW M1 — EVERY SIDE-EFFECT IS ATTEMPTED; THE FIRST FAILURE STILL
+     * REACHES THE CALLER. ORDER IS NO LONGER LOAD-BEARING, AND THAT IS THE POINT.
+     *
+     * All three effects here are AWAITED enqueues that throw when Redis is
+     * unavailable. Sequenced bare, the first to throw pre-empts every one after it
+     * — and on the enumerator/clerk path that loss is PERMANENT, because
+     * `submissions.processed = true` is already committed, so the BullMQ retry hits
+     * the already-processed early return. That is the 13-27 bypass class, and 13-65
+     * review B4 addressed it by ORDERING the effects (emails last, the two
+     * established queue ops first). Ordering only decides WHICH effect is lost.
+     *
+     * 13-69 made fraud detection unconditional, which put a newly-fallible op into
+     * that chain and forced the question again. The review's answer: stop ranking
+     * them. Each effect runs in its own try/catch, a failure is logged with its own
+     * event, and the FIRST error is re-thrown after all three have been attempted —
+     * so the caller still sees a Redis outage (the wizard `.catch()` + Telegram page
+     * stay loud, 13-65 AC6) but a marketplace blip can no longer silently cost a
+     * submission its fraud score, and vice versa.
+     */
+    const queueFailures: unknown[] = [];
 
     // 4. Marketplace profile extraction — consent-gated (Story 13-27 fix). Fires
     //    for BOTH channels now; the worker self-gates on consent + UPSERTs by
     //    respondent, so a re-queue is idempotent.
     if (args.consentMarketplace) {
-      await queueMarketplaceExtraction({
-        respondentId: args.respondentId,
+      try {
+        await queueMarketplaceExtraction({
+          respondentId: args.respondentId,
+          submissionId: args.submissionId,
+        });
+        logger.info({
+          event: 'submission_processing.marketplace_queued',
+          submissionId: args.submissionId,
+          respondentId: args.respondentId,
+        });
+      } catch (err) {
+        queueFailures.push(err);
+        logger.error({
+          event: 'submission_processing.marketplace_queue_failed',
+          submissionId: args.submissionId,
+          respondentId: args.respondentId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    /*
+     * 5. Fraud detection — UNCONDITIONAL since 13-69 (see the audit note above).
+     *
+     * ⛔ DO NOT RE-ADD A COORDINATE GATE HERE. `if (args.gps)` is what made four
+     * working detectors dark for the life of the project; the GPS component is
+     * the ONLY one that needs coordinates, and it already reports its own
+     * inability to measure as `gps_details.reason = 'no_gps_data'` rather than a
+     * silent zero (`fraud-heuristics/gps-clustering.heuristic.ts`).
+     *
+     * The coordinates are still passed when present. The worker does not read
+     * them — `FraudEngine.evaluate(submissionId)` re-loads GPS from the
+     * `submissions` row — but they are cheap, they make the queued job legible
+     * in Redis, and `FraudDetectionJobData` has always typed them optional.
+     *
+     * ⚠️ 13-69 REVIEW M2 — WHAT THIS BUYS IS NOT UNIFORM ACROSS CHANNELS, and the
+     * per-channel truth is recorded in the story rather than implied here. An
+     * ENUMERATOR submission reaches timing, speed and duplicate; straight-lining
+     * reaches its computation but cannot score on the master form (review H1).
+     * A PUBLIC one reaches timing + speed only. A CLERK/WEBAPP one (every
+     * non-enumerator staff role — `determineSubmitterRole`) reaches timing + speed
+     * too: `submissions.enumerator_id` is written ONLY for the enumerator role, and
+     * the duplicate heuristic's history query keys on that column, so it returns
+     * `no_data_or_history` even though the engine attributes the detection row to
+     * the submitter. That attribution is why a clerk's uuid can appear in
+     * `fraud_detections.enumerator_id`.
+     */
+    try {
+      await queueFraudDetection({
         submissionId: args.submissionId,
+        respondentId: args.respondentId,
+        ...(args.gps ? { gpsLatitude: args.gps.latitude, gpsLongitude: args.gps.longitude } : {}),
       });
       logger.info({
-        event: 'submission_processing.marketplace_queued',
+        event: 'submission_processing.fraud_queued',
         submissionId: args.submissionId,
         respondentId: args.respondentId,
+        // 13-69 — so "how many jobs ran without coordinates" is answerable from the
+        // prod logs alone. The whole defect hid for twelve days because the only
+        // record of a skip was the ABSENCE of a log line, and an absence looks
+        // identical to a quiet system.
+        hasGps: args.gps != null,
+      });
+    } catch (err) {
+      queueFailures.push(err);
+      logger.error({
+        event: 'submission_processing.fraud_queue_failed',
+        submissionId: args.submissionId,
+        respondentId: args.respondentId,
+        hasGps: args.gps != null,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
 
@@ -1371,14 +1450,42 @@ export class SubmissionProcessingService {
      *
      * Moved last so the two queue ops that have ALWAYS been awaited cannot be pre-empted by
      * the newest one. An enqueue failure still reaches the caller.
+     *
+     * ⚠️ 13-69 REVIEW M1 — THE ORDER IS NO LONGER WHAT PROTECTS THEM. Each effect
+     * now runs in its own try/catch (see the head of this method), so this one
+     * being last is a tiebreak for log order rather than the thing standing
+     * between a Redis blip and a lost fraud score. Keep it last anyway: the two
+     * queue ops are cheap and the email path is the one with a provider behind it.
      */
-    await this.sendRegistrationAutoEmails({
-      respondentId: args.respondentId,
-      email: args.email,
-      referenceCode: args.referenceCode,
-      status: args.status ?? 'active',
-      isNew: args.isNew,
-    });
+    try {
+      await this.sendRegistrationAutoEmails({
+        respondentId: args.respondentId,
+        email: args.email,
+        referenceCode: args.referenceCode,
+        status: args.status ?? 'active',
+        isNew: args.isNew,
+      });
+    } catch (err) {
+      queueFailures.push(err);
+      logger.error({
+        event: 'submission_processing.auto_emails_failed',
+        submissionId: args.submissionId,
+        respondentId: args.respondentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    /*
+     * ⛔ THE FAILURE STILL REACHES THE CALLER — it is only DEFERRED, never absorbed.
+     * The FIRST error is re-thrown as-is (not wrapped, not aggregated) so the
+     * existing contracts hold: the queue path surfaces it exactly as before, the
+     * wizard's `.catch()` pages Telegram, and a caller matching on the message
+     * still matches. Any further failures are already logged with their own
+     * `*_failed` event above.
+     */
+    if (queueFailures.length > 0) {
+      throw queueFailures[0];
+    }
   }
 
   /**

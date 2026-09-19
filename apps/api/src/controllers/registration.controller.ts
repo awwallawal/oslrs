@@ -1287,8 +1287,14 @@ export class RegistrationController {
       // (9-26 lesson). ⚠️ This used to say "the wizard row is always a fresh insert (isNew:true)
       // with a minted reference code" — R21 made that false: a no-NIN re-registration ATTACHES to
       // the existing record, so both the code and isNew now come from the transaction; the thank-you self-gates on source='public' (all
-      // wizard regs are); marketplace self-gates on consent_marketplace. GPS is
-      // null for the public wizard, so the shared fraud gate is a no-op (AC4).
+      // wizard regs are); marketplace self-gates on consent_marketplace.
+      // ⚠️ 13-69 — GPS is still null for the public wizard, but that NO LONGER makes
+      // fraud detection a no-op: the `if (args.gps)` gate is gone and 13-27 AC4 is
+      // superseded, so every wizard submission is now scored. What it reaches is
+      // timing + speed; straight-lining and duplicate are structurally unmeasurable
+      // on this channel (no >=5 `select_one` battery on the Public Core form, and no
+      // `enumerator_id`/`submitter_id` for the duplicate history to key on). Both
+      // report a `reason` marker rather than a silent zero — see 13-69 AC3.
       void SubmissionProcessingService.runPostSubmissionSideEffects({
         respondentId: respondent.id,
         submissionId,

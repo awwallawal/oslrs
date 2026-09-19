@@ -605,7 +605,22 @@ describe('SubmissionProcessingService', () => {
       );
     });
 
-    it('should NOT queue fraud detection when GPS coordinates are missing', async () => {
+    /*
+     * 13-69 — THIS TEST USED TO ASSERT THE DEFECT, and it is inverted rather than
+     * deleted so that anyone searching for the old behaviour lands here.
+     *
+     * It was named "should NOT queue fraud detection when GPS coordinates are
+     * missing" and it passed, correctly, for the whole life of the project. What
+     * it pinned was an `if (args.gps)` gate whose rationale covered ONE of five
+     * detectors: duplicate, straight-lining, timing and speed score behaviour and
+     * content, and none of them need coordinates. Measured 2026-09-17 — across
+     * 8,282 detections, three of those four had NEVER fired and the fourth had
+     * fired once.
+     *
+     * 13-27 AC4 (product, 2026-07-12) is superseded. See the side-effect audit
+     * note in `submission-processing.service.ts`.
+     */
+    it('queues fraud detection even when GPS coordinates are missing (13-69 — the gate is gone)', async () => {
       const submission = makeSubmission({ gpsLatitude: null, gpsLongitude: null });
       mockFindFirstSubmission.mockResolvedValue(submission);
       mockFindFirstForm.mockResolvedValue({ formSchema: makeFormSchema() });
@@ -614,7 +629,14 @@ describe('SubmissionProcessingService', () => {
 
       await SubmissionProcessingService.processSubmission('sub-001');
 
-      expect(mockQueueFraudDetection).not.toHaveBeenCalled();
+      expect(mockQueueFraudDetection).toHaveBeenCalledOnce();
+      // The coordinate keys must be ABSENT, not null: `FraudDetectionJobData`
+      // types them optional and nothing downstream reads them, but a null would
+      // be a new shape flowing into Redis for no reason.
+      const job = mockQueueFraudDetection.mock.calls[0][0] as Record<string, unknown>;
+      expect(job).toMatchObject({ submissionId: 'sub-001' });
+      expect(job).not.toHaveProperty('gpsLatitude');
+      expect(job).not.toHaveProperty('gpsLongitude');
     });
 
     it('should reject with error containing original registration date and source (AC 3.7.1)', async () => {
@@ -2019,8 +2041,10 @@ describe('SubmissionProcessingService', () => {
   // processSubmission (where marketplace extraction lived), so 124 public opt-ins
   // produced 0 profiles. Both channels now call this one method, so the extraction
   // trigger fires for the public wizard too. Also the AC2 audit's executable spine:
-  // marketplace = consent-gated, fraud = GPS-gated (a no-op for the GPS-less
-  // wizard — AC4), emails = fire-and-forget.
+  // marketplace = consent-gated, fraud = UNCONDITIONAL since 13-69 (it was
+  // GPS-gated, which made it a no-op for the whole public channel AND for every
+  // GPS-less enumerator submission — 13-27 AC4 superseded), emails =
+  // fire-and-forget.
   describe('runPostSubmissionSideEffects (Story 13-27)', () => {
     beforeEach(() => {
       // The auto-emails sub-entrypoint re-queries the respondent (source gate).
@@ -2059,7 +2083,14 @@ describe('SubmissionProcessingService', () => {
       expect(mockQueueMarketplaceExtraction).not.toHaveBeenCalled();
     });
 
-    it('does NOT queue fraud detection when GPS is absent (public wizard is GPS-less — AC4)', async () => {
+    /*
+     * 13-69 — INVERTED, NOT DELETED. This was "does NOT queue fraud detection when
+     * GPS is absent (public wizard is GPS-less — AC4)", and it is the second of the
+     * two tests that pinned the gate. 13-27 AC4 is superseded; see the sibling
+     * note on the enumerator-path test above and the side-effect audit comment in
+     * the service.
+     */
+    it('queues fraud detection when GPS is absent — the public wizard is scored too (13-69)', async () => {
       await SubmissionProcessingService.runPostSubmissionSideEffects({
         respondentId: 'resp-pub',
         submissionId: 'sub-pub',
@@ -2069,8 +2100,11 @@ describe('SubmissionProcessingService', () => {
         gps: null,
       });
 
-      expect(mockQueueFraudDetection).not.toHaveBeenCalled();
-      // Marketplace still fires — the two gates are independent.
+      expect(mockQueueFraudDetection).toHaveBeenCalledWith({
+        submissionId: 'sub-pub',
+        respondentId: 'resp-pub',
+      });
+      // Marketplace still fires — the two side-effects are independent.
       expect(mockQueueMarketplaceExtraction).toHaveBeenCalledOnce();
     });
 
@@ -2141,6 +2175,120 @@ describe('SubmissionProcessingService', () => {
           gps: null,
         }),
       ).rejects.toThrow('redis down');
+    });
+
+    /*
+     * ── 13-69 REVIEW M1 — ONE SIDE-EFFECT'S FAILURE MUST NOT COST ANOTHER ONE ──
+     *
+     * 13-65 review B4 fixed this by ORDERING the effects, and 13-69's first pass
+     * re-ordered them again when the ungate made fraud detection newly-fallible.
+     * Ordering only decides which effect is lost: on the enumerator/clerk path the
+     * loss is PERMANENT, because `processed = true` is already committed and the
+     * BullMQ retry hits the already-processed early return.
+     *
+     * ⛔ The review found this pair UNPINNED: moving fraud back in front of
+     * marketplace left all 105 tests green. These three assert the property that
+     * replaced the ordering — every effect is attempted, the first error still
+     * reaches the caller — so a future re-order cannot quietly re-introduce the
+     * pre-emption, and neither can deleting the try/catch.
+     */
+    it('M1: a marketplace enqueue failure does NOT cost the submission its fraud score', async () => {
+      mockQueueMarketplaceExtraction.mockRejectedValueOnce(new Error('redis down'));
+
+      await expect(
+        SubmissionProcessingService.runPostSubmissionSideEffects({
+          respondentId: 'resp-pub',
+          submissionId: 'sub-pub',
+          email: null,
+          isNew: true,
+          consentMarketplace: true,
+          gps: null,
+        }),
+      ).rejects.toThrow('redis down');
+
+      // The whole point of 13-69: this submission still gets scored.
+      expect(mockQueueFraudDetection).toHaveBeenCalledWith({
+        submissionId: 'sub-pub',
+        respondentId: 'resp-pub',
+      });
+      expect(mockLoggerError).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'submission_processing.marketplace_queue_failed' }),
+      );
+    });
+
+    it('M1: a fraud enqueue failure does NOT cost the respondent their marketplace profile or emails', async () => {
+      mockQueueFraudDetection.mockRejectedValueOnce(new Error('redis down'));
+
+      await expect(
+        SubmissionProcessingService.runPostSubmissionSideEffects({
+          respondentId: 'resp-pub',
+          submissionId: 'sub-pub',
+          email: 'pub@example.test.real',
+          referenceCode: 'OSL-2026-ABC123',
+          status: 'active',
+          isNew: true,
+          consentMarketplace: true,
+          gps: null,
+        }),
+      ).rejects.toThrow('redis down');
+
+      expect(mockQueueMarketplaceExtraction).toHaveBeenCalledOnce();
+      // …and the effects AFTER the failure ran too — this is the half that
+      // ordering could never deliver, because something always has to be last.
+      expect(mockQueueRegistrationConfirmation).toHaveBeenCalledTimes(1);
+      expect(mockLoggerError).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'submission_processing.fraud_queue_failed', hasGps: false }),
+      );
+    });
+
+    it('M1: marketplace is still attempted BEFORE fraud (log order, not protection)', async () => {
+      await SubmissionProcessingService.runPostSubmissionSideEffects({
+        respondentId: 'resp-pub',
+        submissionId: 'sub-pub',
+        email: null,
+        isNew: true,
+        consentMarketplace: true,
+        gps: null,
+      });
+
+      expect(mockQueueMarketplaceExtraction.mock.invocationCallOrder[0])
+        .toBeLessThan(mockQueueFraudDetection.mock.invocationCallOrder[0]);
+    });
+
+    /*
+     * 13-69 REVIEW L1 — Task 2.4's deliverable was a LOG FIELD, and nothing asserted
+     * it. `hasGps` is how prod answers "how many jobs ran without coordinates"
+     * without a DB query, and the defect it exists to prevent hid for twelve days
+     * precisely because the only record of a skip was an absent log line.
+     */
+    it('L1: the fraud_queued log line carries hasGps — false without coordinates', async () => {
+      await SubmissionProcessingService.runPostSubmissionSideEffects({
+        respondentId: 'resp-pub',
+        submissionId: 'sub-pub',
+        email: null,
+        isNew: true,
+        consentMarketplace: false,
+        gps: null,
+      });
+
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'submission_processing.fraud_queued', hasGps: false }),
+      );
+    });
+
+    it('L1: …and true with them', async () => {
+      await SubmissionProcessingService.runPostSubmissionSideEffects({
+        respondentId: 'resp-field',
+        submissionId: 'sub-field',
+        email: null,
+        isNew: true,
+        consentMarketplace: false,
+        gps: { latitude: 7.3775, longitude: 3.947 },
+      });
+
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'submission_processing.fraud_queued', hasGps: true }),
+      );
     });
   });
 

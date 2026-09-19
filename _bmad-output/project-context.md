@@ -1743,10 +1743,18 @@ grep -E "CORS_ORIGIN|NEW_VAR_NAME" /path/to/.env
 
 15. **No "coming soon" pages in production (A11).** Unimplemented features must not have visible placeholder routes. Catch-all wildcard routes should show proper "page not found" UX, not "coming soon" text. Inappropriate for a government system.
 
+### Evidence & Measurement (A12-A14, from the 13-69 review 2026-09-18)
+
+16. **A number about live data carries its DATE and the query that produced it (A12).** Any figure in a story, brief, residual or status line that describes production — a count, a percentage, a coverage claim — is written as *value + as-of date + how it was obtained*, never as a bare number. **Lesson:** 13-69's `~50` unscored submissions travelled brief → story → review as a fact; measured on the day it was **58**, rising, with 5 more arriving during the review. An undated number is believed long after it stops being true, and the reader cannot tell a measurement from an estimate. Corollary: when quoting someone else's number, quote its date too, or re-measure.
+
+17. **"Blocked on a measurement" requires a recorded ATTEMPT (A13).** A task whose deliverable is a measurement may only be handed over as blocked if the story records the command that was run and how it failed. ⚠️ **Read-only production measurement over Tailscale is available to the dev and review agents** (`docker exec -e PGOPTIONS='-c default_transaction_read_only=on' oslsr-postgres psql -U oslsr_user -d oslsr_db`); what belongs to adjudication is commit/push/deploy, the live server, and `docs/adjudication-agent-handoff.md`. **Lesson:** 13-69's AC8 and R1 count rode as "blocked on prod access" through dev-story and a full review pass; two read-only queries closed both, and one of them settled a conditional AC that would otherwise have shipped an unnecessary form re-upload. "I have no path" and "I did not try" read identically six weeks later.
+
+18. **A detector's result must say WHICH KIND of zero it is (A14).** Any heuristic, scorer or check that can return a neutral/zero result must make its `details` self-describing: either a `reason` naming why it could not measure, or the computed evidence proving it did. Never a bare zero. Enforced for the fraud engine by `apps/api/src/services/fraud-heuristics/__tests__/heuristic-self-description.contract.test.ts`, which also fails when a heuristic is registered without declaring what its evidence looks like. **Lesson:** 13-69 existed because four detectors returned zeroes that meant "never ran", and its review then found the same shape four more times in a week (R5, R8, R9, and the GPS permission case in 13-71). The class is cheaper to close with one contract than with four patches.
+
 ---
 
 **DOCUMENT STATUS:** ✅ READY FOR AI AGENT IMPLEMENTATION
 
-**Last Updated:** 2026-03-04
+**Last Updated:** 2026-09-18
 
-**Version:** 2.0.0 (Added: Race Condition Anti-Patterns (5 patterns from Epic 6), Deployment Safety Rules, Production VPS Reference, Team Agreements A7-A11 from Epic 5+6 retrospectives. Updated deployment info from Hetzner to DigitalOcean.)
+**Version:** 2.1.0 (2026-09-18: Team Agreements A12-A14 — dated numbers, recorded measurement attempts, and the detector self-description contract; all three from the Story 13-69 adversarial review.) 2.0.0 (Added: Race Condition Anti-Patterns (5 patterns from Epic 6), Deployment Safety Rules, Production VPS Reference, Team Agreements A7-A11 from Epic 5+6 retrospectives. Updated deployment info from Hetzner to DigitalOcean.)
