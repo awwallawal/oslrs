@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-09-15 · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-09-19 · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -794,6 +794,37 @@ two stories violated §2a0 in plain sight.
 - **The guard caught ME within minutes:** my first fix to 13-57 edited the *Item* cell instead of the
   *State* cell, and it failed immediately. A guard you cannot trip is not a guard.
 
+
+#### 2ab.1 ⛔ A LEDGER WITH NON-CONFORMING IDS IS WORSE THAN NO LEDGER
+*Added 2026-09-19, after writing one and watching the guard ignore it.*
+
+§2ab found that `lint-story-residuals` polices only the stories that adopted the ledger FORMAT.
+This is the same rule one level deeper, and it bites the diligent specifically: **the guard polices
+only the rows whose ID matches `R<digits>`.**
+
+```
+RESIDUAL_ID = /^\s*~{0,2}\*{0,2}\s*(R\d+[A-Za-z0-9-]*)/     // story-residual-guard.ts
+HAS_LEDGER  = /^\s*#{2,4}\s+Residuals\b/im
+```
+
+13-69's ledger was first written with two post-deploy rows called **`D1` / `D2`** (D for discharge —
+it read well). `Status: done` with `DISCHARGE-ON-DEPLOY` sitting in the table, and the guard
+reported **"327 stories scanned, no done-with-open-residuals"**, exit 0.
+
+- ⛔ **AND IT WAS A NET REGRESSION, WHICH IS THE PART TO INTERNALISE.** The guard has a PROSE
+  fallback that greps the body for `DISCHARGE-ON-(PUSH|DEPLOY)` — but it only runs when the story
+  has NO ledger. Adding a `## Residuals` heading **switched that fallback off**, so the story went
+  from "catchable by the prose rule" to "catchable by nothing". **Half-adopting a format can remove
+  the protection you already had.**
+- ✅ **Renaming to `R10`/`R11` fixed it, proven by RED-verify:** set the row back to
+  `DISCHARGE-ON-DEPLOY` → guard exits 1 and NAMES the row. Restore → exit 0. Two runs, thirty seconds.
+- ⭐ **The rule: after writing a ledger, RED-VERIFY IT ONCE — flip one row to an open state and
+  confirm the guard reds.** A ledger is a claim that the story is policed. Until you have seen it
+  fire on your own table, it is decoration with the authority of a control. Same discipline as
+  §2ae, pointed at the artefact rather than the code.
+- ⚠️ Note `R-A8`-style ids do NOT match `R\d+` either. If a ledger ever needs them, the guard
+  must be widened first — do not assume the id scheme is free-form because the table renders.
+
 ### 2ac. ⛔ WHEN I CLOSE A SHARED-DERIVATION FIX, I MUST GREP FOR ITS SIBLINGS — I did not, and it cost a week of divergence
 *Added 2026-08-20. This one is mine.*
 
@@ -1060,7 +1091,25 @@ sit on opposite sides of a boundary — and the far side of a boundary is exactl
 
 ---
 
-## 3. Current state (2026-09-16) — READ THIS ONE
+## 3. Current state (2026-09-19) — READ THIS ONE
+
+**Prod `826147f`**, health 200, CI 35462842118 green 10/10 including `deploy`, pm2 restart confirmed by uptime. ⭐ **THE FRAUD ENGINE IS NO LONGER DARK** — 13-69 adjudicated, deployed and CLOSED the same day, and its two post-deploy checks were discharged against live traffic rather than deferred.
+
+- ✅ **13-69 DONE ON PROD.** The enqueue was gated on `if (args.gps)`; only the GPS heuristic ever needed coordinates, so one over-broad `if` disabled duplicate, straight-lining, timing and speed as well. **Every submission is now scored.** Discharged by two `ZZSMOKE` practice captures through the real enumerator app — one without location, one with — so **both `hasGps` branches are observed in production**. The GPS-less one was scored, which is precisely the case that was invisible before, and its `gps_details` reads `{"reason":"no_gps_data"}` — a marker that had existed in the code the whole time and that **nobody had ever seen, because no row was ever written.**
+- ⛔ **R5 IS NOW CONFIRMED ON PRODUCTION DATA:** `straight_lining` analysed 1 of 2 batteries and returned `pir 0.2` against a 0.8 threshold, `entropy 2.32` against 0.5. **It runs and cannot score on `oslsr_master_v3`.** A straight-lining zero on this form is not evidence of clean data. That is the case for **13-73**, and it is now evidence rather than argument.
+- 🔢 **The unscored backlog is still there and still growing:** **410 all-time / 65 in R-A8's window** (was 403/58 on 09-18 — **~+7/day**). 13-72 pass 1 must **re-measure on its own run day**; do not inherit 58 or 65.
+- 🐞 **THE DEPLOY BROKE THE COHORT TEARDOWN, AND NOTHING WOULD HAVE SAID SO.** The trial teardown deleted `submissions` without `fraud_detections`, which was safe only because detection rows barely existed. `fraud_detections_submission_id_submissions_id_fk` is NO ACTION, so the next run would have raised 23503 and rolled back. Fixed `b8f9950`. ⭐ **A deploy can make a previously-safe procedure unsafe; a runbook does not fail until someone runs it.** When a change starts writing a child row against a common parent, grep the runbooks for deletes of that parent.
+- ⭐ **AND THE SAME FK HARDENED §0.9b:** `fraud_detections.enumerator_id` is NO ACTION too, so deleting an enumerator whose captures have been SCORED now **fails loudly** instead of silently orphaning via the FK-less `submitter_id`. Only covers post-deploy scoring — the rule is unchanged.
+- 🧪 **A staff-detail test was green while writing no audit row at all** (`randomUUID()` actor ⇒ FK violation ⇒ swallowed by the fire-and-forget audit). Fixed `fbbc213`, RED-verified. The audit trail is the feature's whole compliance rationale and nothing had asserted it.
+- ⚠️ **13-70 IS A BRIEF WITH NO STORY AND NO BOARD ENTRY** — limiter hygiene + making R2b's 2026-10-15 date enforceable. It exists because *"five residuals were handed to stories nobody had written"*, and it has now become an instance of its own finding.
+
+### ⏭️ NEXT, in the order the evidence supports
+1. 🔴 **Re-provision the 9 locked-out enumerators** — 7 resends, 2 in-place resets. No deploy, no story, no engineer, and it roughly doubles the working field force. F1 is the trial's bottleneck: **8 of 17 have logged in.** ⛔ Never delete an account with captures.
+2. 🟡 **13-71** — 11% GPS coverage, and it is the only loss that cannot be repaired later.
+3. **13-72 pass 1** (re-measure first) → then **13-73** → then 13-72 pass 2.
+4. **R-A8 last**, and treat pass 1 as a shakedown of the calibration METHOD — 58-65 rows from 10 people is a trial sample, not the field.
+
+## 3-old8. Current state (2026-09-16) — superseded by §3 above
 
 **Prod `b602591`** (pushed, CI green, deployed, process restarted — verified by pm2 uptime, not by the deploy log), health 200. Marketplace **8,576** listings. ⭐ **THE JINGLE READ IS DONE** (§9
 closed), and it turned up a live blocker that outranked the story it was meant to close.

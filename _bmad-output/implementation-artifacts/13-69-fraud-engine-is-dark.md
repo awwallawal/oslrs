@@ -1,6 +1,6 @@
 # Story 13.69: The fraud engine is dark — ungate detection so the four non-GPS detectors run
 
-Status: review
+Status: done
 
 <!--
 STATUS, 2026-09-18 (adversarial code review, second pass). `review` → briefly `in-progress`
@@ -463,10 +463,12 @@ Claude Opus 5 (1M context) — dev-story, 2026-09-17.
 
 ⭐ **THIS TABLE IS NEW AT ADJUDICATION (2026-09-19), AND ITS ABSENCE WAS ITSELF A FINDING.** 13-69's residuals lived entirely in prose, and `lint-story-residuals` **reads table rows only** — so this story was invisible to the guard that exists to police exactly it (§2ab hole 2: *a format-based check polices only the people who adopted the format*). The guard reported *"327 stories scanned, no done-with-open-residuals"* while this story carried eight prose residuals and a stale checkbox. It was not lying; it could not see them.
 
+⛔ **THE IDS MUST MATCH `R<digits>` — THIS LEDGER WAS INVISIBLE TO THE GUARD ON ITS FIRST DRAFT (2026-09-19).** The two post-deploy rows were first written as `D1`/`D2`, and `story-residual-guard.ts`'s `RESIDUAL_ID` is `/^\s*~{0,2}\*{0,2}\s*(R\d+[A-Za-z0-9-]*)/` — so the table scan skipped them entirely. ⚠️ **And it was worse than having no ledger at all:** `HAS_LEDGER` matches `## Residuals`, which DISABLES the prose fallback (`DISCHARGE-ON-(PUSH|DEPLOY)` anywhere in the body) that would otherwise have caught the very same row. **Adding a ledger with non-conforming ids is a net REGRESSION in coverage.** Renamed to `R10`/`R11` and RED-verified: setting `R10` back to `DISCHARGE-ON-DEPLOY` now reds the guard, exit 1, naming the row.
+
 | ID | Item | State | Re-runnable evidence / owner + trigger | Home |
 |---|---|---|---|---|
-| **D1** | `submission_processing.fraud_queued` appears once per new submission, carrying `hasGps` | **DISCHARGE-ON-DEPLOY** | `pm2 logs` grep after deploy. Absent ⇒ the ungate did not reach prod. The cheapest check available, and it exists because this defect hid for twelve days behind an ABSENT log line | this story |
-| **D2** | `fraud_detections` rows actually written after deploy | **DISCHARGE-ON-DEPLOY** | `SELECT count(*) FROM fraud_detections WHERE created_at > '<deploy ts>'` ~1h after. Zero while D1 is green ⇒ the worker is failing after the enqueue; check the dead-letter set | this story |
+| **R10** | `submission_processing.fraud_queued` appears once per new submission, carrying `hasGps` | ✅ **CLOSED 2026-09-19** | `pm2 logs` grep after deploy. Absent ⇒ the ungate did not reach prod. The cheapest check available, and it exists because this defect hid for twelve days behind an ABSENT log line | this story |
+| **R11** | `fraud_detections` rows actually written after deploy | ✅ **CLOSED 2026-09-19** | `SELECT count(*) FROM fraud_detections WHERE created_at > '<deploy ts>'` ~1h after. Zero while R10 is green ⇒ the worker is failing after the enqueue; check the dead-letter set | this story |
 | **R1** | Back-scoring the unscored window — R-A8's PRECONDITION | **SCOPED** | Story **13-72** (`ready-for-dev`). Re-measure on the run day: 58 (09-18) → **65** (09-19), ~+7/day | 13-72 |
 | **R2** | `fraud_detections.submission_id` is a plain index, not unique | **SCOPED** | Story **13-72**, on R1's critical path — a back-score re-enqueues old submissions by definition | 13-72 |
 | **R3** | Public channel structurally blind on `straightline` + `duplicate` | **ACCEPTED** | Measured; permanent given the form's structure. Owner: Awwal / R-A8. Reopen trigger: Public Core gains a section with ≥5 `select_one` | AC3 test |
@@ -476,7 +478,7 @@ Claude Opus 5 (1M context) — dev-story, 2026-09-17.
 | **R8** | 283 submissions reference 5 DELETED form rows | **SCOPED** | Story **13-73** — the `deleteForm` guard + form-identity snapshot; 205 of 283 restorable, 78 gone. ⛔ Must land BEFORE 13-72 pass 2 | 13-73 |
 | **R9** | `duplicate_response` flattens geopoints through `String()`, so two DIFFERENT locations compare equal | **SCOPED** | Story **13-73**. ⚠️ 13-71 is about to make this universal | 13-73 |
 
-⛔ **Do not flip `Status:` to `done` until D1 and D2 are discharged against prod and the deploy SHA is recorded in the Closing verdict below.**
+✅ **R10 and R11 DISCHARGED 2026-09-19 against live prod traffic — see "Post-deploy discharge" in the Closing verdict. `Status: done`.**
 
 **Out of scope (verified untouched — `git diff` empty):**
 - `apps/api/src/services/fraud-engine.service.ts`, all of `apps/api/src/services/fraud-heuristics/`, `apps/api/src/db/seeds/fraud-thresholds.seed.ts`, `apps/api/src/db/schema/respondents.ts` (`PIPELINE_EXCLUDED_STATUSES`), `apps/api/src/queues/fraud-detection.queue.ts`.
@@ -752,9 +754,36 @@ Tasks 5 and 7.2 were handed over as "BLOCKED: needs prod read access", and the r
 
 ✅ **THE WORK IS SOUND AND IS WHAT IT CLAIMS TO BE.** The ungate is real, the coverage it buys is real and per-channel exactly as documented, and every falsifiable prediction the Handover wrote landed on its number. **No defect was found in the code.** Every finding was in the RECORD, and each is fixed above.
 
-⛔ **NOT `done` — `review`, closing ON DEPLOY.** Two verifications are provable only against prod (D1/D2 in the ledger). Per §2a0 a DISCHARGE-ON-DEPLOY row blocks `done` but not the commit, and per §2y(a) `done` requires *deployed* and *verified*, not *committed*.
+⛔ **NOT `done` — `review`, closing ON DEPLOY.** Two verifications are provable only against prod (R10/R11 in the ledger). Per §2a0 a DISCHARGE-ON-DEPLOY row blocks `done` but not the commit, and per §2y(a) `done` requires *deployed* and *verified*, not *committed*.
 
-**Deploy SHA: ⏳ PENDING** — until this line carries a real SHA, `Status:` must not read `done`.
+**Deploy SHA: `826147f`** — deployed 2026-09-19 19:05:45Z (pm2 restart verified by uptime, not by the deploy log). R10 and R11 discharged 2026-09-19 ~20:41Z against live prod traffic; `Status: done` earned, not assumed.
+
+### Post-deploy discharge — R10 and R11, against live prod traffic (2026-09-19)
+
+**Two practice captures through the real enumerator app** by Awwal on `lawalkolade+test@gmail.com`, surname `ZZSMOKE` per the runbook's practice convention. Deliberately one WITHOUT location and one WITH, because `hasGps` has two states and a conditional branch is unverified until its condition is met (§2a2).
+
+| | capture 1 `01a0bb62` | capture 2 `01a0bb66` |
+|---|---|---|
+| GPS captured | **no** | **yes** |
+| `fraud_queued` log line | ✅ `"hasGps":false` | ✅ `"hasGps":true` |
+| `fraud_detections` row | ✅ written | ✅ written |
+| severity / total | `clean` / 5.00 | `clean` / 5.00 |
+| `enumerator_id` set | ✅ | ✅ |
+
+⭐ **THE ONE THAT MATTERS: capture 1 carried no coordinates and was scored anyway.** That is precisely the submission this defect made invisible for the life of the project, and it is now a real row in `fraud_detections` on production.
+
+⭐ **AND `no_gps_data` IS FINALLY VISIBLE.** Capture 1's `gps_details` reads exactly `{"reason": "no_gps_data"}`. That marker has existed in `gps-clustering.heuristic.ts:191` the whole time — FR2 was a VERIFICATION, not a build, precisely because it was already there. **Nobody had ever seen it, because no row was ever written.** Capture 2's `gps_details` instead carries a real evaluation (`gpsPointCount: 1`, `inCluster: false`, no `reason`), so both halves of that heuristic are now observed in production.
+
+**Per-channel claims, confirmed on live data rather than on the fixture:**
+
+- **timing** — `watHour: 21`, `dayOfWeek: "Saturday"`, `isWeekend: true`, `weekendPenalty: 5` ⇒ `timing_score` 5.00. The only component that fired, on both.
+- **speed** — reached computation with **no `reason` key**, which is what AC2 demands: `tier: "normal"`, `referenceTime: 246` (`theoretical_minimum`), capture 1 `completionTimeSeconds: 161` (ratio 0.65), capture 2 `269` (ratio 1.09). Note `historicalSampleSize` moved **0 → 1** between them: the per-enumerator bootstrap is accumulating toward `bootstrapN: 30`, after which speed stops being measured against the inflated 246s floor.
+- **duplicate** — reached computation on the enumerator channel: `comparedSubmissions: 1`, `maxMatchRatio: 0.23`, `bestMatchSubmissionId` = capture 1. Exactly the history-keyed behaviour that is structurally dead on the public and clerk channels (M2).
+- **straight_lining** — ⛔ **R5 IS NOW CONFIRMED ON PRODUCTION DATA, not merely on the parsed fixture.** `batteryCount: 2`, `analyzedBatteries: 1`, and that single analysed battery returned `pir: 0.2` against `pirThreshold: 0.8` and `entropy: 2.32` against `entropyThreshold: 0.5`. **The detector ran, and could not possibly have scored.** This is the strongest evidence yet for 13-73, and it means a straight-lining zero on this form must not be read as a clean result.
+
+⚠️ **A PREDICTION OF ADJUDICATION'S WAS FALSIFIED, AND IT IS RECORDED RATHER THAN QUIETLY DROPPED.** Before the run, adjudication predicted the practice captures would likely trip `speed_run` as `superspeeder` — the Adedeji E1 shape — and warned it should not be read as a real signal. **It did not fire.** The mechanism, measured: `superspecederPct` is 25 and `speederPct` 50, so against a 246s reference the thresholds sit at ~61s and ~123s; capture 1 took **161s** (ratio 0.65) and capture 2 **269s** (1.09), both comfortably `normal`. Adedeji's flagged run was **41s**, a ratio of ~0.17. ⭐ **The prediction was wrong because it assumed a practice capture is a fast one; these were done carefully.** The useful residue is the calibration fact underneath it: a deliberate enumerator clears the speed floor on this form with room to spare, which is an input R-A8 should keep.
+
+**Teardown deliberately NOT run yet:** the detection rows ARE the evidence for R10/R11, and tearing down first would have destroyed the proof. They are tagged `ZZSMOKE` and traceable; removal follows the corrected cohort teardown — which now deletes `fraud_detections` FIRST, a step this very deploy made mandatory (see `docs/runbooks/enumerator-prod-smoke-and-golive-gate.md`, fixed 2026-09-19 `b8f9950`).
 
 ### The probes, executed and reported HERE rather than only in chat (§2a0.1)
 
@@ -765,8 +794,8 @@ Tasks 5 and 7.2 were handed over as "BLOCKED: needs prod read access", and the r
 | 3 | fraud re-ordered above marketplace | 1 red | **1 red** (the M1 order pin); `tsc` stayed 0, so the failure is behavioural, not a compile artefact | ✅ |
 | 4 | prod: enumerator form + geopoint count | v2026072301, 1 geopoint | **exactly that**, 36 submissions. Not 0 ⇒ AC9 correctly never fires and no form is touched | ✅ |
 | 5 | prod: unscored since 2026-09-05 | ≥ 58 and RISING | **65** (410 all-time, 33 enumerator). Rising, so nobody has begun back-scoring | ✅ |
-| 6 | `submission_processing.fraud_queued` with `hasGps` in prod logs | one per new submission | ⏳ **DISCHARGE-ON-DEPLOY (D1)** | ⏳ |
-| 7 | `fraud_detections` written ~1h after deploy | ≈ one per submission since | ⏳ **DISCHARGE-ON-DEPLOY (D2)** | ⏳ |
+| 6 | `submission_processing.fraud_queued` with `hasGps` in prod logs | one per new submission | **both branches observed** — `hasGps:false` AND `hasGps:true` | ✅ |
+| 7 | `fraud_detections` written ~1h after deploy | ≈ one per submission since | **2 of 2 scored**, including the GPS-less one | ✅ |
 
 **Gates re-run independently:** `tsc --noEmit` **0** · `eslint` on all six touched files **0** · all three drift guards **0**, each run DIRECT rather than through turbo (§2y(c)).
 
