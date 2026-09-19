@@ -603,6 +603,119 @@ to do.
 
 ---
 
+---
+
+## 🛰️ The FIELD-PROPER gate — trial exit criteria (added 2026-09-18)
+
+⛔ **This is NOT the media-spend gate above.** That one answers *"may we buy radio?"*. This one answers
+a different question: **"is the trial finished, and may the cohort become the field proper?"** They are
+independent — spend can be green while the field is not, and vice versa.
+
+> **The 17 are a TRIAL cohort. The field proper has not started.** Their captures are nonetheless real
+> citizens in the register (§0.9b), so trial DATA is real; trial READINESS is what is provisional. The
+> four criteria below are what the trial has to PRODUCE before anyone scales past it.
+
+### The four criteria
+
+| # | Criterion | Baseline (2026-09-18) | Target | Closed by | Verdict |
+|---|---|---|---|---|---|
+| F1 | **Enumerators who have actually logged in** | **8 of 17** | **≥ 15 of 17** | Operator re-provisioning with REAL addresses (§0.1a). 7 `invited` need a RESEND, 2 `active` a reset IN PLACE. ⛔ Never delete an account with captures (§0.9b). No deploy required. | ⬜ GREEN ⬜ RED |
+| F2 | **Enumerator submissions carrying GPS, last 7 days** | **11%** (4 of 36 in the trial window) | **≥ 90%** | Story **13-71** (auto-capture on form open + code-enforced requirement with a derived unavailable-reason) | ⬜ GREEN ⬜ RED |
+| F3 | **Submissions holding a `fraud_detections` row, last 7 days** | **0%** (0 of 32 unscored) | **100%** | Story **13-69** deploy (the ungate) | ⬜ GREEN ⬜ RED |
+| F4 | **NEW submissions referencing a form row that no longer exists** | **1** enumerator row (283 across all sources, historical) | **0 new** | Story **13-73** (`deleteForm` guard + the form-identity snapshot) | ⬜ GREEN ⬜ RED |
+
+**Why these four and not a longer list:** each is one query, each has a named owner, and each maps to
+exactly one piece of work. F1 is people, F2 is capture, F3 is supervision, F4 is interpretability. A
+criterion with no query behind it is an opinion.
+
+### The queries
+
+```sql
+-- F1 — who has actually logged in (the fuller tracker is in §0.9)
+SELECT count(*) FILTER (WHERE u.last_login_at IS NOT NULL) AS logged_in, count(*) AS provisioned
+FROM users u JOIN roles r ON r.id = u.role_id
+WHERE r.name = 'enumerator' AND u.email LIKE '%+test%';   -- ⚠️ drop the +test filter once §0.1a is fixed
+
+-- F2 — GPS coverage, last 7 days
+SELECT count(*) AS submissions,
+       count(*) FILTER (WHERE gps_latitude IS NOT NULL) AS with_gps,
+       round(100.0 * count(*) FILTER (WHERE gps_latitude IS NOT NULL) / nullif(count(*),0), 1) AS pct
+FROM submissions WHERE source = 'enumerator' AND submitted_at > now() - interval '7 days';
+
+-- F3 — detection coverage, last 7 days (ALL live sources, not just enumerator)
+SELECT s.source, count(*) AS submissions,
+       count(*) FILTER (WHERE d.submission_id IS NOT NULL) AS scored
+FROM submissions s
+LEFT JOIN (SELECT DISTINCT submission_id FROM fraud_detections) d ON d.submission_id = s.id
+WHERE s.submitted_at > now() - interval '7 days' AND s.source <> 'backfill'
+GROUP BY 1;
+
+-- F4 — new rows pointing at a form that no longer exists
+SELECT count(*) FROM submissions s
+LEFT JOIN questionnaire_forms f ON f.id::text = s.questionnaire_form_id
+WHERE f.id IS NULL AND s.questionnaire_form_id ~ '^[0-9a-f]{8}-'
+  AND s.submitted_at > now() - interval '7 days';
+```
+
+⚠️ **Re-measure, never quote.** Every baseline above is stamped 2026-09-18 and moves daily
+(project-context **A12**). F2 and F3 in particular change the moment 13-69 and 13-71 deploy.
+
+### ⚖️ Adjudicated exemptions — genuine work that the engine flagged, or would
+
+**The rule:** when a detection or a pattern is reviewed and found to be real work, it is recorded HERE
+with its evidence. An exemption that lives only in someone's memory is indistinguishable from an
+unreviewed flag the next time anyone looks.
+
+#### E1 — Adedeji Adetola, 2026-09-15/16. CONFIRMED GENUINE (Awwal, 2026-09-18). The only exemption to date.
+
+**What the record shows, measured:** she is the trial's most productive enumerator — **23 submissions**,
+all in Egbeda, including **13 between 06:06 and 08:54 WAT on 2026-09-16**. She also holds **the only
+non-`clean` fraud detection ever written on this system**:
+
+| | |
+|---|---|
+| Submission | 2026-09-15 **20:54 WAT** |
+| Severity / total | `low` / **25.00** |
+| Driven entirely by | `speed_score` **25.00** — tier `superspeceder`, ratio **0.17** |
+| Completion time vs reference | **41s** against a **246s** theoretical floor |
+| Every other component | `gps` 0, `timing` 0, `straightline` 0, `duplicate` 0 |
+
+⭐ **RULING (Awwal, 2026-09-18): her capturing is REAL. This is not fraud and is not to be re-litigated.**
+It was the **absence of GPS** on her submissions — not the volume — that prompted the investigation, and
+that investigation produced Story **13-69** (the fraud engine was dark for the life of the project) and
+Story **13-71** (the location is offered and not taken).
+
+**Three things the data adds, which support the ruling rather than qualify it:**
+
+1. **The flagged row is an outlier inside HER OWN pattern, not a pattern.** Her other 22 submissions run
+   **132–635 seconds** (most 270–400). A single 41-second row at 20:54, followed by 509s and 499s within
+   the hour, has the shape of a **first/practice submission** — and it is also her **only** submission
+   carrying GPS, i.e. the one where she was exploring the form and pressed the location button.
+2. **Her throughput is not suspicious on inspection.** 13 captures across 2h48m on the morning of 09-16,
+   each with a recorded completion time of 278–635s, spaced by real gaps. That is a person working, and
+   it is the first sustained field evidence this project has.
+3. **The detector was not wrong to look.** 41s against a 246s floor is exactly what `speed_run` exists to
+   surface. ⚠️ But the floor itself is questionable: `calculateTheoreticalMinimum` counts **every** question
+   in the schema, including the 7-question guardian section that applies only to minors and every question
+   hidden behind skip logic. A floor computed from questions a respondent never sees will flag ordinary
+   short interviews. **That is an R-A8 calibration input, and this row is the evidence for it.**
+
+⚠️ **FOR R-A8 — READ THIS BEFORE CALIBRATING.** This is the **only labelled-genuine flag in the entire
+system**: one confirmed-real submission, flagged `low`, on a single component, against a floor that
+over-counts. Treat it as a calibration anchor, not as a base rate — and note that the trial's whole
+detection history is 5 scored submissions out of 37, because everything else was dark until 13-69.
+
+### Decision rule
+
+- **ALL FOUR green → the trial is complete; the cohort may become the field proper.**
+- **ANY red → the trial continues.** ⛔ Do not scale past 17 enumerators on a red F2 in particular: a
+  location that was never captured **cannot be back-filled**, unlike a fraud score, which Story 13-72
+  exists to write after the fact. The hole scales with headcount and is permanent.
+- A criterion is green only with its query output recorded — the 2026-08-05 lesson applies here too:
+  a monitor reading zero and a monitor that never ran look identical.
+
+---
+
 ## §A — Verification queries
 
 Access: `ssh root@100.93.100.28` → `docker exec -it oslsr-postgres psql -U oslsr_user -d oslsr_db`.
