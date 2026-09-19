@@ -517,6 +517,7 @@ WITH cohort AS (
     AND rp.created_at BETWEEN :trial_start AND :trial_end   -- ⚠️ ALWAYS bound by time
 )
 SELECT
+  (SELECT count(*) FROM fraud_detections     WHERE submission_id IN (SELECT id FROM submissions WHERE respondent_id IN (SELECT id FROM theirs))) AS fraud_detections,
   (SELECT count(*) FROM submissions          WHERE respondent_id IN (SELECT id FROM theirs)) AS submissions,
   (SELECT count(*) FROM marketplace_profiles WHERE respondent_id IN (SELECT id FROM theirs)) AS marketplace_profiles,
   (SELECT count(*) FROM theirs)                                                              AS respondents;
@@ -527,12 +528,32 @@ SELECT
 BEGIN;
 -- children first: submissions.respondent_id is a plain FK with NO cascade (since 2026-09-05),
 -- so deleting respondents first raises a violation and leaves the whole set behind.
+-- ⛔ fraud_detections BEFORE submissions — added 2026-09-19, see the warning below.
+DELETE FROM fraud_detections     WHERE submission_id IN (SELECT id FROM submissions WHERE respondent_id IN (SELECT id FROM theirs));
 DELETE FROM submissions          WHERE respondent_id IN (SELECT id FROM theirs);
 DELETE FROM marketplace_profiles WHERE respondent_id IN (SELECT id FROM theirs);
 DELETE FROM respondents          WHERE id             IN (SELECT id FROM theirs);
 -- Check the row counts against the dry run BEFORE committing.
 COMMIT;   -- or ROLLBACK if anything surprised you
 ```
+
+🔴 **`fraud_detections` WAS MISSING FROM THIS BLOCK UNTIL 2026-09-19, AND THE DEPLOY THAT DAY IS WHAT MADE IT BITE.**
+Before 13-69, fraud detection was gated on GPS, so almost no enumerator submission had a detection
+row — **0 of the 32** unscored in the trial window. This teardown therefore worked by luck. From the
+13-69 deploy onward **every submission gets a detection row**, and
+`fraud_detections_submission_id_submissions_id_fk` is **NO ACTION** (verified on prod 2026-09-19), so
+the old block now raises `23503` on the `DELETE FROM submissions` line and rolls the whole
+transaction back. ⭐ **The general shape: a deploy can make a previously-safe procedure unsafe, and
+nothing tells you — the runbook does not fail until someone runs it.** When a change adds a child
+row to a common parent, grep the runbooks for deletes of that parent.
+
+⭐ **AND THE SAME DEPLOY HARDENED §0.9b, which is worth knowing before the next re-provisioning.**
+`fraud_detections.enumerator_id` also carries a **NO ACTION** FK to `users`. §0.9b exists because
+`submitter_id` has NO FK, so deleting an enumerator account silently orphaned their captures. As of
+2026-09-19, an enumerator whose captures have been SCORED can no longer be deleted silently — the
+delete now **fails loudly** with a FK violation instead. ⛔ That is a safety net, not a licence:
+it only covers submissions scored after the deploy, so the rule is unchanged — **never delete an
+account that has captured anyone; reset it IN PLACE.**
 
 ⚠️ **BOUND IT BY TIME, not only by submitter.** The day a trial account is promoted to real work, its
 genuine registrations match `submitter_id` too. `:trial_start` / `:trial_end` are what stop the
