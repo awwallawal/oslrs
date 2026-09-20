@@ -15,6 +15,7 @@ import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import pino from 'pino';
 import { getRedisClient, isTestMode, shouldSkipRateLimit } from './login-rate-limit.js';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'import-rate-limit' });
 
@@ -52,6 +53,6 @@ function makeImportLimiter(prefix: string, max: number, code: string) {
   });
 }
 
-export const importDryRunRateLimit = makeImportLimiter('rl:imports:dry-run:', 10, 'IMPORT_RATE_LIMIT_EXCEEDED');
-export const importConfirmRateLimit = makeImportLimiter('rl:imports:confirm:', 5, 'IMPORT_RATE_LIMIT_EXCEEDED');
-export const importRollbackRateLimit = makeImportLimiter('rl:imports:rollback:', 5, 'IMPORT_RATE_LIMIT_EXCEEDED');
+export const importDryRunRateLimit = makeImportLimiter(RATE_LIMIT_PREFIXES.IMPORTS_DRY_RUN, 10, 'IMPORT_RATE_LIMIT_EXCEEDED');
+export const importConfirmRateLimit = makeImportLimiter(RATE_LIMIT_PREFIXES.IMPORTS_CONFIRM, 5, 'IMPORT_RATE_LIMIT_EXCEEDED');
+export const importRollbackRateLimit = makeImportLimiter(RATE_LIMIT_PREFIXES.IMPORTS_ROLLBACK, 5, 'IMPORT_RATE_LIMIT_EXCEEDED');

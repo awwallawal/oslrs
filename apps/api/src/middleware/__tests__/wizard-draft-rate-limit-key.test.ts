@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
+import { createHash } from 'node:crypto';
 import {
   buildWizardDraftRateLimitKey,
   WIZARD_DRAFT_IP_MAX,
   WIZARD_DRAFT_EMAIL_MAX,
   WIZARD_DRAFT_WINDOW_MS,
 } from '../wizard-draft-rate-limit.js';
+import { buildLoginRateLimitKey } from '../login-rate-limit.js';
+
+const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 
 /**
  * Story 13-46 (AC4) — the draft limiter re-sized and re-keyed for a CGNAT audience.
@@ -14,15 +18,17 @@ import {
  * draft, and a lost draft is indistinguishable from a user who "just didn't finish".
  */
 describe('buildWizardDraftRateLimitKey (13-46 AC4)', () => {
-  it('keys on the normalised email from the PUT body', () => {
+  it('keys on the normalised email from the PUT body — as a DIGEST (Story 13-70 FR3)', () => {
+    // Normalisation still happens (`A@Example.COM ` and `a@example.com` are one bucket); it now
+    // happens inside the shared builder, and what reaches Redis is the hash, not the address.
     expect(buildWizardDraftRateLimitKey({ email: 'A@Example.COM ' }, undefined, '1.2.3.4')).toBe(
-      'e:a@example.com',
+      `e:${sha256('a@example.com')}`,
     );
   });
 
   it('keys on the email from the GET query too — hydration takes the same limiter', () => {
     expect(buildWizardDraftRateLimitKey(undefined, { email: 'B@Example.com' }, '1.2.3.4')).toBe(
-      'e:b@example.com',
+      `e:${sha256('b@example.com')}`,
     );
   });
 
@@ -66,5 +72,28 @@ describe('draft limiter sizing (13-46 AC4)', () => {
 
   it('keeps the 15-minute window (the limiters are compared against each other by operators)', () => {
     expect(WIZARD_DRAFT_WINDOW_MS).toBe(15 * 60 * 1000);
+  });
+});
+
+/**
+ * Story 13-70 FR3 (AC5) — the draft endpoints are unauthenticated and the body is unvalidated when
+ * the limiter runs, so "email" is whatever the caller sent, up to the 1 MB body limit.
+ */
+describe('13-70 FR3 — the draft email key is bounded, and shared with the login builder (AC5)', () => {
+  const MEGABYTE_EMAIL = `${'a'.repeat(1024 * 1024)}@x.com`;
+
+  it('a megabyte-long address still produces a 66-character key', () => {
+    const key = buildWizardDraftRateLimitKey({ email: MEGABYTE_EMAIL }, undefined, '1.2.3.4');
+    expect(key).toHaveLength('e:'.length + 64);
+    expect(key).toMatch(/^e:[0-9a-f]{64}$/);
+    expect(key).not.toContain('@x.com');
+  });
+
+  it('is the SAME key the login limiter would build — one hasher, not two', () => {
+    for (const address of ['a@example.com', ' A@Example.COM ', MEGABYTE_EMAIL]) {
+      expect(buildWizardDraftRateLimitKey({ email: address }, undefined, '1.2.3.4')).toBe(
+        buildLoginRateLimitKey(address, '1.2.3.4'),
+      );
+    }
   });
 });

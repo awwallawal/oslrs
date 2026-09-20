@@ -23,21 +23,26 @@
  *
  *   | Limiter                          | Threshold      | Source        |
  *   |----------------------------------|----------------|---------------|
- *   | loginIpFloodLimit                | 100/IP/15min (ALL responses) | Story 13-68 — mounted FIRST; LOAD-BEARING: the only login limiter counting successes, so the only bound on successful volume per IP; also bounds captcha-refused traffic |
- *   | loginRateLimit                   | 5/EMAIL/15min FAILED ONLY (IP fallback when no email — MFA step 2) | NFR4.4 + Story 9-13 close-out (skipSuccessfulRequests:true 2026-06-03) + Story 13-68 re-key (2026-09-16); mounted AFTER verifyCaptcha; key is a sha256 of the email |
- *   | strictLoginRateLimit             | 60 FAILED/IP/1hr | Story 13-68 (was 10/IP/1hr, all responses) — mounted LAST; derived: 3 strangers/address × 20 failures/person/hr; failed-only is an availability fix, not a security one; the binding bound on failure sprays and non-existent-account enumeration |
+ *   | loginIpFloodLimit                | 100/IP/15min (ALL responses EXCEPT a 429 emitted by a limiter behind it) | Story 13-68 — mounted FIRST; LOAD-BEARING: the only login limiter counting successes, so the only bound on successful volume per IP; also bounds captcha-refused traffic. Story 13-70 FR1 (2026-09-20) added `skipFailedRequests` + `requestWasSuccessful: (_req, res) => !res.locals.rateLimitRefusedBy`, so a person's own 429s are no longer charged to the budget their whole proxy shares (NFR4.4.d). A refused CAPTCHA (400) is still counted; the ceiling still counts its OWN 429s |
+ *   | loginRateLimit                   | 5/EMAIL/15min FAILED ONLY, EXCEPT a 429 emitted by another limiter (IP fallback when no email — MFA step 2) | NFR4.4 + Story 9-13 close-out (skipSuccessfulRequests:true 2026-06-03) + Story 13-68 re-key (2026-09-16); mounted AFTER verifyCaptcha; key is a sha256 of the email. Story 13-70 R3 (2026-09-20) widened `requestWasSuccessful` to `res.statusCode < 400 \|\| refusedByAnotherLimiter(…)`: it is mounted BEFORE `strictLoginRateLimit` and `mfaRateLimit`, so their 429s used to spend the refused person's own per-email budget. Its OWN 429s are still counted |
+ *   | strictLoginRateLimit             | 60 FAILED/IP/1hr, EXCEPT a 429 emitted by another limiter | Story 13-68 (was 10/IP/1hr, all responses) — mounted LAST; derived: 3 strangers/address × 20 failures/person/hr; failed-only is an availability fix, not a security one; the binding bound on failure sprays and non-existent-account enumeration. Story 13-70 R3 (2026-09-20) added the same predicate: `mfaRateLimit` sits behind it on the two MFA step-2 routes |
  *   | refreshRateLimit                 | 10/IP/1min     | sensible default |
  *   | passwordResetRateLimit (IP)      | 200/IP/1hr     | FLOOD CEILING only (2026-09-16). The per-person budget is the row below. |
  *   | PasswordResetService.checkRate   | 3/email/1hr    | NFR4.4 line 5 (service layer) |
  *   | passwordResetCompletionRateLimit | 20/TOKEN/15min | keyed on the reset token (2026-09-16) — a shared proxy IP is not a person |
  *   | passwordResetCompletionIpFlood   | 300/IP/15min   | FLOOD CEILING only |
  *   | registrationRateLimit            | 50/IP/15min    | FLOOD CEILING (2026-08-07, was 5) — /registration/wizard, not an auth route |
- *   | registrationEmailRateLimit       | 3/email/15min  | per-person budget on the wizard submit (2026-08-07) |
+ *   | registrationEmailRateLimit       | 3/email-DIGEST/15min | per-person budget on the wizard submit (2026-08-07); Story 13-70 FR3 (2026-09-20) re-keyed it to `e:<sha256>` through the shared `buildLoginRateLimitKey` — an unvalidated 1 MB body could park megabyte-sized keys in the shared Redis, and every address sat there in plaintext |
  *   | activationRateLimit              | 20/TOKEN/15min | keyed on the invitation token (2026-09-15) — 244 Opera Mini refusals |
  *   | activationIpFloodLimit           | 300/IP/15min   | FLOOD CEILING only |
  *   | mfaRateLimit                     | 10/IP/1min     | Story 9-13 AC#7 |
  *   | reauthRateLimit                  | 5/IP/15min     | AC#4 audit fix  |
  *   | magicLinkRateLimit               | 3/email/1hr    | Story 9-12 AC#6 (NFR4.4 budget) — per-EMAIL only on the request route; the seven token-bearing routes sharing this prefix key per-IP at 3/hr pooled (NFR4.4.c) |
+ *
+ * ⛔ NOT IN THIS TABLE, deliberately: `wizardDraftRateLimit` / `wizardDraftEmailRateLimit` are
+ * registration-wizard routes, not `/auth/*`, so they are out of this map's scope. Story 13-70 FR3
+ * re-keyed `wizardDraftEmailRateLimit` to the same `e:<sha256>` shape; its assertions live in
+ * `wizard-draft-rate-limit-key.test.ts`, and its NFR4.4.c row is in the PRD.
  *
  * REMOVED 2026-09-17 (Lane C, R4): a `googleAuthRateLimit | 10/IP/1hr | sensible default`
  * row stood here naming a limiter that exists NOWHERE in `apps/api/src`. `POST /google/verify`

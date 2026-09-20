@@ -101,7 +101,7 @@ describe('buildLoginRateLimitKey', () => {
  * `${prefix}${key}`. Two limiters that can produce the same string are one counter, counted twice.
  *
  * That is not hypothetical: with the flood ceiling at prefix `rl:login:ip:` (raw IP key) and
- * `loginRateLimit` at `rl:login:` falling back to `ip:<addr>`, both write `rl:login:ip:<addr>` — on
+ * `loginRateLimit` at (then) `rl:login:` falling back to `ip:<addr>`, both write `rl:login:ip:<addr>` — on
  * EVERY request to the MFA step-2 routes, which carry no email. The burst limiter's
  * skipSuccessfulRequests decrement would then subtract from the flood counter, and the flood's
  * every-request increment would push the burst limiter toward counting successes again.
@@ -126,19 +126,33 @@ describe('login limiter Redis keyspaces never overlap', () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
+  /**
+   * ⛔ REWRITTEN BY STORY 13-70 FR2, and the rewrite is the point.
+   *
+   * This used to read `if (b.startsWith(a)) { ...assert the remainder is not a key shape... }` — it
+   * TOLERATED `rl:login:` being nested inside `rl:login:strict:`, and asserted the nesting was
+   * harmless because `loginRateLimit`'s keys always begin `e:` or `ip:`. That was true, and it was a
+   * safety that depended on another limiter's key SHAPE: one refactor of the key builder away from
+   * being untrue, silently. The same shape HAD already gone wrong twice in this family
+   * (`rl:activation:`, `rl:password-reset-complete:`), both of them LIVE collisions.
+   *
+   * `rl:login:burst:` and `rl:login:strict:` are now siblings, so the property is structural and the
+   * conditional body is gone. ⚠️ Note what the OLD form would do today: with no nested pair left to
+   * match, `if (b.startsWith(a))` never fires and the test passes having asserted nothing at all
+   * [[pattern-a-clean-result-must-prove-it-measured]]. An unconditional assertion cannot do that.
+   *
+   * The repo-wide version of this property — over all 30 limiter prefixes, not these three — is
+   * `rate-limit-prefix-disjointness.test.ts`.
+   */
   it('no prefix is nested inside another limiter\'s prefix (so no future key shape can collide)', () => {
     const prefixes = [LOGIN_RATE_LIMIT_PREFIX, LOGIN_IP_FLOOD_PREFIX, STRICT_LOGIN_RATE_LIMIT_PREFIX];
+    const nested: string[] = [];
     for (const a of prefixes) {
       for (const b of prefixes) {
         if (a === b) continue;
-        // `rl:login:strict:` IS nested under `rl:login:`; it is safe only because loginRateLimit's
-        // keys always start `e:` or `ip:`. Assert exactly that, rather than pretending it is not nested.
-        if (b.startsWith(a)) {
-          expect(a).toBe(LOGIN_RATE_LIMIT_PREFIX);
-          const remainder = b.slice(a.length);
-          expect(remainder.startsWith('e:') || remainder.startsWith('ip:')).toBe(false);
-        }
+        if (b.startsWith(a)) nested.push(`${a} is a proper prefix of ${b}`);
       }
     }
+    expect(nested).toEqual([]);
   });
 });

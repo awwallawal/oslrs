@@ -2,6 +2,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'message-rate-limit' });
 
@@ -23,7 +24,7 @@ export const messageRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:message:',
+    prefix: RATE_LIMIT_PREFIXES.MESSAGE,
   }),
   windowMs: 60_000, // 1 minute
   max: 30, // 30 messages per minute per user

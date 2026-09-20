@@ -1,11 +1,20 @@
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
-import { isTestMode, shouldSkipRateLimit } from './login-rate-limit.js';
+// Story 13-70 FR3 — `buildLoginRateLimitKey` is the ONE per-email key builder. Not a second hasher.
+import {
+  buildLoginRateLimitKey,
+  isTestMode,
+  shouldSkipRateLimit,
+  refusedByAnotherLimiter,
+  REFUSED_BY_WIZARD_DRAFT_RATE_LIMIT,
+  REFUSED_BY_WIZARD_DRAFT_EMAIL_RATE_LIMIT,
+} from './login-rate-limit.js';
 // Story 13-46 (AC3) — a lost DRAFT looks like a user who "just didn't finish", so this refusal
 // counts toward the same turn-away signal as the submit limiter's.
 import { recordRegistration429 } from './registration-burst.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'wizard-draft-rate-limit' });
 
@@ -86,9 +95,13 @@ export function buildWizardDraftRateLimitKey(
   query: { email?: unknown } | undefined,
   ip: string | undefined,
 ): string {
-  const email = readDraftEmail(body, query);
-  if (email) return `e:${email}`;
-  return `ip:${ipKeyGenerator(ip ?? 'unknown')}`;
+  // ⛔ Story 13-70 FR3 — DELEGATES to the shipped login key builder; it does not re-implement it.
+  // This used to return `e:${email}` — the ADDRESS ITSELF as the Redis key, on an unauthenticated
+  // endpoint whose body is unvalidated here and capped only by the 1 MB body limit. The shared
+  // builder answers `e:<sha256>`: a fixed 64 hex characters, and no plaintext address in the Redis
+  // that BullMQ and the sessions share. The `ipKeyGenerator` fallback is the same call it always
+  // was, so the /56 collapse tests below still red if it is removed.
+  return buildLoginRateLimitKey(readDraftEmail(body, query), ip);
 }
 
 /** The normalised address this request is for, or null when it carries none. */
@@ -121,11 +134,31 @@ const draftLimitMessage = {
  * draft auto-save + hydration endpoints. Per-IP flood-stop; see `WIZARD_DRAFT_IP_MAX`.
  */
 export const wizardDraftRateLimit = rateLimit({
-  store: store('rl:wizard-draft:'),
+  // Story 13-70 FR2 — was `rl:wizard-draft:`, a proper prefix of `rl:wizard-draft:email:` below.
+  // Latent rather than live (this limiter keys on the bare IP, which can never spell `email:…`), but
+  // the property AC4 pins is structural: no prefix may be a proper prefix of another, so that no
+  // future key SHAPE can turn a latent pair into the activation one.
+  store: store(RATE_LIMIT_PREFIXES.WIZARD_DRAFT_IP),
   windowMs: WIZARD_DRAFT_WINDOW_MS,
   max: WIZARD_DRAFT_IP_MAX,
+  // ⛔ Story 13-70 R7 — A REFUSAL IS NOT A REQUEST (PRD NFR4.4.d), the same rule the login ceiling
+  // got in FR1. `wizardDraftEmailRateLimit` is mounted behind this one and stamps
+  // `res.locals.rateLimitRefusedBy` before answering 429; this ceiling hands its own increment back
+  // for those requests, so a person who exhausts their own 300-per-email budget and keeps retrying no
+  // longer spends the shared per-IP budget on refusals they caused for themselves.
+  // `requestWasSuccessful` ALONE IS DEAD CODE — express-rate-limit consults it only when a skip flag
+  // is set (8.3.0 dist: `if (config.skipFailedRequests || config.skipSuccessfulRequests)`), which is
+  // why `skipFailedRequests` is here; it decrements when the predicate is FALSE, i.e. exactly when
+  // another limiter stamped. ⚠️ It also registers `close`/`error` listeners, so an ABORTED request is
+  // no longer counted here — Story 13-70 **R4**, open and dated, now covering four more ceilings.
+  skipFailedRequests: true,
+  requestWasSuccessful: (_req, res) => !refusedByAnotherLimiter(res, REFUSED_BY_WIZARD_DRAFT_RATE_LIMIT),
   message: draftLimitMessage,
   handler: (req, res, next, options) => {
+    // Story 13-70 R7 — this ceiling stamps too, even though it is mounted FIRST and nothing ahead of
+    // it reads the flag. The rule is uniform on purpose (R3): every limiter declares itself, so a
+    // limiter inserted ahead of this one inherits the behaviour instead of silently not having it.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_WIZARD_DRAFT_RATE_LIMIT;
     logger.warn({
       event: 'wizard_draft.rate_limit_exceeded',
       ip: req.ip,
@@ -147,7 +180,7 @@ export const wizardDraftRateLimit = rateLimit({
  * routes, so the cheap check runs first (same ordering as `POST /wizard`).
  */
 export const wizardDraftEmailRateLimit = rateLimit({
-  store: store('rl:wizard-draft:email:'),
+  store: store(RATE_LIMIT_PREFIXES.WIZARD_DRAFT_EMAIL),
   windowMs: WIZARD_DRAFT_WINDOW_MS,
   max: WIZARD_DRAFT_EMAIL_MAX,
   // Destructured, not `req.ip` — see the note on the builder.
@@ -159,6 +192,12 @@ export const wizardDraftEmailRateLimit = rateLimit({
     ),
   message: draftLimitMessage,
   handler: (req, res, next, options) => {
+    // Story 13-70 R7 — tell the ceiling mounted ahead of this one that the response is a REFUSAL,
+    // not a request. Set before the response is written, because the ceiling reads it from a
+    // `finish` listener. ⚠️ This limiter needs no predicate of its own: it is mounted LAST on every
+    // route it appears on, so no other limiter's 429 can reach its counter. Mount one behind it and
+    // that stops being true — see the R7 block in `login-rate-limit.ts`.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_WIZARD_DRAFT_EMAIL_RATE_LIMIT;
     logger.warn({
       event: 'wizard_draft.rate_limit_exceeded',
       ip: req.ip,

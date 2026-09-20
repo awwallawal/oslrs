@@ -4,7 +4,17 @@ import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 // Story 13-46 (AC3) — a refusal is counted so the burst breaker can SEE a 429 wall. Until now the
 // only trace of a turned-away listener was the `logger.warn` below, which nobody was asked to read.
 import { recordRegistration429 } from './registration-burst.js';
+// Story 13-70 FR3 — ONE key builder for every per-email limiter. Not a second hasher.
+import {
+  buildLoginRateLimitKey,
+  refusedByAnotherLimiter,
+  REFUSED_BY_REGISTRATION_RATE_LIMIT,
+  REFUSED_BY_REGISTRATION_EMAIL_RATE_LIMIT,
+  REFUSED_BY_ACTIVATION_IP_FLOOD_LIMIT,
+  REFUSED_BY_ACTIVATION_RATE_LIMIT,
+} from './login-rate-limit.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'registration-rate-limit' });
 
@@ -49,17 +59,38 @@ export const registrationRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:register:',
+    // Story 13-70 FR2 — was `rl:register:`, a proper prefix of `rl:register:email:` below.
+    prefix: RATE_LIMIT_PREFIXES.REGISTER_IP,
   }),
   windowMs: 15 * 60 * 1000,
   // 50/15min: comfortably above any real venue or carrier gateway, still a hard stop on a script.
   max: 50,
+  // ⛔ Story 13-70 R7 — A REFUSAL IS NOT A REQUEST (PRD NFR4.4.d), the same rule the login ceiling
+  // got in FR1. `registrationEmailRateLimit` is mounted behind this one and stamps
+  // `res.locals.rateLimitRefusedBy` before answering 429; this ceiling hands its own increment back
+  // for those requests, so a person who exhausts their own 3-per-email budget and keeps
+  // retrying no longer spends the shared per-IP budget on refusals they caused for themselves.
+  // `requestWasSuccessful` ALONE IS DEAD CODE — express-rate-limit consults it only when a skip flag
+  // is set (8.3.0 dist: `if (config.skipFailedRequests || config.skipSuccessfulRequests)`), which is
+  // why `skipFailedRequests` is here; it decrements when the predicate is FALSE, i.e. exactly when
+  // another limiter stamped. ⚠️ It also registers `close`/`error` listeners, so an ABORTED request is
+  // no longer counted here — Story 13-70 **R4**, open and dated, now covering four more ceilings.
+  skipFailedRequests: true,
+  requestWasSuccessful: (_req, res) => !refusedByAnotherLimiter(res, REFUSED_BY_REGISTRATION_RATE_LIMIT),
+  // ⚠️ On `/supplemental` (registration.routes.ts:99) this limiter is mounted ALONE, so nothing
+  // ever stamps and the predicate never returns false: counting there is unchanged apart from the
+  // abort listeners R4 covers.
   message: {
     status: 'error',
     code: 'RATE_LIMIT_EXCEEDED',
     message: 'Too many registration attempts. Please try again later.',
   },
   handler: (req, res, next, options) => {
+    // Story 13-70 R7 — this ceiling stamps too, even though it is mounted FIRST and nothing ahead
+    // of it reads the flag. The rule is uniform on purpose (R3): every limiter declares itself, so a
+    // limiter inserted ahead of this one inherits the behaviour instead of silently not having it,
+    // and the `attempts` field logged below can be attributed.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_REGISTRATION_RATE_LIMIT;
     logger.warn({
       event: 'registration.rate_limit_exceeded',
       ip: req.ip,
@@ -106,15 +137,26 @@ export const registrationRateLimit = rateLimit({
  * and that test fails, which is the only property worth having.
  */
 export function buildRegistrationEmailRateLimitKey(email: unknown, ip: string | undefined): string {
-  if (typeof email === 'string' && email.trim()) return `e:${email.trim().toLowerCase()}`;
-  return `ip:${ipKeyGenerator(ip ?? 'unknown')}`;
+  // ⛔ Story 13-70 FR3 — DELEGATES to the shipped login key builder; it does not re-implement it.
+  //
+  // This used to return `e:${email.trim().toLowerCase()}` — the ADDRESS ITSELF as the Redis key. The
+  // wizard submit body is unvalidated at this point and the body limit is 1 MB, so one IP could park
+  // megabyte-sized keys in the Redis that BullMQ and the sessions share, and every registrant's
+  // address sat in Redis in plaintext. `buildLoginRateLimitKey` answers `e:<sha256>` — a fixed 64
+  // hex characters, unsalted on purpose so the same address always reaches the same bucket.
+  //
+  // The normalisation (trim + lowercase) and the `ipKeyGenerator` fallback both live there too, so
+  // the two limiters cannot drift apart — which is the actual deliverable
+  // [[feedback_canonical_primitive_backlog_sweep]]. The IPv6 /56 tests below still pass because the
+  // fallback is the same call; delete `ipKeyGenerator` from the shared builder and they still red.
+  return buildLoginRateLimitKey(email, ip);
 }
 
 export const registrationEmailRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:register:email:',
+    prefix: RATE_LIMIT_PREFIXES.REGISTER_EMAIL,
   }),
   windowMs: 15 * 60 * 1000,
   max: 3,
@@ -131,9 +173,24 @@ export const registrationEmailRateLimit = rateLimit({
       'Please wait a moment and try again — your answers are saved.',
   },
   handler: (req, res, next, options) => {
+    // Story 13-70 R7 — tell the ceiling mounted ahead of this one that the response is a REFUSAL,
+    // not a request. Set before the response is written, because the ceiling reads it from a
+    // `finish` listener. ⚠️ This limiter needs no predicate of its own: it is mounted LAST on every
+    // route it appears on, so no other limiter's 429 can reach its counter. Mount one behind it and
+    // that stops being true — see the R7 block in `login-rate-limit.ts`.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_REGISTRATION_EMAIL_RATE_LIMIT;
     logger.warn({
       event: 'registration.email_rate_limit_exceeded',
       ip: req.ip,
+      // Story 13-70 FR3 (3.3) — the axis actually keyed on, derived from the KEY rather than from a
+      // re-reading of the body, so the log and the limiter cannot disagree. The address itself is
+      // never logged; it is a digest in the key and absent from here.
+      keyedBy: buildRegistrationEmailRateLimitKey(
+        (req.body as { email?: unknown } | undefined)?.email,
+        req.ip,
+      ).startsWith('e:')
+        ? 'email'
+        : 'ip',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       attempts: (req as any).rateLimit?.current,
     });
@@ -197,16 +254,33 @@ export const activationIpFloodLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:activation:ip:',
+    prefix: RATE_LIMIT_PREFIXES.ACTIVATION_IP,
   }),
   windowMs: 15 * 60 * 1000,
   max: 300,
+  // ⛔ Story 13-70 R7 — A REFUSAL IS NOT A REQUEST (PRD NFR4.4.d), the same rule the login ceiling
+  // got in FR1. `activationRateLimit` is mounted behind this one and stamps
+  // `res.locals.rateLimitRefusedBy` before answering 429; this ceiling hands its own increment back
+  // for those requests, so a person who exhausts their own 20-per-token budget and keeps
+  // retrying no longer spends the shared per-IP budget on refusals they caused for themselves.
+  // `requestWasSuccessful` ALONE IS DEAD CODE — express-rate-limit consults it only when a skip flag
+  // is set (8.3.0 dist: `if (config.skipFailedRequests || config.skipSuccessfulRequests)`), which is
+  // why `skipFailedRequests` is here; it decrements when the predicate is FALSE, i.e. exactly when
+  // another limiter stamped. ⚠️ It also registers `close`/`error` listeners, so an ABORTED request is
+  // no longer counted here — Story 13-70 **R4**, open and dated, now covering four more ceilings.
+  skipFailedRequests: true,
+  requestWasSuccessful: (_req, res) => !refusedByAnotherLimiter(res, REFUSED_BY_ACTIVATION_IP_FLOOD_LIMIT),
+
   message: {
     status: 'error',
     code: 'RATE_LIMIT_EXCEEDED',
     message: 'Too many activation attempts. Please try again later.',
   },
   handler: (req, res, _next, options) => {
+    // Story 13-70 R7 — this ceiling stamps too, even though it is mounted FIRST and nothing ahead
+    // of it reads the flag. The rule is uniform on purpose (R3): every limiter declares itself, so a
+    // limiter inserted ahead of this one inherits the behaviour instead of silently not having it.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_ACTIVATION_IP_FLOOD_LIMIT;
     logger.warn({ event: 'activation.ip_flood_limit_exceeded', ip: req.ip });
     res.status(429).json(options.message);
   },
@@ -226,7 +300,24 @@ export const activationRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:activation:',
+    // ⛔ Story 13-70 FR2 — was `rl:activation:`. This limiter falls back to the key `ip:<addr>`, so
+    // under that prefix it spelled `rl:activation:ip:<addr>` — byte for byte the key
+    // `activationIpFloodLimit` writes at prefix `rl:activation:ip:`. A 20-per-token budget and a
+    // 300-per-IP ceiling would then be ONE counter incremented twice.
+    //
+    // ⚠️ CORRECTED BY THE ADVERSARIAL REVIEW, 2026-09-20 — the story called this LIVE and it is NOT,
+    // and the correction matters more than the fix. Both mounts are `/activate/:token` and
+    // `/activate/:token/validate` (`auth.routes.ts:27,29`), so express cannot match either route
+    // without a token segment, and `buildActivationRateLimitKey` only falls back to `ip:` when the
+    // token is absent or blank — see the note twelve lines below, which said so all along. The IP
+    // fallback is therefore unreachable here and this pair was LATENT. `passwordResetCompletion*` is
+    // the one that was genuinely live: its POST route has no path param and takes the token from the
+    // BODY, which a malformed request can omit. One live, one latent — not "two live".
+    //
+    // The rename is right either way: the property AC4 pins is structural, so no future key SHAPE
+    // can turn the latent pair into the live one. The in-memory test store gives each limiter its
+    // own map and can never see any of this.
+    prefix: RATE_LIMIT_PREFIXES.ACTIVATION_TOKEN,
   }),
   windowMs: 15 * 60 * 1000, // 15 minutes
   // 20, not 10: the budget is now PER PERSON rather than per shared proxy, and a
@@ -244,6 +335,12 @@ export const activationRateLimit = rateLimit({
     message: 'Too many activation attempts. Please try again later.',
   },
   handler: (req, res, next, options) => {
+    // Story 13-70 R7 — tell the ceiling mounted ahead of this one that the response is a REFUSAL,
+    // not a request. Set before the response is written, because the ceiling reads it from a
+    // `finish` listener. ⚠️ This limiter needs no predicate of its own: it is mounted LAST on every
+    // route it appears on, so no other limiter's 429 can reach its counter. Mount one behind it and
+    // that stops being true — see the R7 block in `login-rate-limit.ts`.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_ACTIVATION_RATE_LIMIT;
     logger.warn({
       event: 'activation.rate_limit_exceeded',
       ip: req.ip,

@@ -13,6 +13,7 @@ import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import type { Request } from 'express';
 import type { AuthenticatedRequest } from '../types.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'operations-rate-limit' });
 
@@ -46,7 +47,7 @@ export const operationsReadRateLimit = rateLimit({
     : new RedisStore({
         // @ts-expect-error - Known type mismatch with ioredis (matches settings pattern)
         sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-        prefix: 'rl:operations:read',
+        prefix: RATE_LIMIT_PREFIXES.OPERATIONS_READ,
       }),
   windowMs: 60 * 1000,
   max: 60,

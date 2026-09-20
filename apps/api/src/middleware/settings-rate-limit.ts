@@ -13,6 +13,7 @@ import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'settings-rate-limit' });
 
@@ -35,7 +36,7 @@ export const settingsListRateLimit = rateLimit({
     : new RedisStore({
         // @ts-expect-error - Known type mismatch with ioredis (matches login-rate-limit pattern)
         sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-        prefix: 'rl:settings:list',
+        prefix: RATE_LIMIT_PREFIXES.SETTINGS_LIST,
       }),
   windowMs: 60 * 1000,
   max: 60,
@@ -68,7 +69,7 @@ export const settingsWriteRateLimit = rateLimit({
     : new RedisStore({
         // @ts-expect-error - Known type mismatch with ioredis
         sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-        prefix: 'rl:settings:write',
+        prefix: RATE_LIMIT_PREFIXES.SETTINGS_WRITE,
       }),
   windowMs: 60 * 1000,
   max: 30,

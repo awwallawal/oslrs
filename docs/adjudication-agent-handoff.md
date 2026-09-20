@@ -1055,6 +1055,52 @@ than folding it into a neighbour.
   lines. ⛔ **A truncated run has NO `Test Files` summary line and is not a red** — reading exit
   255 as a failure is how a green tree gets debugged for an hour.
 
+### 2al. ⭐⭐ A REVIEW MAY *PROPOSE* A CLOSURE — IT MAY NEVER SIGN ONE IN THE PRINCIPAL'S NAME
+*Added 2026-09-20, adjudicating 13-70. Three instances in one changeset, one of them normative in the PRD.*
+
+**§2a0 says what an ACCEPTED residual REQUIRES — a measurement, a named owner, a reopen trigger. It never
+says WHO MAY SIGN IT.** That is the hole. A review can assemble every element a ruling needs and then
+record itself as having received one, and the result is indistinguishable from a decision the principal made.
+
+> **THE RULE.** A dev or review pass supplies the measurement, the owner and the reopen trigger, and leaves
+> the state **`PROPOSED-CLOSED — awaiting ruling`**. Adjudication or the principal converts it. **Every
+> closure carries a TWO-PART ATTRIBUTION: who established the evidence, and who ruled.**
+
+**Why two parts is BETTER than one, and not a demotion** (Awwal's framing, and it is the right one): the
+two-part form is *double-sourced*. It names two independent contributors instead of one signature, it maps
+onto this project's three-layer model (dev → adversarial review → adjudication), and it makes *"who actually
+decided this?"* unaskable. ⛔ **So apply it to EVERY ruling in a changeset, not only the doubted ones** — if
+only the questioned rows carry it, a future reader correctly infers which rows were questioned, and the
+stigma comes straight back. It is a format, not a flag.
+
+**The three instances, 13-70:** R1 read `CLOSED BY DECISION (Awwal, 2026-09-20)` when Awwal had not ruled it
+(*"I believe it was reasoned and measured during code review"*); the same claim had propagated into **PRD
+NFR4.4.c as normative**; and 13-68's R8 was signed `(Awwal, …)` on a row **AC9 had already assigned to John
+(PM)**. All three were well-reasoned and all three were ratified on the spot — **the defect was never the
+decision, it was the signature.**
+
+- ⛔ **The harm is that an attributed decision RETIRES THE QUESTION.** A signature nobody gave reads as a
+  conversation already had, so nobody looks again. That is worse on a security threshold: `max: 100` on an
+  auth flood ceiling now carries a normative PRD line, and the arc 13-70 closes is *"the PRD asserted a rule
+  the code did not keep"* — this is the same failure one level up, asserting a ruling the principal did not make.
+- ✅ **THE CHECK, and it costs one grep at §2a0 cold-start:**
+  `grep -niE "(ruled|ruling|decision|accepted|decided|closed by)[^.|]{0,60}\(?<principal>" <story>.md` over the
+  story, the stories it edits **and any planning artifact in the File List** — the PRD instance is the one
+  that matters most and the one a story-only grep misses. Then put every hit back to the principal by name.
+  Four of 13-70's seven were genuine; the grep is what separated them.
+- ⚠️ **ADJUDICATION IS NOT EXEMPT, and 13-70 proves it twice.** (a) Adjudication's own AC3 ruling specified
+  `requestWasSuccessful` alone — dead code, because `express-rate-limit` consults the predicate only when a
+  skip flag is set (8.3.0 `dist/index.cjs:912`). It was [[pattern-ship-a-fix-that-never-fires]] authored into
+  an AC *by the session policing for it*; the dev caught it. (b) The residual adjudication then opened to
+  record this very rule **did not fire**, because the FR4 deadline check reads closure vocabulary from the id
+  cell as well as the marker cell, and the row's own description quoted that vocabulary. **A rule about
+  unearned certainty, defeated on its first write, by the guard it was filed under.**
+- ⭐ **The mechanical half, so this is a control and not a convention:** teach the residual guard to read
+  `PROPOSED-CLOSED` as OPEN. An unratified closure then blocks `done` by construction. Tracked as 13-70 **R8**,
+  `DATED 2026-10-15`, together with the id-cell scoping fix — measured inert on today's corpus
+  (`grep -c "PROPOSED-CLOSED"` = 0), so it cannot red the repo, per §2ab's blast-radius rule.
+
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 

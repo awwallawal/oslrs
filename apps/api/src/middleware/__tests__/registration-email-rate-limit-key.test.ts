@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { createHash } from 'node:crypto';
 import { buildRegistrationEmailRateLimitKey } from '../registration-rate-limit.js';
+import { buildLoginRateLimitKey } from '../login-rate-limit.js';
+
+const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 
 /**
  * 2026-08-07 — the IPv6 bypass in the per-email registration limiter.
@@ -17,8 +21,11 @@ import { buildRegistrationEmailRateLimitKey } from '../registration-rate-limit.j
  */
 describe('buildRegistrationEmailRateLimitKey', () => {
   describe('the email key — the control that actually matches the threat', () => {
-    it('keys on the email when present', () => {
-      expect(buildRegistrationEmailRateLimitKey('a@x.com', '1.2.3.4')).toBe('e:a@x.com');
+    it('keys on the email when present — as a DIGEST, never the address (Story 13-70 FR3)', () => {
+      // Was `e:a@x.com`. The wizard body is unvalidated here and capped only by the 1 MB body limit,
+      // so a raw key let one IP park megabyte-sized keys in the shared Redis and kept every
+      // registrant's address there in plaintext.
+      expect(buildRegistrationEmailRateLimitKey('a@x.com', '1.2.3.4')).toBe(`e:${sha256('a@x.com')}`);
     });
 
     it('lowercases and trims, so a capital or a stray space is not a fresh bucket', () => {
@@ -86,5 +93,33 @@ describe('buildRegistrationEmailRateLimitKey', () => {
         'ip:102.88.1.1',
       );
     });
+  });
+});
+
+/**
+ * Story 13-70 FR3 (AC5) — an unbounded "email" must yield a FIXED-SIZE Redis key, and both
+ * per-email limiters must get there through the SAME builder.
+ *
+ * ⛔ The point of the second test is not that the key is short; it is that there is only one hasher
+ * in the codebase. Two copies of "hash the email" drift, and the one that drifts is the one nobody
+ * is looking at [[feedback_canonical_primitive_backlog_sweep]].
+ */
+describe('13-70 FR3 — the email key is bounded, and shared with the login builder (AC5)', () => {
+  const MEGABYTE_EMAIL = `${'a'.repeat(1024 * 1024)}@x.com`;
+
+  it('a megabyte-long address still produces a 66-character key', () => {
+    const key = buildRegistrationEmailRateLimitKey(MEGABYTE_EMAIL, '1.2.3.4');
+    expect(key).toHaveLength('e:'.length + 64);
+    expect(key).toMatch(/^e:[0-9a-f]{64}$/);
+    // And the address itself is nowhere in it.
+    expect(key).not.toContain('@x.com');
+  });
+
+  it('is the SAME key the login limiter would build — one hasher, not two', () => {
+    for (const address of ['a@x.com', '  A@X.COM  ', MEGABYTE_EMAIL]) {
+      expect(buildRegistrationEmailRateLimitKey(address, '1.2.3.4')).toBe(
+        buildLoginRateLimitKey(address, '1.2.3.4'),
+      );
+    }
   });
 });

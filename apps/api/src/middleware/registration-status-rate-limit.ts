@@ -3,6 +3,7 @@ import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import { isTestMode, shouldSkipRateLimit } from './login-rate-limit.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'registration-status-rate-limit' });
 
@@ -30,7 +31,7 @@ export const registrationStatusRateLimit = rateLimit({
     : new RedisStore({
         // @ts-expect-error - Known type mismatch with ioredis
         sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-        prefix: 'rl:registration-status:',
+        prefix: RATE_LIMIT_PREFIXES.REGISTRATION_STATUS,
       }),
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // 10 requests per 15 min per IP

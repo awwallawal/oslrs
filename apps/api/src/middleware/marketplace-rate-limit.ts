@@ -2,6 +2,7 @@ import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import pino from 'pino';
 import { isTestMode, getRedisClient, shouldSkipRateLimit } from './login-rate-limit.js';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'marketplace-rate-limit' });
 
@@ -48,7 +49,7 @@ export const marketplaceProfileRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:marketplace:profile:',
+    prefix: RATE_LIMIT_PREFIXES.MARKETPLACE_PROFILE,
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 100, // 100 requests per minute per IP
@@ -76,7 +77,7 @@ export const editTokenRequestRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:marketplace:edit-token-request:',
+    prefix: RATE_LIMIT_PREFIXES.MARKETPLACE_EDIT_TOKEN_REQUEST,
   }),
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10, // 10 requests per hour per IP
@@ -104,7 +105,7 @@ export const editTokenUseRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:marketplace:edit-token-use:',
+    prefix: RATE_LIMIT_PREFIXES.MARKETPLACE_EDIT_TOKEN_USE,
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 30, // 30 requests per minute per IP
@@ -135,7 +136,7 @@ export const revealStepUpRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:marketplace:reveal-step-up:',
+    prefix: RATE_LIMIT_PREFIXES.MARKETPLACE_REVEAL_STEP_UP,
   }),
   windowMs: 5 * 60 * 1000, // 5 minutes
   max: 15, // 15 attempts per 5 minutes per IP
@@ -162,7 +163,7 @@ export const marketplaceSearchRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:marketplace:search:',
+    prefix: RATE_LIMIT_PREFIXES.MARKETPLACE_SEARCH,
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 30, // 30 requests per minute per IP

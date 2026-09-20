@@ -5,6 +5,7 @@ import { marketplaceProfiles } from '../db/schema/marketplace.js';
 import { respondents } from '../db/schema/respondents.js';
 import { SMSService } from './sms.service.js';
 import { getRedisClient } from '../lib/redis.js';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 import pino from 'pino';
 
 const logger = pino({ name: 'marketplace-edit-service' });
@@ -64,9 +65,12 @@ export class MarketplaceEditService {
     }
 
     // 3. Rate limit check: 3/day per NIN (falls back to respondent ID if NIN is null)
+    // Story 13-70 FR2 (review fix 2026-09-20) — keyspace named in `lib/rate-limit-prefixes.ts`,
+    // which asserts at module load that nothing else can swallow it. No value changed; `rid:` is a
+    // key shape inside this prefix, not a second prefix (see the registry note).
     const rateLimitKey = respondent.nin
-      ? `rl:edit-token:${respondent.nin}`
-      : `rl:edit-token:rid:${respondent.id}`;
+      ? `${RATE_LIMIT_PREFIXES.EDIT_TOKEN}${respondent.nin}`
+      : `${RATE_LIMIT_PREFIXES.EDIT_TOKEN}rid:${respondent.id}`;
     const redis = getRedisClient();
     const newCount = await redis.incr(rateLimitKey);
     if (newCount === 1) {

@@ -31,7 +31,11 @@ router.post('/activate/:token', activationIpFloodLimit, activationRateLimit, Aut
 // Staff login - rate limited + CAPTCHA protected
 // Story 13-68 — two axes, because a shared proxy IP is not a person. ⛔ THE ORDER IS THE CONTROL (review 2026-09-16):
 // 1. loginIpFloodLimit (100/IP/15min, ALL responses) - first, so it bounds everything behind it, the hCaptcha
-//    verification call included; the only layer bounding successful volume per IP
+//    verification call included; the only layer bounding successful volume per IP.
+//    ⛔ Story 13-70 FR1: being FIRST is also why it is the only limiter that can see every other one's 429.
+//    3 and 4 stamp res.locals.rateLimitRefusedBy and this ceiling hands its own increment back — so "ALL
+//    responses" now means every response EXCEPT one a limiter behind it refused (PRD NFR4.4.d). A refused
+//    captcha (2) deliberately still counts.
 // 2. verifyCaptcha - BEFORE the per-email budget, or a request with no captcha could spend anyone's budget and
 //    hold their login shut for free (review H1)
 // 3. loginRateLimit (5 FAILED/EMAIL/15min) - one person's budget; IP fallback when no email (MFA step 2)

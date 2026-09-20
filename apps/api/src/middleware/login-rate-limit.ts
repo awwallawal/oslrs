@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import type { Response } from 'express';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'login-rate-limit' });
 
@@ -29,12 +31,111 @@ export const shouldSkipRateLimit = () => isTestMode();
  * every-request increment would make the burst limiter count successful logins again.
  * `login-rate-limit-key.test.ts` pins the separation; the in-memory test store cannot see it.
  *
- * `rl:login:strict:` IS nested under `rl:login:` (unchanged since before Story 13-68) and is safe only
- * because `loginRateLimit` keys always begin `e:` or `ip:` — the same test asserts that.
+ * ⛔ Story 13-70 FR2 — NO PREFIX MAY BE A PROPER PREFIX OF ANOTHER (PRD NFR4.4.c). The burst limiter
+ * was `rl:login:`, which `rl:login:strict:` nested inside. That was SAFE, but only conditionally:
+ * safe because `loginRateLimit`'s keys always begin `e:` or `ip:`, so no key could ever spell
+ * `strict:`. A safety that depends on another limiter's key SHAPE is one refactor from being untrue,
+ * and the same shape had already gone wrong twice in this family (`rl:activation:` and
+ * `rl:password-reset-complete:`). `rl:login:burst:` and `rl:login:strict:` are now siblings, so the
+ * property is structural and `rate-limit-prefix-disjointness.test.ts` enumerates EVERY limiter in
+ * `middleware/` and asserts it — a limiter added tomorrow is covered without anyone remembering.
+ *
+ * Deploy note: Redis-only. Counters under the old prefixes are orphaned and age out with their own
+ * TTL (≤15 min here), so at worst one window's budget is handed back. No migration.
  */
-export const LOGIN_RATE_LIMIT_PREFIX = 'rl:login:';
-export const LOGIN_IP_FLOOD_PREFIX = 'rl:login-ip-flood:';
-export const STRICT_LOGIN_RATE_LIMIT_PREFIX = 'rl:login:strict:';
+/* ------------------------------------------------------------------------------------------------
+ * Story 13-70 FR1 — "A REFUSAL IS NOT A REQUEST" (PRD NFR4.4.d), as ONE rule applied uniformly.
+ *
+ * THE RULE, in two halves, and every limiter on the login routes obeys both:
+ *   1. When a limiter refuses, it stamps its OWN NAME into `res.locals.rateLimitRefusedBy`.
+ *   2. A limiter never counts a request that a DIFFERENT limiter refused. Its own refusals it still
+ *      counts — that is what keeps `attempts` meaning "requests from this IP".
+ *
+ * ⛔ WHY THE MARKER CARRIES A NAME AND NOT A BOOLEAN. A boolean can only express "somebody refused
+ * this", which forces every limiter to choose between discounting its own 429s (the rejected Option
+ * A — the counter then pins at `max` and the reopen trigger at `loginIpFloodLimit` becomes
+ * undiagnosable exactly when it fires) and counting everyone's. The NAME lets each limiter ignore
+ * every refusal but its own, which is what NFR4.4.d actually says: *any OTHER limiter*.
+ *
+ * ⚠️ POLARITY IS PER SITE, AND THE TWO SHAPES ARE NOT INTERCHANGEABLE. `express-rate-limit`
+ * consults `requestWasSuccessful` ONLY when `skipFailedRequests` or `skipSuccessfulRequests` is set
+ * (8.3.0: `if (config.skipFailedRequests || config.skipSuccessfulRequests)`), and each flag reads
+ * the answer the opposite way round — so the predicate alone is dead code, and the wrong flag
+ * inverts the control:
+ *   • `skipFailedRequests` decrements when the predicate is FALSE  → flood ceiling: "successful"
+ *     means *not refused by another limiter*.
+ *   • `skipSuccessfulRequests` decrements when the predicate is TRUE → burst/strict: "successful"
+ *     means *a 2xx, or a refusal by another limiter*.
+ *
+ * ⛔ `verifyCaptcha` deliberately does NOT stamp. Its 400 stays counted, so the flood ceiling keeps
+ * bounding the hCaptcha siteverify call per IP (AC2).
+ * ---------------------------------------------------------------------------------------------- */
+
+/**
+ * The value each limiter stamps. Named constants, so the predicates, the limiters and the tests
+ * cannot drift apart, and `grep REFUSED_BY` finds every limiter that has opted in.
+ */
+export const REFUSED_BY_LOGIN_IP_FLOOD_LIMIT = 'loginIpFloodLimit';
+export const REFUSED_BY_LOGIN_RATE_LIMIT = 'loginRateLimit';
+export const REFUSED_BY_STRICT_LOGIN_RATE_LIMIT = 'strictLoginRateLimit';
+export const REFUSED_BY_MFA_RATE_LIMIT = 'mfaRateLimit';
+
+/* ------------------------------------------------------------------------------------------------
+ * Story 13-70 R7 — THE OTHER FOUR ROUTE FAMILIES (adversarial review 2026-09-20, fixed 2026-09-20).
+ *
+ * FR1 and R3 made the rule true on the login routes. NFR4.4.d is ROUTE-GENERAL — *any other limiter
+ * on the same route* — and the review found four more pairs with the identical shape the login pair
+ * had: a flood ceiling mounted FIRST counting all responses, with a person-keyed limiter behind it
+ * and no skip predicate anywhere. The PRD had been flipped to "IMPLEMENTED" while four fifths of
+ * the clause was untrue, which is the drift class this whole arc exists to close.
+ *
+ *   activation         `activationIpFloodLimit`                → `activationRateLimit`
+ *   password reset     `passwordResetCompletionIpFloodLimit`   → `passwordResetCompletionRateLimit`
+ *   registration       `registrationRateLimit`                 → `registrationEmailRateLimit`
+ *   wizard draft       `wizardDraftRateLimit`                  → `wizardDraftEmailRateLimit`
+ *
+ * ⛔ WHY THE CEILINGS GET THE PREDICATE AND THE SECOND LIMITERS ONLY STAMP. Every mount of all eight
+ * was enumerated (`routes/auth.routes.ts:27,29,108-109,115-116`; `routes/registration.routes.ts:60,
+ * 61,74-75,99`) and in every one the person-keyed limiter is LAST — `registrationBurstWatch` sits
+ * behind it on `/wizard` but calls `next()` and never answers 429. So the seconds have nothing
+ * behind them to be charged for, and giving them `skipFailedRequests` anyway would buy nothing and
+ * cost something real: it registers the `close`/`error` decrement listeners of **R4**, and if BOTH
+ * limiters on a route carry them then NOTHING on that route counts an aborted request. Login is
+ * safe from that precisely because burst and strict use `skipSuccessfulRequests`, which registers
+ * `finish` only. Keeping the seconds listener-free preserves the same shape here.
+ *
+ * ⚠️ SO THIS IS THE ONE PLACE A MOUNT-ORDER ASSUMPTION REMAINS, and R3 is the reason to say it out
+ * loud: mount `mfaRateLimit`'s equivalent behind any of these seconds and it needs the predicate
+ * too. `rate-limit-coverage.test.ts` asserts each route's limiter list, so adding one reds there.
+ *
+ * ⭐ THE BURST BREAKER GETS BETTER, NOT WORSE. `recordRegistration429` fires from each limiter's
+ * `handler`, so Story 13-46's turn-away signal still counts every refusal that happens. What
+ * changes is that the ceiling refuses LESS — it stops charging a registrant's own 429s to the
+ * 50-per-IP budget their whole proxy shares — so the breaker stops counting a person's retries into
+ * their own refusal as fresh turn-aways. The signal narrows onto real ones.
+ * ---------------------------------------------------------------------------------------------- */
+export const REFUSED_BY_ACTIVATION_IP_FLOOD_LIMIT = 'activationIpFloodLimit';
+export const REFUSED_BY_ACTIVATION_RATE_LIMIT = 'activationRateLimit';
+export const REFUSED_BY_PASSWORD_RESET_COMPLETION_IP_FLOOD_LIMIT = 'passwordResetCompletionIpFloodLimit';
+export const REFUSED_BY_PASSWORD_RESET_COMPLETION_RATE_LIMIT = 'passwordResetCompletionRateLimit';
+export const REFUSED_BY_REGISTRATION_RATE_LIMIT = 'registrationRateLimit';
+export const REFUSED_BY_REGISTRATION_EMAIL_RATE_LIMIT = 'registrationEmailRateLimit';
+export const REFUSED_BY_WIZARD_DRAFT_RATE_LIMIT = 'wizardDraftRateLimit';
+export const REFUSED_BY_WIZARD_DRAFT_EMAIL_RATE_LIMIT = 'wizardDraftEmailRateLimit';
+
+/**
+ * Did a limiter OTHER than `self` refuse this request?
+ *
+ * `undefined` means nobody refused it — an ordinary 401, 400 or 200, all of which stay counted.
+ */
+export function refusedByAnotherLimiter(res: Response, self: string): boolean {
+  const by = res.locals.rateLimitRefusedBy;
+  return by !== undefined && by !== self;
+}
+
+export const LOGIN_RATE_LIMIT_PREFIX = RATE_LIMIT_PREFIXES.LOGIN_BURST;
+export const LOGIN_IP_FLOOD_PREFIX = RATE_LIMIT_PREFIXES.LOGIN_IP_FLOOD;
+export const STRICT_LOGIN_RATE_LIMIT_PREFIX = RATE_LIMIT_PREFIXES.LOGIN_STRICT;
 
 /**
  * Story 13-68 — key for `loginRateLimit`: the SUBMITTED EMAIL, falling back to the IP.
@@ -95,7 +196,9 @@ export function buildLoginRateLimitKey(email: unknown, ip: string | undefined): 
  * failures left `failed_login_attempts = 0`). Failures are refused by `strictLoginRateLimit` at 61 per hour,
  * long before this ceiling's 100 per 15 minutes; that is the constant not to raise for enumeration.
  *
- * ⭐ LOAD-BEARING: this is the ONLY login limiter that counts every response (no skipSuccessfulRequests).
+ * ⭐ LOAD-BEARING: this is the ONLY login limiter that counts SUCCESSFUL responses (no
+ * skipSuccessfulRequests — and Story 13-70 did not add one; what it added is `skipFailedRequests`
+ * bound to a marker predicate, which discounts only the 429s OTHER limiters emit).
  * `loginRateLimit` and `strictLoginRateLimit` both count failures only, so without this ceiling nothing
  * would bound the volume of SUCCESSFUL requests from one IP — e.g. an attacker who already holds valid
  * credentials validating them in bulk. The binding test pins it through the production stack: 100
@@ -109,17 +212,89 @@ export const loginIpFloodLimit = rateLimit({
     prefix: LOGIN_IP_FLOOD_PREFIX,
   }),
   windowMs: 15 * 60 * 1000,
-  // FAILS CLOSED for a whole proxy only at 100 requests in 15 minutes. Headroom: the enumerator
-  // cohort is 17 people — every one of them failing five times is 85. Reopen trigger: any
-  // `auth.login_ip_flood_limit_exceeded` whose IP reverse-resolves to opera-mini.net or a Nigerian
-  // carrier CGNAT range.
+  // ⛔ 100 REQUESTS / IP / 15 MIN — ACCEPTED 2026-09-20 (Awwal, Story 13-70 R1). The derivation
+  // below REPLACES the one that stood here, which was wrong on its own terms twice over.
+  //
+  // IT USED TO SAY: *"the enumerator cohort is 17 people — every one of them failing five times is
+  // 85."* Measured read-only on prod 2026-09-20: there are **28 enumerator accounts and NINE of them
+  // are the operator's own harness logins** (`lawalkolade+demo1/2/3`, `+enum1`, `+test`, …), leaving
+  // **19 real field accounts**. So "17" mixed field staff with the test harness. And "failing five
+  // times is 85" counted only failures, while this is the one login limiter with no
+  // `skipSuccessfulRequests` — it counts successes too.
+  //
+  // THE DERIVATION, per person per window, of what THIS ceiling actually counts after Story 13-70
+  // FR1: 5 failures (their whole per-email budget) + 1 success = **6**. Their own 429s are no longer
+  // counted; a refused CAPTCHA still is, so a person who also fumbles the captcha costs more.
+  //   • measured concurrency per shared address — 17 enumerators across SIX Opera Mini addresses on
+  //     2026-09-07/08, so ≈3 per address:            3 × 6 =  18
+  //   • absolute worst case, the whole field force behind ONE carrier gateway at once:
+  //                                                 19 × 6 = 114
+  //   • what 100 buys:                              ≈16 concurrent people behind one address
+  //
+  // ⭐ WHY THAT IS ACCEPTABLE NOW AND WAS NOT BEFORE, which is the whole reason this row could be
+  // closed: until FR1 the binding constraint was ONE PERSON — five real attempts plus up to 95 of
+  // their OWN refusals reached 100 and shut their entire proxy for fifteen minutes. It now takes
+  // roughly seventeen simultaneous people to spend the same budget, against a measured concurrency
+  // of three. FR1 did not raise the number; it changed who can spend it.
+  //
+  // ⚠️ THE NUMBER ITSELF IS STILL UNDER A DATED REVIEW, and it is not this comment's to move. The
+  // PRD's flood-ceiling divergence ruling (2026-09-17) permits login's 100 against its Tier-1 peers'
+  // 300 only because this ceiling also bounds the hCaptcha `siteverify` call and the bcrypt work
+  // behind it — and it requires BOTH costs to be measured by **2026-10-15**, harmonising to 300 if
+  // neither constrains. Story 13-70 **R5** carries that date. ⛔ And Story 13-70 **R6** records that
+  // FR1 moved the two halves of that justification in OPPOSITE directions: bcrypt is bounded better
+  // (a request refused downstream never reaches it), siteverify worse (it already made the call).
+  // Measured in `login-rate-limit.binding.test.ts`: 40 captcha-passing requests refused by the burst
+  // limiter cost 40 siteverify calls while this counter peaked at 6.
+  //
+  // REOPEN TRIGGER: any `auth.login_ip_flood_limit_exceeded` whose IP reverse-resolves to
+  // opera-mini.net or a Nigerian carrier CGNAT range, **or the operator's own IP during a dev/UAT
+  // session** (nine harness accounts share one desk), **or the count of real field accounts
+  // exceeding 19** — 13-71 grows the cohort by design.
   max: 100,
+  // ⛔ STORY 13-70 FR1 — A REFUSAL IS NOT A REQUEST (PRD NFR4.4.d). Ruled by Awwal, adjudication
+  // 2026-09-20: mark and ignore (Option B), not a status filter (Option A).
+  //
+  // `loginRateLimit` and `strictLoginRateLimit` are mounted BEHIND this ceiling and stamp
+  // `res.locals.rateLimitRefusedBy` before answering 429. This ceiling is mounted FIRST, so its
+  // response listener is the only one that observes every other limiter's refusal; it hands its own
+  // increment back for those requests. One enumerator mistyping a password five times used to spend
+  // five real attempts PLUS up to ninety-five refusals OF those attempts against a budget their
+  // whole Opera Mini proxy shares — every incident in this family was a legitimate person.
+  //
+  // ⚠️ `requestWasSuccessful` ALONE IS DEAD CODE — it is consulted only when `skipFailedRequests`
+  // or `skipSuccessfulRequests` is set (express-rate-limit 8.3.0 dist, `if (config.skipFailedRequests
+  // || config.skipSuccessfulRequests)`); with neither, no response listener is registered and the
+  // predicate never runs. `skipFailedRequests` is the half that pairs with THIS predicate: it
+  // decrements when the predicate returns false, which is exactly when a downstream limiter stamped
+  // the marker. Read the option name through the predicate — "failed" here means "refused by another
+  // limiter", and nothing else.
+  //
+  // ⭐ THE ALL-RESPONSE PROPERTY IS INTACT: `skipSuccessfulRequests` is still absent, so successful
+  // logins are still counted and this is still the only login ceiling that bounds request VOLUME.
+  //
+  // ⛔ NOT `res.statusCode !== 429` (Option A, rejected): that also discounts this ceiling's OWN
+  // 429s, so the counter pins at `max` and `attempts` below stops meaning "requests from this IP" —
+  // the reopen trigger above becomes undiagnosable precisely when it fires. `verifyCaptcha`
+  // deliberately does NOT stamp, so a refused captcha is still counted and this ceiling still bounds
+  // the hCaptcha siteverify call per IP.
+  //
+  // ⚠️ KNOWN CONSEQUENCE, recorded not hidden: `skipFailedRequests` also registers `close` and
+  // `error` listeners, and the `close` one decrements when the response did not finish writing — a
+  // request aborted mid-flight is no longer counted. That is the right answer for a dropping mobile
+  // connection (this cohort's normal condition) and a narrow evasion otherwise; Story 13-70 R4.
+  skipFailedRequests: true,
+  requestWasSuccessful: (_req, res) => !refusedByAnotherLimiter(res, REFUSED_BY_LOGIN_IP_FLOOD_LIMIT),
   message: {
     status: 'error',
     code: 'AUTH_RATE_LIMIT_EXCEEDED',
     message: 'Too many login attempts. Please try again later.',
   },
   handler: (req, res, _next, options) => {
+    // Story 13-70 FR1 — stamp even though this limiter is mounted FIRST and nothing upstream reads
+    // it. The rule is uniform on purpose: every limiter declares itself, so `attempts` in the log
+    // below can be attributed, and a limiter inserted ahead of this one inherits the behaviour.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_LOGIN_IP_FLOOD_LIMIT;
     logger.warn({
       event: 'auth.login_ip_flood_limit_exceeded',
       ip: req.ip,
@@ -185,6 +360,16 @@ export const loginRateLimit = rateLimit({
   // 2xx logins do not increment the counter. Operator iteration friendly;
   // attacker defense preserved (failed brute-force attempts still counted).
   skipSuccessfulRequests: true,
+  // ⛔ Story 13-70 R3 (ruled by Awwal 2026-09-20, after the FR1 pass measured the gap). This limiter
+  // is mounted BEFORE `strictLoginRateLimit` and before `mfaRateLimit`, so it has already
+  // incremented by the time either of them answers 429 — and its `skipSuccessfulRequests` decrements
+  // only on a 2xx. A strict refusal therefore used to spend a unit of the per-EMAIL budget of
+  // whoever happened to send it. MEASURED before the fix: once strict's 60/IP/hour was exhausted, an
+  // address that had NEVER been given a single login attempt on that IP lost its whole 5-failure
+  // budget to refusals it did not cause, and the sixth request was refused by THIS limiter.
+  // "A 2xx, or a refusal by someone else" — its own 429s are still counted (see the docblock above).
+  requestWasSuccessful: (_req, res) =>
+    res.statusCode < 400 || refusedByAnotherLimiter(res, REFUSED_BY_LOGIN_RATE_LIMIT),
   // Destructured rather than touching `req.ip` — mirrors buildRegistrationEmailRateLimitKey. The
   // library's IPv6 validator greps this source text; the key-builder unit test is the real guard.
   keyGenerator: ({ body, ip }) =>
@@ -195,6 +380,9 @@ export const loginRateLimit = rateLimit({
     message: 'Too many login attempts. Please try again later.',
   },
   handler: (req, res, next, options) => {
+    // Story 13-70 FR1 — tell the flood ceiling this response is a REFUSAL, not a request. Set before
+    // the response is written, because the ceiling reads it from a `finish` listener.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_LOGIN_RATE_LIMIT;
     const key = buildLoginRateLimitKey((req.body as { email?: unknown } | undefined)?.email, req.ip);
     logger.warn({
       event: 'auth.rate_limit_exceeded',
@@ -264,12 +452,19 @@ export const strictLoginRateLimit = rateLimit({
   max: 60,
   // Story 13-68 — failures only. Availability, not security: see the docblock.
   skipSuccessfulRequests: true,
+  // Story 13-70 R3 — same rule as the burst limiter. Mounted LAST of the four, but `mfaRateLimit`
+  // sits behind it on the two MFA step-2 routes, so there IS a limiter whose 429 it would otherwise
+  // charge to the shared per-IP failure budget.
+  requestWasSuccessful: (_req, res) =>
+    res.statusCode < 400 || refusedByAnotherLimiter(res, REFUSED_BY_STRICT_LOGIN_RATE_LIMIT),
   message: {
     status: 'error',
     code: 'AUTH_IP_BLOCKED',
     message: 'Your IP has been temporarily blocked due to too many failed login attempts. Please try again later.',
   },
   handler: (req, res, next, options) => {
+    // Story 13-70 FR1 — see the ceiling's `skipFailedRequests` block.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_STRICT_LOGIN_RATE_LIMIT;
     logger.warn({
       event: 'auth.ip_blocked',
       ip: req.ip,
@@ -295,7 +490,7 @@ export const refreshRateLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
     sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-    prefix: 'rl:refresh:',
+    prefix: RATE_LIMIT_PREFIXES.REFRESH,
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 10, // 10 refresh attempts per minute

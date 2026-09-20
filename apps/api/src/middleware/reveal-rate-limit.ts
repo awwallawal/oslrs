@@ -1,6 +1,7 @@
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
 import { getRevealGuardConfig } from '../config/reveal-guard.config.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'reveal-rate-limit' });
 
@@ -15,9 +16,11 @@ const getRedisClient = () => {
 const REVEAL_LIMIT = 50;
 const REVEAL_WINDOW_SECONDS = 86400; // 24 hours
 
-const USER_KEY = (userId: string) => `rl:reveal:user:${userId}`;
-const DEVICE_KEY = (fp: string) => `rl:reveal:device:${fp}`;
-const GLOBAL_KEY = 'rl:reveal:global';
+// Story 13-70 FR2 (review fix 2026-09-20) — these two were the keyspaces the disjointness scan
+// could not see, because a template literal is not a single-quoted string. No value changed.
+const USER_KEY = (userId: string) => `${RATE_LIMIT_PREFIXES.REVEAL_USER}${userId}`;
+const DEVICE_KEY = (fp: string) => `${RATE_LIMIT_PREFIXES.REVEAL_DEVICE}${fp}`;
+const GLOBAL_KEY = RATE_LIMIT_PREFIXES.REVEAL_GLOBAL;
 
 export interface RevealRateLimitResult {
   allowed: boolean;

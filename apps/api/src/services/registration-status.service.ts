@@ -29,6 +29,7 @@ import { buildRegistrantFullName } from '../utils/registrant-name.js';
 import { normaliseNigerianPhone } from '../lib/normalise/index.js';
 import { getRedisClient } from '../lib/redis.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'registration-status-service' });
 
@@ -54,7 +55,7 @@ const EMAIL_SEND_THROTTLE = {
   /** Mirrors the magic-link route middleware budget (NFR4.4: 3/email/hour). */
   MAX_PER_WINDOW: 3,
   WINDOW_SECONDS: 60 * 60, // rolling 1 hour
-  KEY_PREFIX: 'rl:regstatus-email:',
+  KEY_PREFIX: RATE_LIMIT_PREFIXES.REGSTATUS_EMAIL,
 } as const;
 
 /**

@@ -1,8 +1,13 @@
 import rateLimit from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import { getRedisClient as getFactoryRedisClient } from '../lib/redis.js';
-import { isTestMode, shouldSkipRateLimit } from './login-rate-limit.js';
+import {
+  isTestMode,
+  shouldSkipRateLimit,
+  REFUSED_BY_MFA_RATE_LIMIT,
+} from './login-rate-limit.js';
 import pino from 'pino';
+import { RATE_LIMIT_PREFIXES } from '../lib/rate-limit-prefixes.js';
 
 const logger = pino({ name: 'mfa-rate-limit' });
 
@@ -26,7 +31,7 @@ export const mfaRateLimit = rateLimit({
     : new RedisStore({
         // @ts-expect-error - Known type mismatch with ioredis
         sendCommand: (...args: string[]) => getRedisClient()?.call(...args),
-        prefix: 'rl:mfa:',
+        prefix: RATE_LIMIT_PREFIXES.MFA,
       }),
   windowMs: 60 * 1000, // 1 minute
   max: 10, // 10 requests per minute per IP
@@ -36,6 +41,11 @@ export const mfaRateLimit = rateLimit({
     message: 'Too many MFA attempts. Please slow down.',
   },
   handler: (req, res, next, options) => {
+    // Story 13-70 R3 — this limiter is mounted LAST on the MFA step-2 routes, behind all three login
+    // limiters, so without this stamp its 429 is counted by every one of them: the flood ceiling,
+    // the victim's per-email budget and the shared per-IP failure budget. See the "a refusal is not
+    // a request" docblock in `login-rate-limit.ts`.
+    res.locals.rateLimitRefusedBy = REFUSED_BY_MFA_RATE_LIMIT;
     logger.warn({
       event: 'mfa.rate_limit_exceeded',
       ip: req.ip,
