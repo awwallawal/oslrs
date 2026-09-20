@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-09-19 · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-09-20 · 🆕 **NEW PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1137,7 +1137,83 @@ sit on opposite sides of a boundary — and the far side of a boundary is exactl
 
 ---
 
-## 3. Current state (2026-09-19) — READ THIS ONE
+## 3. Current state (2026-09-20) — READ THIS ONE
+
+⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds — run them, do not read a number.
+⚠️ At 2026-09-20 13:00Z prod was on **`a4660cc`** while §3 and `MEMORY.md` both still said `826147f` —
+**D6's exact failure, recurring.** The deployed *runtime* code was identical (the only non-docs diff between
+them is a test file, `fbbc213`), so nothing was wrong except the number. That is precisely the point of D6.
+
+- ⏳ **13-70 ADJUDICATED, COMMITTED `eeacee3`, PUSHED. Status `review`, NOT `done`** — R2 is
+  DISCHARGE-ON-DEPLOY and blocks `done`, not the commit (§2a0). CI `35513171573`. **THE OUTSTANDING WORK IS
+  THE POST-DEPLOY READ, and it is not optional:** five flood ceilings change what they COUNT on this deploy
+  (login, activation, password-reset completion, registration, wizard draft), each refusing LESS because a
+  person's own downstream 429s are handed back — **and the decrement is unproven against
+  `rate-limit-redis@4`, because every binding test runs the IN-MEMORY store.** Procedure: from one IP drive 6
+  failed logins for ONE address (the 6th is refused by `loginRateLimit`), then 1 more for a DIFFERENT
+  address; read `attempts` in `auth.login_ip_flood_limit_exceeded` / `auth.rate_limit_exceeded`. **Predict
+  the flood counter advances by 6, not 7.** ⛔ Assert the counter VALUE — "the request was served" is
+  consistent with both a working decrement and a no-op. Then repeat for a REGISTRATION refusal: four of the
+  five ceilings were added today and none is exercised by the login-only procedure.
+- ✅ **WHAT IT SHIPPED.** *A refusal is not a request* (NFR4.4.d) is now true on **eight route families /
+  twelve limiters**: each stamps `res.locals.rateLimitRefusedBy` with its own NAME, and the four ceilings
+  skip on `requestWasSuccessful` **paired with `skipFailedRequests`**. Plus disjoint Redis keyspaces (31
+  registered, invariant asserted at module load), hashed email keys, and FR4 — a residual carrying
+  `DATED <iso>` now fails the build once its date passes. Verified at fixed clocks: **0 expired on
+  2026-10-15, 5 on 2026-10-16** (`13-68 R2b`, `13-70 R4/R5/R6/R8`). Suite **330 files / 4,657 tests / 0
+  failed**, reproduced independently by the pre-push gate.
+- ⛔ **ADJUDICATION'S OWN RULING WAS INCOMPLETE, AND THE DEV CAUGHT IT.** AC3 specified
+  `requestWasSuccessful` alone. `express-rate-limit` consults that predicate **only** when a skip flag is set
+  (8.3.0 `dist/index.cjs:912`), so the ruling as written was **dead code** —
+  [[pattern-ship-a-fix-that-never-fires]] authored into an AC *by the session policing for it*. Removing
+  `skipFailedRequests` reds 4 tests. **Adjudication's output is not exempt from the defect class it hunts.**
+- 🆕 **§2al IS NEW, AND IT CAME FROM A GAP IN §2a0.** §2a0 says what an ACCEPTED residual requires and never
+  says **who may sign it**, so a review can assemble every element of a ruling and record itself as having
+  received one. Three instances in 13-70, none a wrong decision, all ratified on the spot — **the defect was
+  the signature, not the decision.** One had reached **PRD NFR4.4.c as normative**.
+- 🐞 **AND THE RESIDUAL OPENED TO RECORD §2al DID NOT FIRE ON ITS FIRST WRITE (13-70 R8).** FR4's deadline
+  check reads closure vocabulary from the **id cell** as well as the marker cell, and the id cell is free
+  prose — R8's own description quoted `CLOSED BY DECISION` as evidence of the problem, so the guard read the
+  row as closed. **The adversarial review had already tripped this itself** (its error #2) and fixed the
+  INSTANCE by rewording to "settled", so the class survived the fix that found it. Measured: 6 dated rows,
+  exactly **1** disarmed, and it was the new one — LATENT, not live, hence dated rather than hot-fixed.
+  Re-armed by moving the quotes to the evidence cell and recorded **as a workaround, not a fix.**
+- 📐 **F1–F4 RE-MEASURED READ-ONLY ON PROD (2026-09-20 08:25 WAT)** before the marathon began, so every
+  deploy has a falsifiable baseline (`docs/runbooks/enumerator-prod-smoke-and-golive-gate.md` → measurement
+  log). ⛔ **HEADLINE: NINE of the 28 enumerator accounts are the OPERATOR'S OWN harness logins**
+  (`lawalkolade+demo1/2/3`, `+enum1`, `+test`, `+testenumerator`, `+testenumeratornew`, `+testfour`, bare
+  `lawalkolade`), seven of which have "logged in". **So "17 enumerators" was never a headcount** and every
+  ratio built on it inherited that — including `8 of 17` and the flood ceiling's headroom comment. Real
+  roster: **19 field accounts, 11 logged in, gap 8** (6 `invited` → resend, 2 `active` → reset in place).
+  - **F1 🔴 gap 8** — now a GAP, not a ratio, because the denominator moved within two days of being written.
+  - **F2 🔴 11.4% (4 of 35)** — *unchanged.* The raw query reads 13.5% (5 of 37); the difference is the
+    operator's own `ZZSMOKE` capture. **13-71 is wholly untouched work.**
+  - **F3 🟡 the ungate WORKS — 2 of 2 post-deploy** — but **zero PUBLIC submissions since `826147f`**, so that
+    channel's post-deploy scoring has **never been observed**; 13-69 closed on enumerator evidence only.
+    Public runs ~5/day, so one arrival closes it for free. The 6-of-65 window figure is pre-deploy backlog.
+  - **F4 🟡 0 in 7 days — by luck, not construction.** `deleteForm` still permits `draft` OR `archived`.
+  - ⭐ **Every criterion now carries a MINIMUM SAMPLE.** Volume is 1–7/day and tapering, so one row moves F2
+    ~3 points: after 13-71 a single GPS capture would read **F2 = 100% on N=1**. F2 needs ≥90% over **N ≥ 20
+    from ≥ 5 DISTINCT enumerators**; F3 needs a **`public` row**. N is recorded with every number.
+- 🔢 **13-72 AC1, re-measured 2026-09-20:** **410 unscored all-time · 65 in the R-A8 window** (33 enumerator +
+  32 public) · ⭐ **all 65 reference a LIVE form**, so pass 1 is runnable as AC2 assumes. Re-measure on the day.
+
+### ⏭️ NEXT, in the order the evidence supports
+1. 🔴 **Finish 13-70:** verify EVERY CI job (`gh run view <id> --json jobs`, never the watcher's verdict),
+   confirm VPS SHA + health, then **run R2's post-deploy read on BOTH a login and a registration refusal**.
+   Only then may 13-70 read `done`.
+2. 🟡 **13-71** — F2 is the only gate whose loss is PERMANENT. **Pull 13-73 AC7 in with it:** the `String()`
+   geopoint flattening makes two DIFFERENT locations compare equal, and 13-71 makes that universal on the
+   exact channel R-A8 calibrates against.
+3. **13-73** — closes F4 structurally (AC4 guard + AC5 form-identity snapshot).
+4. **Re-provision the 8** → closes F1. ⛔ **AFTER 13-71**, so their first captures land GPS-enforced and help
+   F2 rather than diluting its 7-day window. Ruled by Awwal 2026-09-20: all at once, no half-measures.
+5. **13-72 pass 1** (re-measure first) → pass 2 after 13-73 → **R-A8 last**; pass 1 is a trial sample, not the
+   field. ⭐ 13-72 needs no dev slot — its AC10 forbids changing anything outside `scripts/`.
+6. ⚠️ **ONE DEPLOY PER STORY.** Two of these add columns, the last deploy silently broke the cohort teardown,
+   and 13-71's AC10 prediction (11% → >90%) is unattributable if three other stories ship beside it.
+
+## 3-old9. Current state (2026-09-19) — superseded by §3 above
 
 **Prod `826147f`**, health 200, CI 35462842118 green 10/10 including `deploy`, pm2 restart confirmed by uptime. ⭐ **THE FRAUD ENGINE IS NO LONGER DARK** — 13-69 adjudicated, deployed and CLOSED the same day, and its two post-deploy checks were discharged against live traffic rather than deferred.
 
@@ -2048,6 +2124,28 @@ adds an `adopted_from_draft` bucket. No schema change (13-49 writes real rows; t
     not the e2e harness written for this exact behaviour. Budget for dry runs accordingly.
 
 ---
+
+## 7v. Session 2026-09-20 — 13-70 adjudicated, and three records that signed a name they had not earned
+
+⚠️ **Kept deliberately short: D8's cap on §7 is OVERDUE and this entry makes it worse. The arc lives in §3.**
+
+1. **Recovered the previous session from its transcript**, not from memory — it had crashed mid-question
+   (`~/.claude/projects/<slug>/*.jsonl`; grep the last user/assistant turns). The pending question was
+   13-70 FR1's skip behaviour, and **"Option B" existed nowhere in the repo.** ⭐ A crashed session's
+   transcript is a first-class source; reconstructing from the tree alone would have re-derived the wrong
+   question.
+2. **Ruled Option B** (marker, not status filter) and wrote 13-70's residual ledger + R1. **Both the ruling
+   and R1 were then corrected by others** — the ruling was dead code (§3), and R1's *"keep it undated to
+   protect AC11's headline count"* was correctly called out by the review as the tail wagging the dog.
+3. **Re-measured F1–F4 on prod before the marathon started**, which is the only reason the 13.5%-vs-11.4%
+   GPS figure and the nine operator-owned enumerator accounts were caught. **Two of the four gates were
+   measuring something other than what they claimed.**
+4. **Adjudicated 13-70**: no code defect; two record-drift corrections; §2al added; R8 opened and immediately
+   found not to fire. Pushed `eeacee3`; `review`, not `done`.
+5. ⭐ **THE THEME OF THE DAY, and it is uncomfortable: three separate artefacts asserted a decision nobody
+   had made** (R1, the PRD line, 13-68 R8), **and two guards failed on the rows written to police them.**
+   Every single one was found by *looking at the artefact* rather than at the claim about it — §2w, four
+   more times.
 
 ## 7b. Session 2026-07-31 — 13-47 + 13-37 shipped
 
@@ -3680,7 +3778,7 @@ this session applied to this list. Nothing here blocks the blast; §4 holds the 
 |---|---|---|---|
 | D1 | ✅ **WORKED EXAMPLE EXISTS (2026-07-30) — format is no longer a proposal, copy it.** **Residual ledger**: a `## Residuals` table (ID / severity / state / re-runnable evidence / owner), using the §2a0 three states. ~~Retrofit 13-36 as the worked example.~~ **Done instead on 13-37** — `_bmad-output/implementation-artifacts/13-37-registry-read-drift-ci-guard.md` → `## Residuals`. **13-37 is the better example than the proposed 13-36 retrofit**, for three reasons: it has exactly **ONE blocking residual** (R1, AC6's CI leg) rather than a tangle; that residual has **re-runnable evidence on both sides of the push** (locally `pnpm --filter @oslsr/api lint:registry-read` → 344 files/0 hits; after push, a two-part `gh run view` check for the step being green **and** ordered above `Lint`); and the ledger was written **before** the close rather than reconstructed after it, which is what §2a0's two touch points actually ask for. It also carries two ACCEPTED rows (R2 = the rule-(a) scope gap, measured 50→0; R3 = L2's comment-mask KNOWN LIMIT) — deliberately kept, because those are exactly what §2a0's grep surfaces, and R3 is left as the example of a *thin* ACCEPTED (a bound, not a count) so the format shows its own failure mode. | Makes the debt gate a *schema* instead of a discipline. Prose is not type-checked. | ~~First story adjudicated after launch.~~ **DONE.** Remaining: fold the table into the story template so the next story starts with it, and use it on the next adjudication. |
 | D2 | **STILL PARKED — no script written.** **`scripts/residual-inventory.ts`** — regenerates the debt table on demand (unchecked boxes + residual language + file-vs-board status divergence). | A hand-written list is stale in a week. Same script later feeds D3, so the parse is written once. | ~~Do with D1; it *is* the report.~~ **D1 shipped WITHOUT it** — 13-37's ledger is hand-written, which is precisely the staleness D2 exists to fix, so the trigger is now sharper, not softer: **write it when a SECOND story needs a ledger**, i.e. at 13-41's close-out. Two hand-written ledgers is the point at which the parse pays for itself, and by then D1's format has been exercised twice so the script has a stable target. |
-| D3 | 🐞 **NEW 2026-08-18 — THE SHIPPED HALF IS ALREADY BROKEN LOCALLY, fix this with the story.** `turbo.json`'s `lint` task has **no `inputs`**, so it hashes `apps/api/` only; `_bmad-output/` is outside, so a **story-only commit replays a stale guard verdict** (observed on the 12-4 close-out: `FULL TURBO`, 208 ms, "317 stories scanned" from an older run). The guard therefore cannot fire on exactly the commits it polices. CI is unaffected (remote caching disabled → cold cache). Fix = explicit `inputs` including `../../_bmad-output/**/*.md`, or a separate task. See §2y(c). **Story 13-45 — CI guard**: fail when a story reads `Status: done` while its ledger holds an OPEN/DISCHARGE-ON-PUSH row. | Without a guard, D1 is a convention — and conventions produced the 201. Needs a RED-failing canary, so it is real dev work. Sibling of 13-41/13-37. **⚠️ It is the THIRD consumer of the shared CI-guard toolkit 13-41 extracts** (`apps/api/src/lib/ci-guard/` — file walk, path rules, allowlist, escape hatch, hit record, message skeleton, runner factory, AST source model), so it should be built ON that toolkit, never as a fourth copy of 13-37's plumbing. It is also a named blocking step in `lint-and-build`, so it inherits **Pitfall #45**: the step must sit ABOVE `Lint`, and 13-41's AC6 ordering-assertion test must be extended to cover it. | ~~After D1+D2 exist and one story has used the ledger for real.~~ **D1 now exists and 13-37 has used it for real** — so the remaining gates are D2 (the parse) and, critically, **13-41 landing the toolkit**. Do not start 13-45 before 13-41 is `done`. |
+| D3 | 🔔 **TRIGGER FIRED AGAIN, TWICE IN ONE SESSION (2026-09-20) — 13-70 shipped FR4 and did NOT fix this.** Observed in both directions on the same day: a **docs-only** commit's pre-commit gate replayed `327 stories scanned` from cache while a direct run reported `328` — the guard never saw a ledger that had just been added — and the later `apps/api/**` commit was a genuine **cache miss** that executed (411/411/328). ⛔ **So FR4's new dated-deferral check inherits the same hole**: a residual whose date passes is, by construction, usually a story-only edit, which is exactly the commit that replays a stale verdict. 13-70's Task 4.7 documents the workaround (*run the guard DIRECT*) rather than closing it. **The fix is still one line of `turbo.json` `inputs`.** 🐞 **NEW 2026-08-18 — THE SHIPPED HALF IS ALREADY BROKEN LOCALLY, fix this with the story.** `turbo.json`'s `lint` task has **no `inputs`**, so it hashes `apps/api/` only; `_bmad-output/` is outside, so a **story-only commit replays a stale guard verdict** (observed on the 12-4 close-out: `FULL TURBO`, 208 ms, "317 stories scanned" from an older run). The guard therefore cannot fire on exactly the commits it polices. CI is unaffected (remote caching disabled → cold cache). Fix = explicit `inputs` including `../../_bmad-output/**/*.md`, or a separate task. See §2y(c). **Story 13-45 — CI guard**: fail when a story reads `Status: done` while its ledger holds an OPEN/DISCHARGE-ON-PUSH row. | Without a guard, D1 is a convention — and conventions produced the 201. Needs a RED-failing canary, so it is real dev work. Sibling of 13-41/13-37. **⚠️ It is the THIRD consumer of the shared CI-guard toolkit 13-41 extracts** (`apps/api/src/lib/ci-guard/` — file walk, path rules, allowlist, escape hatch, hit record, message skeleton, runner factory, AST source model), so it should be built ON that toolkit, never as a fourth copy of 13-37's plumbing. It is also a named blocking step in `lint-and-build`, so it inherits **Pitfall #45**: the step must sit ABOVE `Lint`, and 13-41's AC6 ordering-assertion test must be extended to cover it. | ~~After D1+D2 exist and one story has used the ledger for real.~~ **D1 now exists and 13-37 has used it for real** — so the remaining gates are D2 (the parse) and, critically, **13-41 landing the toolkit**. Do not start 13-45 before 13-41 is `done`. |
 | D4 | **Triage the blind spot**: ⚠️ **RE-MEASURED 2026-07-31: 198 `done` stories / 299 unchecked boxes / 61 stories affected** (the 58/201 estimate came from a three-story spot-check). Most are litter — accepted-by-design notes, parked options, dead commit-hygiene reminders — which IS the problem: **real items are indistinguishable from noise.** WORKED EXAMPLE: `13-9` L1 correctly diagnosed AND prescribed the fix for the 13-47 production defect a month early, sat unchecked in a `done` story, and was only rediscovered from prod data. Original text: Start with the launch-adjacent set (13-24, 13-19, 13-34, 13-21, 13-23, 13-27, 11-2, 13-16) and mark the OSV cluster (13-31/13-32/sec-1/sec-4, ~27 hits) as **managed-elsewhere** — `osv-scanner.toml` + the blocking gate already is their ledger. | The two launch-gating items in §4 came out of a 3-story spot-check. The rest is unmeasured. | Post-blast, or immediately if anything in §4's list turns out to have siblings. |
 | D5 | **Make §0 a script** (`scripts/adjudicate-coldstart.sh`): the five checks + prod registry baseline + pinned form, one screen. | A prose command block rots invisibly — §0's `git rev-parse --short A B` silently broke on git 2.52 and cost a session four commands to diagnose. A script fails loudly. | Next time a §0 command misbehaves, or with D2. |
 | D6 | ✅ **DONE 2026-08-18 — the SHA is gone from the header**, replaced by the two commands that produce ground truth. It had been wrong a **FOURTH** time when this session opened (header `19b51f5`, prod `9490449`), which is the whole argument: self-staling metadata is read as fact. ~~🔔 **TRIGGER FIRED — 3rd time, 2026-08-10. DO THIS NEXT SESSION.** **Drop the prod SHA from this doc's header.**~~ | It is self-staling metadata: wrong within hours on 2026-07-26 (a docs-only deploy moved prod's HEAD), again on 2026-07-30, and again on 2026-08-09 — where it also asserted *"`main` ahead by docs-only commits"* while an undeployed **code** fix sat on main for 24 hours (§7m). ~~Let D5's script report ground truth instead.~~ | ~~Do with D5.~~ **UNGATED 2026-08-10 — this was wrongly blocked on D5: deleting a line needs no script.** Replace the SHA with the one-line `ssh … git rev-parse --short HEAD` (already added to the header as an interim). |
