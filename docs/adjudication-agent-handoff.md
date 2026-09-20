@@ -1144,17 +1144,27 @@ sit on opposite sides of a boundary — and the far side of a boundary is exactl
 **D6's exact failure, recurring.** The deployed *runtime* code was identical (the only non-docs diff between
 them is a test file, `fbbc213`), so nothing was wrong except the number. That is precisely the point of D6.
 
-- ⏳ **13-70 ADJUDICATED, COMMITTED `eeacee3`, PUSHED. Status `review`, NOT `done`** — R2 is
-  DISCHARGE-ON-DEPLOY and blocks `done`, not the commit (§2a0). CI `35513171573`. **THE OUTSTANDING WORK IS
-  THE POST-DEPLOY READ, and it is not optional:** five flood ceilings change what they COUNT on this deploy
-  (login, activation, password-reset completion, registration, wizard draft), each refusing LESS because a
-  person's own downstream 429s are handed back — **and the decrement is unproven against
-  `rate-limit-redis@4`, because every binding test runs the IN-MEMORY store.** Procedure: from one IP drive 6
-  failed logins for ONE address (the 6th is refused by `loginRateLimit`), then 1 more for a DIFFERENT
-  address; read `attempts` in `auth.login_ip_flood_limit_exceeded` / `auth.rate_limit_exceeded`. **Predict
-  the flood counter advances by 6, not 7.** ⛔ Assert the counter VALUE — "the request was served" is
-  consistent with both a working decrement and a no-op. Then repeat for a REGISTRATION refusal: four of the
-  five ceilings were added today and none is exercised by the login-only procedure.
+- ✅ **13-70 DEPLOYED `eeacee3` AND R2 DISCHARGED ON PROD.** CI `35513171573` 10/10 incl. `deploy`, health
+  200, pm2 uptime 42s (restart confirmed by uptime, not the deploy log). **The decrement WORKS against
+  `rate-limit-redis@4`: predicted 21, measured 21.** 22 requests reached `activationIpFloodLimit`, one of them
+  a 429 from `activationRateLimit`, and `rl:activation:ip:<ip>` read **21** — so the decrement fired AND the
+  ceiling still advanced on all 21 served requests (Option A's failure mode absent). ⭐ `rl:activation:token:`
+  read **21** at the same moment: the person-keyed limiter counted its OWN refusal while the ceiling did not
+  count someone else's, which is exactly what a NAME-carrying marker buys over a boolean.
+  - ⛔ **THE PROCEDURE THE STORY WROTE WAS UNRUNNABLE, and that is the transferable lesson.** It specified a
+    LOGIN refusal — but `verifyCaptcha` is mounted between the ceiling and `loginRateLimit`, so reaching the
+    burst limiter on prod needs real hCaptcha tokens. It had been written from the mount-order *document*
+    rather than the mount-order *code*. **Substitute, and it is strictly better:**
+    `GET /api/v1/auth/activate/:token/validate` carries the ceiling → token-limiter pair with **no captcha**,
+    and a bogus UUIDv7 returns `200 {"valid":false}` — no writes, no citizen data, no real account's lockout
+    counter, 22 requests against a 300 budget on one's own IP. It also exercises one of the **four ceilings
+    R7 added**, i.e. the half R2 said was unexercised. **Read the counter VALUE from Redis** — the ceiling's
+    own `attempts` log line only fires at 300, so the logs cannot answer this.
+- ⏳ **BUT 13-70 IS STILL `review`, NOT `done`, AND CORRECTLY SO.** R4 was ACCEPTED by ruling (decision 3 of
+  4) and its DATED marker removed — a row cannot be both accepted and blocking. **R5, R6 and R8 remain OPEN
+  and dated 2026-10-15**: R5/R6 are the PRD's own hCaptcha-and-bcrypt measurement obligation, R8 is §2al's
+  mechanism. Verified by simulation: flipping the story to `done` reds the guard on exactly those three.
+  **The guard expires 4 rows on 2026-10-16** (`13-68 R2b`, `13-70 R5/R6/R8`) — measured at fixed clocks.
 - ✅ **WHAT IT SHIPPED.** *A refusal is not a request* (NFR4.4.d) is now true on **eight route families /
   twelve limiters**: each stamps `res.locals.rateLimitRefusedBy` with its own NAME, and the four ceilings
   skip on `requestWasSuccessful` **paired with `skipFailedRequests`**. Plus disjoint Redis keyspaces (31
