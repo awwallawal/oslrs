@@ -53,6 +53,8 @@ so that **coverage stops depending on whether someone remembers to press a butto
 
 11. **AC11 — The briefing's "Coming soon" note becomes the present tense, as the LAST task.** `docs/runbooks/enumerator-field-briefing.md` §3 already describes this behaviour as future. The PDF renders from that Markdown at request time (`field-briefing.service.ts`), so the edit reaches the field with the deploy and there is no second artefact to go stale. ⛔ Flipping it before the code ships would brief people on behaviour they do not have.
 
+12. **AC12 — ⛔ RULED IN FROM 13-73 (was its AC7): `duplicate_response` stops treating every geopoint as identical.** ⭐ TWO-PART ATTRIBUTION (§2al): EVIDENCE and RECOMMENDATION by adjudication, 2026-09-20; **RULING by Awwal, 2026-09-20 — "fix it once with 13-71"**. `calculateFieldMatchRatio` compares answers with `String(a[key] ?? '')` (`duplicate-response.heuristic.ts:21,24-40`), so any object answer renders `"[object Object]"` and **two DIFFERENT locations compare EQUAL**. ⛔ **THIS STORY IS WHAT MAKES THAT UNIVERSAL** — today only 4 of 35 enumerator submissions carry coordinates, so few pairs both have a geopoint and the bias is small; the moment AC3 takes effect, *every* enumerator pair gains one free matching field and `maxMatchRatio` is biased upward on the exact channel R-A8 is about to calibrate. **So the defect is created by this story and must be closed by it**, which is the whole reason the ruling moved it here rather than leaving it to 13-73. ⛔ Do NOT fix by dropping the key: two interviews at genuinely identical coordinates is real duplicate evidence, and `String()` destroys that too. Compare geopoints by **rounded lat/long** (13-69 R9). ⚠️ RED-VERIFY BOTH DIRECTIONS — two different locations must NOT match, **and** two identical ones must STILL match; a fix that only satisfies the first licenses the opposite defect. ⛔ **AC8's fence still holds: no threshold value changes** (`fraud-thresholds.seed.ts` diff empty) — this changes what "equal" means, never what fires.
+
 ## Tasks / Subtasks
 
 - [ ] **Task 1 — Read the chain before changing it; it is hardcoded in one place** (AC: #1, #5, #6, #9)
@@ -87,6 +89,13 @@ so that **coverage stops depending on whether someone remembers to press a butto
 - [ ] **Task 6 — The coverage surface** (AC: #10)
   - [ ] 6.1 Add the per-enumerator query to `docs/runbooks/ops-activity-monitoring.md`: submissions, with_gps, %, reasons by code, median accuracy — per enumerator, per day.
   - [ ] 6.2 Record the prediction (11% → >90% in one week) in the runbook BEFORE deploy, with the date it was made.
+
+- [ ] **Task 6b — The duplicate comparison, RULED IN from 13-73** (AC: #12)
+  - [ ] 6b.1 Compare geopoint answers by ROUNDED coordinates instead of `String()` identity [Source: apps/api/src/services/fraud-heuristics/duplicate-response.heuristic.ts:21,24-40]. Pick the rounding precision deliberately and write down what it means on the ground — ~4 decimal places is ≈11 m at this latitude, which is the scale that distinguishes two households from one. State the figure; do not leave it implicit.
+  - [ ] 6b.2 ⛔ RED-VERIFY BOTH DIRECTIONS on the heuristic's own suite (`__tests__/duplicate-response.heuristic.test.ts` already exists — extend it, do not start a new file): two DIFFERENT geopoints must no longer match, **and** two IDENTICAL ones must still match. Mutate each way and record the observed red.
+  - [ ] 6b.3 ⚠️ Any answer that is an OBJECT hits the same `String()` path, not just geopoints — enumerate what else the live forms can store as an object before assuming geopoint is the only case, and say what you found. If there are others, fix the comparison generally or scope it explicitly and record why.
+  - [ ] 6b.4 Quantify the change on real data: how many of the existing `fraud_detections` rows would move if rescored? ⭐ Read-only prod is open to you. If the answer is "none today", say so — that is the evidence this is prophylactic before 13-71 deploys and live the moment it does.
+  - [ ] 6b.5 ⛔ `git diff` on `fraud-thresholds.seed.ts` must be EMPTY at close (13-73 AC8's fence, inherited with the AC).
 
 - [ ] **Task 7 — Gates, run yourself, quoted whole** (AC: all)
   - [ ] 7.1 `pnpm tsc --noEmit` per package; api lint + the 3 drift guards; **web lint + tsc — this story DOES change web files**, unlike 13-69.
