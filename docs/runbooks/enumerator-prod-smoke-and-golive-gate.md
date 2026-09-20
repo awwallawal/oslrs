@@ -636,34 +636,116 @@ independent — spend can be green while the field is not, and vice versa.
 > citizens in the register (§0.9b), so trial DATA is real; trial READINESS is what is provisional. The
 > four criteria below are what the trial has to PRODUCE before anyone scales past it.
 
+### ⛔ What these four DO and DO NOT measure — read before quoting any of them
+
+**They measure the APPARATUS, not the data.** F1 = can an invited person get in. F2 = does a capture
+carry a location. F3 = does a submission get scored. F4 = can a submission still be interpreted next
+year. None of them says anything about whether the register's *contents* are good. That is deliberate:
+the trial's job is not to collect data, it is to establish whether the pipeline can be trusted with
+data. **These four numbers ARE the trial's deliverable.**
+
+⚠️ **AND THEREFORE A GREEN HERE IS AN INSTRUMENTATION GREEN, NEVER A STATISTICAL ONE.** Trial volume is
+1–7 enumerator submissions a day and tapering, so **one submission moves F2 by about three points**.
+After 13-71 deploys, a single GPS-carrying capture would read **F2 = 100% on N = 1** — a green bought
+with one row, which is this project's most-repeated defect shape [[pattern-a-clean-result-must-prove-it-measured]].
+So every criterion below now carries a **minimum sample**, and **N is recorded with the number, never
+just the percentage**. A percentage without its denominator is not evidence.
+
 ### The four criteria
 
-| # | Criterion | Baseline (2026-09-18) | Target | Closed by | Verdict |
-|---|---|---|---|---|---|
-| F1 | **Enumerators who have actually logged in** | **8 of 17** | **≥ 15 of 17** | Operator re-provisioning with REAL addresses (§0.1a). 7 `invited` need a RESEND, 2 `active` a reset IN PLACE. ⛔ Never delete an account with captures (§0.9b). No deploy required. | ⬜ GREEN ⬜ RED |
-| F2 | **Enumerator submissions carrying GPS, last 7 days** | **11%** (4 of 36 in the trial window) | **≥ 90%** | Story **13-71** (auto-capture on form open + code-enforced requirement with a derived unavailable-reason) | ⬜ GREEN ⬜ RED |
-| F3 | **Submissions holding a `fraud_detections` row, last 7 days** | **0%** (0 of 32 unscored) | **100%** | Story **13-69** deploy (the ungate) | ⬜ GREEN ⬜ RED |
-| F4 | **NEW submissions referencing a form row that no longer exists** | **1** enumerator row (283 across all sources, historical) | **0 new** | Story **13-73** (`deleteForm` guard + the form-identity snapshot) | ⬜ GREEN ⬜ RED |
+| # | Criterion | Baseline (2026-09-18) | **Measured 2026-09-20 08:25 WAT** | Target (+ minimum sample) | Closed by | Verdict |
+|---|---|---|---|---|---|---|
+| F1 | **Enumerator accounts that have never logged in** (the GAP, not a ratio — see the denominator note) | gap **9** (8 of 17 in) | 🔴 **gap 8** — **11 of 19 real field accounts** have logged in. ⚠️ **9 of the 28 enumerator accounts on prod are the OPERATOR'S OWN** harness accounts (`lawalkolade%`) and are excluded. The 8: **6 `invited`** → RESEND (`bashiratfasasi+test`, `callmezainab3000+test`, `koyebimpe2011+test`, `olayiwolaprecious109+test`, `uthmanayo07+test`, `victoriakilanko023+test`) + **2 `active`** → reset IN PLACE (`kemiquad1202`, `moboladeidrees+test`) | **gap ≤ 2** (equivalent to the original "15 of 17", but denominator-proof) | Operator re-provisioning with REAL addresses (§0.1a). ⛔ Never delete an account with captures (§0.9b). No deploy required. | ⬜ GREEN 🔴 **RED** |
+| F2 | **Enumerator submissions carrying GPS, last 7 days** | **11%** (4 of 36) | 🔴 **11.4% (4 of 35)** — genuine field. ⚠️ The raw query reads **13.5% (5 of 37)**; the difference is the **ZZSMOKE smoke capture at 2026-09-19 21:41**, the only post-deploy GPS row. **Unchanged from baseline — 13-71 is wholly untouched work** | **≥ 90%**, over **N ≥ 20** submissions from **≥ 5 distinct enumerators** ⭐ the distinct-enumerator floor matters more than N: GPS permission is per-person, per-device, so one enumerator's working capture proves nothing about the cohort (baseline: 3 of 10 enumerators) | Story **13-71** (auto-capture on form open + code-enforced requirement with a derived unavailable-reason) | ⬜ GREEN 🔴 **RED** |
+| F3 | **Submissions holding a `fraud_detections` row** | **0%** (0 of 32) | 🟡 **THE UNGATE WORKS — 2 of 2 post-deploy (100%)**, both enumerator. The window figure (6 of 65) is **entirely pre-deploy backlog**, which is 13-72's job, not a defect. ⚠️ **BUT: zero PUBLIC submissions have arrived since the deploy**, so that channel's post-deploy behaviour has **never been observed** — 13-69 closed on enumerator evidence only | **100%** of submissions arriving AFTER the deploy, and ⛔ **at least one `public` row among them** — otherwise the assertion covers one of two live channels | Story **13-69** deploy (the ungate, `826147f`, 2026-09-19 19:29 WAT). Backlog by **13-72** | ⬜ GREEN 🟡 **HALF-OBSERVED** |
+| F4 | **NEW submissions referencing a form row that no longer exists** | **1** enumerator row (283 historical) | 🟡 **0 in the last 7 days** — but zero because nobody deleted a form this week, **not because they cannot**. `deleteForm` still permits deleting `draft` OR `archived`, and `archived` is what a superseded form gets — the exact mechanism behind all 283 | **0 new AND the guard shipped.** ⛔ A count of zero is NOT sufficient: green requires 13-73 AC4 in the tree, or this box is green by luck and will silently go red the next time a form is archived | Story **13-73** (`deleteForm` guard + the form-identity snapshot) | ⬜ GREEN 🟡 **ZERO, NOT CLOSED** |
 
 **Why these four and not a longer list:** each is one query, each has a named owner, and each maps to
 exactly one piece of work. F1 is people, F2 is capture, F3 is supervision, F4 is interpretability. A
 criterion with no query behind it is an opinion.
 
+#### ⛔ F1's denominator moved, which is why the criterion is now a GAP and not a ratio
+
+The original wording was **"8 of 17 → ≥ 15 of 17"**. On 2026-09-20 there are **21** accounts under the
+runbook's own `+test` filter and **28** without it — so "of 17" was already false two days after it was
+written, and a reader could have declared F1 green against a stale denominator.
+
+**The fix: count the GAP (accounts that have never logged in), not the ratio.** The gap preserves the
+original intent exactly — 17 − 15 = 2 permitted stragglers — and cannot rot when the roster grows.
+
+**What counts in the denominator:** `active` + `invited` enumerator accounts, **minus every
+operator-owned harness account**. **Excluded:** `deactivated` accounts (1 today, and it HAS logged in —
+leaving it in inflates the numerator), and all `lawalkolade%` accounts.
+
+⛔ **THE FINDING THAT FORCED THIS, 2026-09-20: nine of the twenty-eight enumerator accounts on prod are
+the operator's own.** `lawalkolade+demo1/2/3`, `+enum1`, `+test`, `+testenumerator`, `+testenumeratornew`,
+`+testfour`, and bare `lawalkolade` — six `active`, two `invited`, one `deactivated`, and **seven of them
+have "logged in"**. So the familiar **"17 enumerators"** is a MIXED figure: it counts the operator's test
+harness alongside field staff, and every ratio built on it — including the original `8 of 17` — inherits
+that. ⚠️ It is also the number the login flood ceiling's headroom comment is sized against
+(`login-rate-limit.ts:113-116`, and 13-70 **R1**), so that sizing rests on a figure that was never a
+count of field people.
+
+**Roster 2026-09-20:** 28 accounts total = 19 `active` + 8 `invited` + 1 `deactivated`; **9 operator-owned**
+→ **19 real field accounts**, of which **11** have logged in, **8** never have.
+
+⚠️ **The `+test` filter in the legacy F1 query below is an ARTEFACT, not a definition** — and note it does
+NOT separate the two populations, because real people were also provisioned at plus-addressed inboxes
+(`bashiratfasasi+test` is a field enumerator; `lawalkolade+test` is the operator). Ownership, not the
+`+test` suffix, is what distinguishes them. Run the query both ways and record both; when they disagree,
+the roster has changed shape and the disagreement is the finding.
+
 ### The queries
 
 ```sql
--- F1 — who has actually logged in (the fuller tracker is in §0.9)
+-- F1 — the GAP: real enumerator accounts that have never logged in.
+-- ⛔ This is the criterion. `active` + `invited`, MINUS operator demo accounts; `deactivated` excluded
+-- from BOTH sides (one such account has logged in, and counting it inflates the numerator).
+SELECT count(*) FILTER (WHERE u.last_login_at IS NULL)     AS gap,          -- target: <= 2
+       count(*) FILTER (WHERE u.last_login_at IS NOT NULL) AS logged_in,
+       count(*)                                            AS real_accounts
+FROM users u JOIN roles r ON r.id = u.role_id
+WHERE r.name = 'enumerator'
+  AND u.status IN ('active','invited')
+  AND u.email NOT LIKE 'lawalkolade%';   -- ⛔ ALL operator harness accounts (9 of 28), not field people
+
+-- F1 roster — WHO the gap is, and which remedy each needs (RESEND vs reset IN PLACE)
+SELECT u.status, count(*) AS n, string_agg(split_part(u.email,'@',1), ', ' ORDER BY u.email) AS locals
+FROM users u JOIN roles r ON r.id = u.role_id
+WHERE r.name = 'enumerator' AND u.last_login_at IS NULL AND u.email NOT LIKE 'lawalkolade%'
+GROUP BY 1 ORDER BY 1;   -- `invited` => resend; `active` => reset in place
+
+-- F1 hygiene — the operator's own accounts, listed so they are never miscounted as field staff again
+SELECT split_part(u.email,'@',1) AS local, u.status, (u.last_login_at IS NOT NULL) AS has_logged_in
+FROM users u JOIN roles r ON r.id = u.role_id
+WHERE r.name = 'enumerator' AND u.email LIKE 'lawalkolade%' ORDER BY u.email;
+
+-- F1 legacy/parity — run BOTH ways and record BOTH. Disagreement means the roster changed shape.
 SELECT count(*) FILTER (WHERE u.last_login_at IS NOT NULL) AS logged_in, count(*) AS provisioned
 FROM users u JOIN roles r ON r.id = u.role_id
-WHERE r.name = 'enumerator' AND u.email LIKE '%+test%';   -- ⚠️ drop the +test filter once §0.1a is fixed
+WHERE r.name = 'enumerator' AND u.email LIKE '%+test%';   -- ⚠️ the +test filter is an ARTEFACT of §0.1a
 
--- F2 — GPS coverage, last 7 days
+-- F2 — GPS coverage, last 7 days. ⛔ `enumerators` IS PART OF THE CRITERION, not decoration:
+-- the target is >= 90% over N >= 20 submissions from >= 5 DISTINCT enumerators.
 SELECT count(*) AS submissions,
        count(*) FILTER (WHERE gps_latitude IS NOT NULL) AS with_gps,
-       round(100.0 * count(*) FILTER (WHERE gps_latitude IS NOT NULL) / nullif(count(*),0), 1) AS pct
+       round(100.0 * count(*) FILTER (WHERE gps_latitude IS NOT NULL) / nullif(count(*),0), 1) AS pct,
+       count(DISTINCT enumerator_id) AS enumerators,
+       count(DISTINCT enumerator_id) FILTER (WHERE gps_latitude IS NOT NULL) AS enumerators_with_gps
 FROM submissions WHERE source = 'enumerator' AND submitted_at > now() - interval '7 days';
 
--- F3 — detection coverage, last 7 days (ALL live sources, not just enumerator)
+-- F2 ⚠️ SMOKE-CAPTURE EXCLUSION — do this EVERY time, it has already distorted the reading once.
+-- On 2026-09-20 the raw query read 13.5% (5 of 37) and the genuine field figure was 11.4% (4 of 35):
+-- the difference was two ZZSMOKE practice captures run through the real app to discharge 13-69.
+-- An operator's own test capture is not field coverage. List the window and eyeball the tail.
+SELECT (submitted_at AT TIME ZONE 'Africa/Lagos') AS wat, enumerator_id,
+       (gps_latitude IS NOT NULL) AS has_gps
+FROM submissions WHERE source = 'enumerator' AND submitted_at > now() - interval '7 days'
+ORDER BY submitted_at DESC LIMIT 20;
+
+-- F3 — detection coverage, last 7 days (ALL live sources, not just enumerator).
+-- ⚠️ This window MIXES pre- and post-deploy rows, so a low number here is BACKLOG (13-72), not a
+-- defect. Read it together with the post-deploy split below — that split is the actual criterion.
 SELECT s.source, count(*) AS submissions,
        count(*) FILTER (WHERE d.submission_id IS NOT NULL) AS scored
 FROM submissions s
@@ -671,15 +753,69 @@ LEFT JOIN (SELECT DISTINCT submission_id FROM fraud_detections) d ON d.submissio
 WHERE s.submitted_at > now() - interval '7 days' AND s.source <> 'backfill'
 GROUP BY 1;
 
--- F4 — new rows pointing at a form that no longer exists
+-- F3 THE CRITERION — scoring of traffic that arrived AFTER the ungate deployed.
+-- ⛔ GREEN REQUIRES A `public` ROW HERE. On 2026-09-20 this returned enumerator 2/2 and NO public row
+-- at all: the public channel had seen zero traffic in the ~13h since deploy, so its post-deploy
+-- behaviour was UNOBSERVED while 13-69 was already closed on enumerator evidence. Absence of a row is
+-- not a pass — it means the question was never asked of that channel.
+SELECT s.source, count(*) AS subs,
+       count(*) FILTER (WHERE d.submission_id IS NOT NULL) AS scored
+FROM submissions s
+LEFT JOIN (SELECT DISTINCT submission_id FROM fraud_detections) d ON d.submission_id = s.id
+WHERE s.submitted_at > '2026-09-19 19:29:37+01'   -- 826147f, the ungate. Update on later deploys.
+  AND s.source <> 'backfill'
+GROUP BY 1 ORDER BY 1;
+
+-- F3 context — scoring by day x source. Shows the defect's own signature: 2026-09-16 had 19 enumerator
+-- submissions and 0 scored, while 09-15's 2 scored rows are exactly the GPS-carrying ones the old
+-- `if (args.gps)` gate let through.
+SELECT (s.submitted_at AT TIME ZONE 'Africa/Lagos')::date AS wat_day, s.source,
+       count(*) AS subs, count(*) FILTER (WHERE d.submission_id IS NOT NULL) AS scored
+FROM submissions s
+LEFT JOIN (SELECT DISTINCT submission_id FROM fraud_detections) d ON d.submission_id = s.id
+WHERE s.submitted_at > now() - interval '9 days' AND s.source <> 'backfill'
+GROUP BY 1,2 ORDER BY 1,2;
+
+-- F4 — new rows pointing at a form that no longer exists.
+-- ⛔ A ZERO HERE IS NOT THE CRITERION ON ITS OWN. Zero means no form was deleted in the window; it does
+-- NOT mean a form CANNOT be deleted. `QuestionnaireService.deleteForm` still permits `draft` OR
+-- `archived`, and `archived` is what a superseded form gets — the mechanism behind all 283 historical
+-- orphans. Green = this query returns 0 AND 13-73 AC4's referencing-submission guard is in the tree.
 SELECT count(*) FROM submissions s
 LEFT JOIN questionnaire_forms f ON f.id::text = s.questionnaire_form_id
 WHERE f.id IS NULL AND s.questionnaire_form_id ~ '^[0-9a-f]{8}-'
   AND s.submitted_at > now() - interval '7 days';
 ```
 
-⚠️ **Re-measure, never quote.** Every baseline above is stamped 2026-09-18 and moves daily
-(project-context **A12**). F2 and F3 in particular change the moment 13-69 and 13-71 deploy.
+### How to run them (read-only, enforced by Postgres — not by good intentions)
+
+```bash
+ssh root@oslsr-home-app 'docker exec -i \
+  -e PGOPTIONS="-c default_transaction_read_only=on" \
+  oslsr-postgres psql -U oslsr_user -d oslsr_db -X -q' <<'SQL'
+  \echo '=== F1 gap ==='
+  -- paste the queries above
+SQL
+```
+
+`default_transaction_read_only=on` makes a stray write fail at the database, which is the same
+guarantee `prod-verify.yml` relies on — *"we only put SELECTs in here" is a promise, and this repo has
+spent too long learning that a promise is not a control.* Confirm it took effect by selecting
+`current_setting('transaction_read_only')` in the same session and reading back `on`.
+⚠️ Tailscale-independent alternative when SSH is unavailable: `gh workflow run prod-verify.yml`.
+
+⚠️ **Re-measure, never quote.** Every figure moves daily (project-context **A12**). F2 and F3 in
+particular change the moment 13-71 deploys and the moment the backlog is scored.
+
+### Measurement log
+
+⭐ **One row per measurement, with N. Never overwrite — the sequence is the evidence.** A single reading
+cannot distinguish "the fix worked" from "the traffic changed"; two readings around a deploy can.
+
+| Measured (WAT) | F1 gap | F2 | F3 | F4 | Notes |
+|---|---|---|---|---|---|
+| 2026-09-18 (baseline) | **9** (8 of 17 in) | **11%** (4 of 36) | **0%** (0 of 32) | **1** | Authored with the gate. Denominator "17" was already stale two days later. |
+| **2026-09-20 08:25** | **gap 8** — 11 of **19 real** field accounts in (28 total less 9 operator-owned) | **11.4% (4 of 35)** genuine, 9 enumerators / 4 with GPS · raw reads 13.5% (5 of 37) | **2 of 2 post-deploy (100%), enumerator only — NO public row** · window 6 of 65 is pre-deploy backlog | **0** in 7d, guard NOT shipped | Pre-marathon baseline, read-only, before any of 13-70/71/72/73 was developed. **Four findings:** (1) F2 has not moved — the apparent gain was two ZZSMOKE captures; (2) the public channel's post-deploy scoring is UNOBSERVED, because it has had zero traffic since `826147f`; (3) F4's zero is luck, not construction; (4) ⛔ **9 of 28 enumerator accounts are the operator's own**, so every "of 17" ratio in this gate's history was a mixed figure. Also re-measured for 13-72 AC1: **410 unscored all-time, 65 in the R-A8 window** (33 enumerator + 32 public), **all 65 referencing a LIVE form**. ⚠️ **Method note:** the 19/11 denominator was first hand-derived as 25/17 from a grouped roster and was WRONG; running the written query returned 24/16, and only listing the accounts individually gave 19/11. The query is the evidence, not the arithmetic over a summary [[pattern-census-counts-sites-not-callers]]. |
 
 ### ⚖️ Adjudicated exemptions — genuine work that the engine flagged, or would
 
