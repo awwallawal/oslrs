@@ -1063,8 +1063,27 @@ says WHO MAY SIGN IT.** That is the hole. A review can assemble every element a 
 record itself as having received one, and the result is indistinguishable from a decision the principal made.
 
 > **THE RULE.** A dev or review pass supplies the measurement, the owner and the reopen trigger, and leaves
-> the state **`PROPOSED-CLOSED — awaiting ruling`**. Adjudication or the principal converts it. **Every
+> the state **`OPEN — closure proposed, awaiting ruling`**. Adjudication or the principal converts it. **Every
 > closure carries a TWO-PART ATTRIBUTION: who established the evidence, and who ruled.**
+
+⛔ **THE EXACT WORDING IS LOAD-BEARING, AND THE FIRST VERSION OF THIS RULE GOT IT WRONG. Corrected
+2026-09-23, adjudicating 13-71.** This section originally prescribed **`PROPOSED-CLOSED — awaiting ruling`**.
+That string **disarms the very guard the rule exists to feed**, and it fails in two independent ways —
+measured with `isOpenState`, not reasoned:
+
+| state string | guard verdict |
+|---|---|
+| `PROPOSED-CLOSED — awaiting ruling` (the original prescription) | ⛔ **NOT open** — `ROW_IS_CLOSED` matches `\bCLOSED\b`, and a hyphen is a word boundary |
+| `PROPOSED — awaiting ruling` (the obvious shortening) | ⛔ **NOT open** — `OPEN_MARKER` requires the literal word `OPEN`, which "PROPOSED" does not contain |
+| **`OPEN — closure proposed, awaiting ruling`** | ✅ **open, guard fires** — "closure" is not `\bCLOSED\b` |
+
+⭐ **So the rule about unearned certainty shipped with a booby trap: follow it literally and your unruled row
+goes invisible, and `Status: done` then passes straight over it.** The 13-71 review caught the first failure
+by READING `story-residual-guard.ts` before writing its row — not by running it afterwards — and adjudication
+found the second by running all three candidates. This is the third instance of one class in four days
+(13-70 **R8**, then the §2al text, now this), and the common shape is: **a cell whose prose decides whether a
+check fires.** ⛔ **When ruling on such a row, do NOT write a closure word into column 3** — strike the id as
+`~~R2~~` instead, which is the repo's resolved convention and what `residualRows` actually skips on.
 
 **Why two parts is BETTER than one, and not a demotion** (Awwal's framing, and it is the right one): the
 two-part form is *double-sourced*. It names two independent contributors instead of one signature, it maps
@@ -3749,6 +3768,37 @@ a helper called once per test — three instantiations. The tempting fix is to h
 ESLint caches config resolution at module scope, so instances 2 and 3 are already ~free. Hoisting
 would move the 3 s from the first test into a hook, not remove it — and a hook has a timeout too.
 **Recorded so the next person does not spend an afternoon implementing it.**
+
+### 11d. 🆕 A SECOND WEB FLAKE, 2026-09-23 — and I destroyed its evidence by grepping the run
+
+*Added adjudicating 13-71. Recorded here rather than "fixed", because §11c's ruling applies and I have no
+error string to reopen on.*
+
+`ProfileCompletionPage … sends the provenance discriminator BEFORE the file (AC6.2)` failed once, in web
+shard 2/4, during a two-shard run at **1.76 GB free RAM**. It has never failed in CI.
+
+**What was established, and it is enough to classify but not to fix:**
+
+| evidence | reading |
+|---|---|
+| Passes **4/4 in isolation**, repeatedly | not a deterministic defect |
+| **Zero dependency overlap** with the changeset — imports no `offline-db`, `sync-manager`, `submission.api`, `useDraftPersistence` or `native-form` | not a regression from 13-71 |
+| The failing run collected **70 files**; a clean run collects **71** | ⭐ §2aa.2's documented tell — a contended run loses a worker and collects FEWER FILES |
+| Re-run at **4.83 GB free**: 71 files, 832 tests, green | contention, not code |
+
+⛔ **AND THE PART THAT IS MINE: I piped the suite through `grep -E "Test Files|Tests |FAIL"`, so the
+assertion message was never captured.** By the time the failure mattered, the only record was the word
+FAIL. §11c says *"reopen with a captured failure message"* — and I had made that impossible for this
+occurrence. The test's own helper already awaits the fetch (`await waitFor(() => expect(fetch)
+.toHaveBeenCalled())`), so the obvious race theory does not hold, and with no error text there is nothing
+left but speculation. **§11c's ruling stands: no speculative fix.**
+
+- ✅ **THE RULE, and it is the same family as [[feedback-never-pipe-a-push-to-tail]] and
+  [[feedback-quote-the-suite-total-never-a-subset]]:** when running a gating suite, **write the FULL output
+  to a file and grep the file** — never grep the stream. `pnpm vitest run --shard=n/4 > run-n.log 2>&1;
+  grep -E "Test Files|Tests " run-n.log`. Filtering at the pipe throws away the only artefact that makes a
+  flake actionable, and you do not know you needed it until you do.
+- **Next occurrence:** keep the log, paste the assertion into this section, and §11c's reopen condition is met.
 
 ### 11c. Ruling
 
