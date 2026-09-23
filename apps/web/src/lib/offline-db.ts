@@ -10,6 +10,23 @@ export interface Draft {
   userId: string; // Owner's user ID (prep-11: shared-device isolation)
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
+  /**
+   * Story 13-71 (adversarial review R7) — ISO timestamp set ONLY by
+   * `SyncManager.restoreToDraft`, i.e. this draft is a REJECTED SUBMISSION being
+   * reopened, not a fresh interview.
+   *
+   * ⛔ It exists because auto-capture must not fire on one. The interview already
+   * happened, somewhere else, possibly days ago; taking a position now would file
+   * the operator's CURRENT location as the place the work was done. That is the
+   * base-map poisoning AC7's clerk exemption exists to prevent, and a false
+   * coordinate is strictly worse than an honest absent one — the absent one is at
+   * least visible as absent.
+   *
+   * Not indexed, so it needs no Dexie version bump (same as `permanentFailure`
+   * and `referenceCode` on the queue table). Undefined on every existing row,
+   * which reads correctly as "not restored".
+   */
+  restoredAt?: string;
 }
 
 export interface SubmissionQueueItem {

@@ -143,6 +143,10 @@ describe('useDraftPersistence', () => {
       expect(result.current.resumeData).toEqual({
         formData: { name: 'Jane', age: 25 },
         questionPosition: 2,
+        // Review R7 — an ordinary draft is NOT a reopened rejected submission, so
+        // `FormFillerPage` still auto-captures on it. This stays a deep equal on
+        // purpose: a new field on `resumeData` should have to be acknowledged here.
+        restored: false,
       });
     });
   });
@@ -301,6 +305,170 @@ describe('useDraftPersistence', () => {
     const addedItem = mockSubmissionQueueAdd.mock.calls[0][0];
     expect(addedItem.payload).not.toHaveProperty('gpsLatitude');
     expect(addedItem.payload).not.toHaveProperty('gpsLongitude');
+  });
+
+  // ── Story 13-71 ─────────────────────────────────────────────────────────
+
+  /**
+   * Helper: drive `completeDraft` once over the given answers and return the
+   * enriched payload the submission queue received.
+   */
+  async function payloadFor(
+    formData: Record<string, unknown>,
+    opts: { geopointQuestionName?: string; override?: Record<string, unknown> } = {},
+  ) {
+    mockDraftsFirst.mockResolvedValue({
+      id: 'draft-1371',
+      formId: 'form-1',
+      responses: formData,
+      questionPosition: 0,
+      status: 'in-progress',
+    });
+
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1',
+        formVersion: '2.0.0',
+        formData,
+        currentIndex: 1,
+        enabled: true,
+        geopointQuestionName: opts.geopointQuestionName,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.resumeData).not.toBeNull());
+    await act(async () => {
+      await result.current.completeDraft(opts.override);
+    });
+
+    return (mockSubmissionQueueAdd.mock.calls.at(-1)?.[0] as { payload: Record<string, unknown> }).payload;
+  }
+
+  it('13-71 AC5: accuracy reaches the payload — GeopointInput captured it all along', async () => {
+    const payload = await payloadFor(
+      { q1: 'a', site_location: { latitude: 7.3775, longitude: 3.947, accuracy: 15 } },
+      { geopointQuestionName: 'site_location' },
+    );
+    expect(payload.gpsLatitude).toBe(7.3775);
+    expect(payload.gpsLongitude).toBe(3.947);
+    // This is the line that used to throw it away.
+    expect(payload.gpsAccuracy).toBe(15);
+  });
+
+  it('13-71 Task 1.1: reads the SCHEMA question name, not a hardcoded `gps_location`', async () => {
+    // ⭐ The question is `site_location`. Before this story the hook read the
+    // literal `formData.gps_location`, so this payload would have carried NO
+    // coordinates at all — silently, because an absent key and an unanswered
+    // question are indistinguishable downstream.
+    const payload = await payloadFor(
+      { q1: 'a', site_location: { latitude: 9.1, longitude: 4.2, accuracy: 30 } },
+      { geopointQuestionName: 'site_location' },
+    );
+    expect(payload.gpsLatitude).toBe(9.1);
+    expect(payload.gpsLongitude).toBe(4.2);
+  });
+
+  it('13-71 Task 1.1: finds a geopoint BY SHAPE when no name is supplied (ClerkDataEntryPage)', async () => {
+    const payload = await payloadFor({
+      q1: 'a',
+      anything_at_all: { latitude: 6.5, longitude: 3.3, accuracy: 9 },
+    });
+    expect(payload.gpsLatitude).toBe(6.5);
+    expect(payload.gpsAccuracy).toBe(9);
+  });
+
+  it('13-71: the open-time capture is METADATA and is never mistaken for the answer', async () => {
+    // `_gpsOpenCapture` holds where the interview STARTED (AC2). If the shape scan
+    // picked it up, a form with no answered geopoint would report the open-time
+    // position as the submitted one.
+    const payload = await payloadFor({ q1: 'a', _gpsOpenCapture: { latitude: 1.1, longitude: 2.2, accuracy: 5 } });
+    expect(payload).not.toHaveProperty('gpsLatitude');
+    expect(payload).not.toHaveProperty('gpsAccuracy');
+  });
+
+  it('13-71 AC4: a derived reason is lifted onto the envelope when there is no position', async () => {
+    const payload = await payloadFor({ q1: 'a', _gpsUnavailableReason: 'permission_denied' });
+    expect(payload.gpsUnavailableReason).toBe('permission_denied');
+    expect(payload).not.toHaveProperty('gpsLatitude');
+  });
+
+  it('⛔ 13-71: a position WINS over a stale reason — never both on one row', async () => {
+    // Reachable in the field: auto-capture is refused at open (stamping the
+    // reason), the enumerator then taps the manual button and succeeds. Counting
+    // that against them in the weekly ops read would be simply wrong.
+    const payload = await payloadFor(
+      {
+        q1: 'a',
+        site_location: { latitude: 7.1, longitude: 3.1, accuracy: 11 },
+        _gpsUnavailableReason: 'permission_denied',
+      },
+      { geopointQuestionName: 'site_location' },
+    );
+    expect(payload.gpsLatitude).toBe(7.1);
+    expect(payload).not.toHaveProperty('gpsUnavailableReason');
+  });
+
+  /**
+   * ⛔ REVIEW R8 — THE GUARD WAS ON THE ENVELOPE AND THE COLUMN IS FED FROM THE
+   * ANSWERS.
+   *
+   * The test above ("a position WINS over a stale reason") asserted only that
+   * `payload.gpsUnavailableReason` is absent. But `payload.responses` still
+   * carried `_gpsUnavailableReason`, the API spreads `responses` straight into
+   * `rawData`, and the ingestion worker writes `rawData._gpsUnavailableReason`
+   * into the column — so the row landed with a real position AND a reason not to
+   * have one, which is the exact state the suppression exists to prevent. The
+   * certifying test passed over the hole it was written to close.
+   * [[pattern-test-that-passes-over-a-hole]]
+   */
+  it('⛔ R8: the superseded reason is stripped from the ANSWERS too, not just the envelope', async () => {
+    const payload = await payloadFor(
+      {
+        q1: 'a',
+        site_location: { latitude: 7.1, longitude: 3.1, accuracy: 11 },
+        _gpsUnavailableReason: 'permission_denied',
+      },
+      { geopointQuestionName: 'site_location' },
+    );
+
+    expect(payload.gpsLatitude).toBe(7.1);
+    expect(payload).not.toHaveProperty('gpsUnavailableReason');
+    // ⭐ The half that used to leak. `responses` is what becomes `raw_data`.
+    expect(payload.responses).not.toHaveProperty('_gpsUnavailableReason');
+    // Nothing ELSE was dropped on the way through.
+    expect((payload.responses as Record<string, unknown>).q1).toBe('a');
+    expect((payload.responses as Record<string, unknown>).site_location).toEqual({
+      latitude: 7.1, longitude: 3.1, accuracy: 11,
+    });
+  });
+
+  it('R8: a reason with NO position is still carried in both places', async () => {
+    const payload = await payloadFor({ q1: 'a', _gpsUnavailableReason: 'timeout' });
+    expect(payload.gpsUnavailableReason).toBe('timeout');
+    // The strip is narrow: it fires only when a position supersedes the reason.
+    expect(payload.responses).toHaveProperty('_gpsUnavailableReason');
+  });
+
+  it('13-71 AC2: completeDraft(override) submits the passed answers, not a stale closure', async () => {
+    // The submit-time refresh mutates the answers microseconds before calling
+    // this. Reading `formData` out of the render closure would queue the PREVIOUS
+    // render's coordinate and lose the refreshed one with no error.
+    const stale = { q1: 'a', site_location: { latitude: 1, longitude: 1, accuracy: 50 } };
+    const fresh = { q1: 'a', site_location: { latitude: 7.4001, longitude: 3.9002, accuracy: 8 } };
+    const payload = await payloadFor(stale, { geopointQuestionName: 'site_location', override: fresh });
+
+    expect(payload.gpsLatitude).toBe(7.4001);
+    expect(payload.gpsAccuracy).toBe(8);
+    expect(payload.responses).toEqual(fresh);
+  });
+
+  it('13-71: a non-finite accuracy is omitted rather than carried as NaN', async () => {
+    const payload = await payloadFor(
+      { q1: 'a', site_location: { latitude: 7.1, longitude: 3.1, accuracy: NaN } },
+      { geopointQuestionName: 'site_location' },
+    );
+    expect(payload.gpsLatitude).toBe(7.1);
+    expect(payload).not.toHaveProperty('gpsAccuracy');
   });
 
   it('completeDraft() queues submission BEFORE deleting draft (correct order)', async () => {

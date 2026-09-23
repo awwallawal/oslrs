@@ -62,6 +62,28 @@ export const submissions = pgTable('submissions', {
   gpsLatitude: doublePrecision('gps_latitude'),
   gpsLongitude: doublePrecision('gps_longitude'),
 
+  // Story 13-71 AC5: GPS accuracy radius in METRES, as the browser reported it
+  // (`GeolocationCoordinates.accuracy`). `GeopointInput` has always captured and
+  // displayed this and then thrown it away at the payload boundary.
+  // Nullable: legacy rows have none, and a row satisfying the requirement with a
+  // reason instead of coordinates has none either.
+  // Without it a 2 km network fix and a 5 m satellite fix are indistinguishable,
+  // so base-mapping cannot tell a base from a neighbourhood — and the
+  // "accuracy > 50 m" secondary signal that gps-clustering.heuristic.ts
+  // documents as blocked is blocked on precisely this column.
+  gpsAccuracy: doublePrecision('gps_accuracy'),
+
+  // Story 13-71 AC6: WHY a submission carries no coordinates, derived from
+  // GeolocationPositionError.code on the client.
+  // A COLUMN and not just a raw_data key, because the entire point is to COUNT
+  // it per enumerator in the weekly ops read, and a reason buried in jsonb
+  // cannot be grouped without a scan.
+  // Canonical vocabulary: `gpsUnavailableReasons` in @oslsr/types
+  // (packages/types/src/native-form.ts). Stored as free text here because a
+  // drizzle schema file must NOT import @oslsr/types; the API validates the
+  // value against that enum before it ever reaches this column.
+  gpsUnavailableReason: text('gps_unavailable_reason'),
+
   // Story 4.3: Completion time for speed-run fraud detection
   // Computed as (submittedAt - formStartedAt) in seconds on the client
   // Nullable — legacy submissions won't have this; heuristic uses bootstrap fallback

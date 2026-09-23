@@ -10,6 +10,9 @@ import { Request, Response, NextFunction } from 'express';
 import { FormController } from '../form.controller.js';
 import { NativeFormService } from '../../services/native-form.service.js';
 import { queueSubmissionForIngestion } from '../../queues/webhook-ingestion.queue.js';
+// Story 13-71 R7 — read the fence rather than re-typing its value; see the
+// boundary test below for why a copied literal stops testing what it names.
+import { GEOPOINT_REQUIREMENT_EFFECTIVE_FROM } from '../../services/form-submission-validation.service.js';
 import { AppError } from '@oslsr/utils';
 
 const mockFindFirstRespondent = vi.fn();
@@ -488,6 +491,305 @@ describe('FormController', () => {
           }),
         })
       );
+    });
+
+    // -- Story 13-71 -------------------------------------------------------
+
+    /**
+     * A form that SERVES a geopoint question. `permissiveFlattened` has no
+     * questions at all, so every pre-existing case above sits on AC3's exempt
+     * side -- which is exactly why these cases must supply their own form. A gate
+     * tested only against a form it cannot apply to is not tested at all.
+     */
+    const geopointFlattened = {
+      ...permissiveFlattened,
+      questions: [
+        { name: 'site_location', type: 'geopoint', required: false, sectionId: 's1' },
+      ] as never[],
+    };
+
+    /*
+     * ⛔ REVIEW R7 — EVERY 13-71 CASE MUST SIT AFTER THE EFFECTIVE DATE.
+     *
+     * `validBody.submittedAt` is 2026-02-13, which is BEFORE the geopoint
+     * requirement takes effect, so these cases would have run against a waived
+     * gate and the acceptance tests would have passed for the wrong reason
+     * entirely. Caught by the suite the moment the fence landed — which is the
+     * whole argument for `pattern-test-that-passes-over-a-hole`: the question is
+     * never "did it pass", it is "would it have passed if the code never ran".
+     */
+    /**
+     * ⛔ DERIVED FROM THE FENCE, NOT RE-TYPED (adjudication 2026-09-23).
+     *
+     * This was the literal `2026-09-22T10:00:00.000Z` — post-effective against the
+     * fence of the day (the 21st). When the fence moved to the 24th, that instant
+     * fell BEHIND it and every enforcement assertion built on this body started
+     * getting a waiver instead: `13-71 AC3 … refused 422` went red with
+     * "expected null not to be null".
+     *
+     * ⭐ It went RED, not green, so the suite did its job — but R7 instructs
+     * MOVING THIS FENCE AT EVERY DEPLOY, so a hardcoded "after" date breaks these
+     * tests on a schedule. One hour past the constant is always after it, whatever
+     * the constant becomes.
+     */
+    const postEffectiveBody = {
+      ...validBody,
+      submittedAt: new Date(GEOPOINT_REQUIREMENT_EFFECTIVE_FROM.getTime() + 60 * 60 * 1000).toISOString(),
+    };
+
+    /** The AppError handed to `next()`, or null when the submission was accepted. */
+    function refusal(): AppError | null {
+      const err = vi.mocked(mockNext).mock.calls[0]?.[0];
+      return err instanceof AppError ? err : null;
+    }
+
+    it('13-71 AC3: an ENUMERATOR with neither coordinates nor a reason is refused 422', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = postEffectiveBody;
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      const err = refusal();
+      expect(err).not.toBeNull();
+      // The EXISTING shape -- the client's error handling needs no new branch.
+      expect(err?.code).toBe('INCOMPLETE_SUBMISSION');
+      expect(err?.statusCode).toBe(422);
+      expect(err?.details).toEqual({ fields: ['site_location'] });
+      // And nothing was queued. A refusal is not a deferral.
+      expect(queueSubmissionForIngestion).not.toHaveBeenCalled();
+    });
+
+    it('13-71 AC3: an ENUMERATOR WITH coordinates is accepted', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = { ...postEffectiveBody, gpsLatitude: 7.3775, gpsLongitude: 3.947, gpsAccuracy: 12 };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      expect(statusMock).toHaveBeenCalledWith(201);
+      expect(queueSubmissionForIngestion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rawData: expect.objectContaining({ _gpsLatitude: 7.3775, _gpsAccuracy: 12 }),
+        }),
+      );
+    });
+
+    it('13-71 AC3: the geopoint ANSWER satisfies the gate with no envelope coordinates', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = {
+        ...validBody,
+        responses: {
+          ...validBody.responses,
+          site_location: { latitude: 7.1, longitude: 3.1, accuracy: 9 },
+        },
+      };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      expect(statusMock).toHaveBeenCalledWith(201);
+    });
+
+    it('13-71 AC4: an ENUMERATOR with a derived REASON and no coordinates is accepted', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = { ...postEffectiveBody, gpsUnavailableReason: 'permission_denied' };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      expect(statusMock).toHaveBeenCalledWith(201);
+      expect(queueSubmissionForIngestion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rawData: expect.objectContaining({ _gpsUnavailableReason: 'permission_denied' }),
+        }),
+      );
+    });
+
+    it('13-71 AC4: an INVENTED reason is a 400, not an ungroupable string in the column', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = { ...postEffectiveBody, gpsUnavailableReason: 'phone_was_flat' };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      // The whole point of AC6 is that the reason can be COUNTED. Free text would
+      // turn the weekly ops read into a spelling exercise.
+      expect(refusal()?.code).toBe('VALIDATION_ERROR');
+      expect(queueSubmissionForIngestion).not.toHaveBeenCalled();
+    });
+
+    /**
+     * AC7 -- REMOVE THE EXEMPTION AND THIS TEST FAILS.
+     *
+     * Same form, same empty payload, same missing position as the enumerator case
+     * above; only the role differs. A clerk transcribing a paper form records the
+     * OFFICE, and office coordinates filed as field captures would poison the base
+     * map this story exists to enable. Five of seven prod roles map to `clerk`.
+     */
+    it('13-71 AC7: a CLERK with neither is ACCEPTED -- the exemption, asserted', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = postEffectiveBody;
+      mockReq.user = { sub: 'clerk-1', role: 'data_entry_clerk' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      expect(statusMock).toHaveBeenCalledWith(201);
+      expect(queueSubmissionForIngestion).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'clerk' }),
+      );
+    });
+
+    it('13-71 AC7: a PUBLIC user with neither is ACCEPTED', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = postEffectiveBody;
+      mockReq.user = { sub: 'pub-1', role: 'public_user' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      expect(statusMock).toHaveBeenCalledWith(201);
+    });
+
+    it('13-71 AC7: a SUPERVISOR (-> webapp) with neither is ACCEPTED', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = postEffectiveBody;
+      mockReq.user = { sub: 'sup-1', role: 'supervisor' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      expect(statusMock).toHaveBeenCalledWith(201);
+    });
+
+    /**
+     * AC3's FENCE. Two live submissions reference forms serving no geopoint
+     * question (one on Public Core, one on a form row that no longer exists).
+     * Keying the gate on the role alone would have made those permanently
+     * unsubmittable -- a lockout, not a requirement.
+     */
+    it('13-71 AC3 FENCE: an ENUMERATOR on a form serving NO geopoint question is ACCEPTED', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(permissiveFlattened as never);
+      mockReq.body = postEffectiveBody;
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      expect(statusMock).toHaveBeenCalledWith(201);
+    });
+
+    /*
+     * ⛔ ADVERSARIAL REVIEW R6 — THE ZOD ENUM GUARDS THE ENVELOPE, NOT THE COLUMN.
+     *
+     * `submitFormSchema.responses` is `z.record(z.unknown())`, so a `_gps*` key
+     * carried inside the ANSWERS reached `rawData` verbatim and the ingestion
+     * worker wrote it straight to the column — bypassing `z.enum` and
+     * `z.number().nonnegative()` entirely. Proven against a real row before this
+     * fix: the column read back `"i-invented-this-value"`.
+     *
+     * These two tests fail if the strip is removed from `submitForm`.
+     */
+    it('R6: a client-supplied _gpsUnavailableReason in the ANSWERS never reaches rawData', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = {
+        ...validBody,
+        responses: { ...validBody.responses, _gpsUnavailableReason: 'i-invented-this-value' },
+        gpsLatitude: 7.3775,
+        gpsLongitude: 3.947,
+      };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      const queued = vi.mocked(queueSubmissionForIngestion).mock.calls[0][0] as {
+        rawData: Record<string, unknown>;
+      };
+      // ⭐ Not "is not the invented value" — is ABSENT. This submission has a
+      // position, so a reason not to have one must not exist on the row at all.
+      expect(queued.rawData).not.toHaveProperty('_gpsUnavailableReason');
+    });
+
+    it('R6: a client-supplied _gpsAccuracy in the ANSWERS cannot forge the column', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = {
+        ...validBody,
+        // Negative — the envelope's `.nonnegative()` would have rejected it.
+        // ⭐ And NO envelope accuracy is sent, deliberately: if one were, it would
+        // overwrite the forged value anyway and this test would pass whether or
+        // not the strip existed. The absence is what makes it mutation-sensitive.
+        responses: { ...validBody.responses, _gpsAccuracy: -9999 },
+        gpsLatitude: 7.3775,
+        gpsLongitude: 3.947,
+      };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      const queued = vi.mocked(queueSubmissionForIngestion).mock.calls[0][0] as {
+        rawData: Record<string, unknown>;
+      };
+      expect(queued.rawData).not.toHaveProperty('_gpsAccuracy');
+    });
+
+    /*
+     * ⛔ ADVERSARIAL REVIEW R7 — THE REQUIREMENT MUST NOT APPLY RETROACTIVELY.
+     *
+     * Every submission in an enumerator's offline queue on deploy day predates
+     * auto-capture and carries no position. Without this fence each one is refused
+     * 422 on its first sync, and `sync-manager.isPermanentFailure` treats a 422 as
+     * PERMANENT — parked at MAX_RETRIES, never retried. The documented recovery
+     * ("Reopen — nothing is lost") then re-captures the enumerator's CURRENT
+     * position and files it as the interview location.
+     */
+    it('R7: an interview submitted BEFORE the requirement took effect is accepted with neither', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = { ...postEffectiveBody, submittedAt: '2026-09-19T09:15:00.000Z' };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      expect(statusMock).toHaveBeenCalledWith(201);
+    });
+
+    it('R7: the fence is a DATE, not an off switch — a submission after it is still refused', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      // ⛔ DERIVED FROM THE CONSTANT, NOT RE-TYPED (adjudication 2026-09-23). This
+      // line used to hardcode `2026-09-21T00:00:00.000Z`. When the fence moved to
+      // the 24th the literal fell BEHIND it, so the boundary case silently became
+      // a pre-effective case and the test asserted the opposite of its own name.
+      // A test that pins a constant by copying its value stops testing the
+      // constant the moment it changes — and this constant is DESIGNED to change
+      // at every deploy. Reading it keeps the boundary meaning "the boundary".
+      mockReq.body = {
+        ...postEffectiveBody,
+        submittedAt: GEOPOINT_REQUIREMENT_EFFECTIVE_FROM.toISOString(),
+      };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      // ⭐ The boundary instant itself is INSIDE the requirement. A fence tested
+      // only from the outside does not tell you where it is.
+      expect(refusal()?.code).toBe('INCOMPLETE_SUBMISSION');
     });
 
     it('calls next on queue error', async () => {

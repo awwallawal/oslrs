@@ -115,3 +115,68 @@ export interface NativeFormSchema {
   createdAt: string;
   publishedAt?: string;
 }
+
+// ── Story 13-71: GPS capture vocabulary ────────────────────────────────────
+
+/**
+ * Story 13-71 AC4 — why an enumerator submission carries NO coordinates.
+ *
+ * ⛔ THIS IS A DERIVED VALUE, NOT A MENU. Every member except `other` is the
+ * browser's own verdict, mapped from `GeolocationPositionError.code` (or from
+ * the absence of `navigator.geolocation`). A free-choice dropdown whose first
+ * item excuses the requirement becomes the fast way out of it, and the browser
+ * already knows the true cause — the enumerator confirms that they could not
+ * capture a location, they do not diagnose why.
+ *
+ * ⭐ WHY IT IS A VOCABULARY AT ALL: before this story, "did not tap the button"
+ * and "tapped and was refused" were the SAME absent value. That is the
+ * difference between a field problem and a phone problem, and the weekly ops
+ * read cannot act on either without being able to tell them apart (A14 — a
+ * zero must say which kind of zero it is).
+ *
+ * Shared because both sides need the SAME list (A10): the client derives it,
+ * the API validates it as a zod enum, and `submissions.gps_unavailable_reason`
+ * stores it. The drizzle schema column is plain `text` — a schema file must not
+ * import `@oslsr/types` — and names this constant as its canonical source.
+ */
+export const gpsUnavailableReasons = [
+  /** `GeolocationPositionError.PERMISSION_DENIED` (1) — the user or the OS refused. */
+  'permission_denied',
+  /** `GeolocationPositionError.POSITION_UNAVAILABLE` (2) — no fix obtainable. */
+  'position_unavailable',
+  /** `GeolocationPositionError.TIMEOUT` (3) — no fix within the deadline. */
+  'timeout',
+  /** `navigator.geolocation` is absent — the browser has no geolocation at all. */
+  'unsupported',
+  /** A manual override, or a refusal with no attempt on record. */
+  'other',
+] as const;
+export type GpsUnavailableReason = (typeof gpsUnavailableReasons)[number];
+
+/**
+ * Map a `GeolocationPositionError.code` onto the stored vocabulary.
+ *
+ * Deliberately takes a bare `number` rather than the DOM error object so it is
+ * shared (this package is imported by the API, which has no DOM lib) and so it
+ * is unit-testable without a browser. The three codes are fixed by the W3C
+ * Geolocation spec and are not expected to grow; anything unrecognised — and
+ * anything absent, which is the "no attempt was ever made" case — falls to
+ * `other` rather than guessing.
+ *
+ * ⛔ `unsupported` is NOT derivable here: it is the absence of the API, which
+ * produces no error object and therefore no code. The caller sets it directly.
+ */
+export function geolocationErrorCodeToReason(
+  code: number | null | undefined,
+): GpsUnavailableReason {
+  switch (code) {
+    case 1:
+      return 'permission_denied';
+    case 2:
+      return 'position_unavailable';
+    case 3:
+      return 'timeout';
+    default:
+      return 'other';
+  }
+}

@@ -1,4 +1,5 @@
 import { db } from '../lib/offline-db';
+import type { GpsUnavailableReason } from '@oslsr/types';
 import { submitSurvey, fetchSubmissionStatuses } from '../features/forms/api/submission.api';
 import { ApiError } from '../lib/api-client';
 
@@ -171,6 +172,19 @@ export class SyncManager {
       userId: item.userId,
       createdAt: item.createdAt,
       updatedAt: now,
+      /*
+       * Story 13-71 (adversarial review R7) — MARK IT AS REOPENED, so auto-capture
+       * does not fire on it.
+       *
+       * This button says "Reopen — nothing is lost", and until this line that was
+       * only true of the answers. The interview itself happened somewhere else,
+       * possibly days ago; a restored draft carries no geopoint answer, so AC1's
+       * auto-capture would take the position of WHEREVER THE OPERATOR IS NOW —
+       * typically the office, at the end of the day — and file it as the place the
+       * work was done. Indistinguishable from a genuine field capture in AC10's
+       * coverage read, and worse than the honest blank it replaced.
+       */
+      restoredAt: now,
     });
 
     // Drop the queue row LAST: if the put above throws, the entry is still queued and recoverable
@@ -253,6 +267,19 @@ export class SyncManager {
       const gpsLatitude = payload.gpsLatitude as number | undefined;
       const gpsLongitude = payload.gpsLongitude as number | undefined;
       const completionTimeSeconds = payload.completionTimeSeconds as number | undefined;
+      /*
+       * Story 13-71 AC9 — THIS REBUILD IS THE SILENT-DROP POINT OF THE WHOLE CHAIN.
+       *
+       * The payload is reconstructed field by field below, so a field that is not
+       * NAMED here is lost with no error and no log line: the submission syncs, the
+       * server returns 201, and the value simply never existed. An enumerator
+       * working without signal — which is the case this path exists for — is exactly
+       * the one whose accuracy and unavailable-reason would go missing.
+       *
+       * ⛔ Anything added to `SubmitSurveyPayload` must be named here too.
+       */
+      const gpsAccuracy = payload.gpsAccuracy as number | undefined;
+      const gpsUnavailableReason = payload.gpsUnavailableReason as GpsUnavailableReason | undefined;
 
       const result = await Promise.race([
         submitSurvey({
@@ -263,6 +290,8 @@ export class SyncManager {
           submittedAt,
           ...(gpsLatitude != null && { gpsLatitude }),
           ...(gpsLongitude != null && { gpsLongitude }),
+          ...(gpsAccuracy != null && { gpsAccuracy }),
+          ...(gpsUnavailableReason != null && { gpsUnavailableReason }),
           ...(completionTimeSeconds != null && { completionTimeSeconds }),
         }),
         new Promise<never>((_, reject) =>

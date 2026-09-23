@@ -30,6 +30,11 @@ import {
   isNonRetryablePostgresError,
   constraintOf,
 } from '../services/submission-terminal-state.js'; // Story 13-57 (AC2)
+// Story 13-71 AC6 (review R6) — the canonical vocabulary the reason column is
+// validated against at the storage boundary. The drizzle schema file cannot
+// import this (schema files must not depend on @oslsr/types) and names it as its
+// source instead; the worker is where that naming is actually enforced.
+import { gpsUnavailableReasons } from '@oslsr/types';
 
 const logger = pino({ name: 'webhook-ingestion-worker' });
 
@@ -111,6 +116,34 @@ async function processSubmissionJob(job: Job<WebhookIngestionJobData>): Promise<
   const gpsLongitude = rawData?._gpsLongitude != null ? Number(rawData._gpsLongitude) : null;
   // Story 4.3: Extract completion time for speed-run fraud detection
   const completionTimeSeconds = rawData?._completionTimeSeconds != null ? Number(rawData._completionTimeSeconds) : null;
+  // Story 13-71 AC5/AC6: accuracy (metres) and the derived unavailable-reason.
+  // Same `Number(...)` + isNaN shape as the coordinates above — a non-numeric
+  // accuracy must land as NULL, not as NaN in a double precision column.
+  const gpsAccuracy = rawData?._gpsAccuracy != null ? Number(rawData._gpsAccuracy) : null;
+  /*
+   * ⛔ ADVERSARIAL REVIEW R6 — THIS WAS A PASS-THROUGH, AND THE COMMENT JUSTIFYING
+   * IT WAS WRONG.
+   *
+   * It read: "already constrained to the shared vocabulary by the controller's zod
+   * enum". It was not. `submitFormSchema.responses` is `z.record(z.unknown())`, so
+   * a `_gpsUnavailableReason` carried inside the ANSWERS reached `rawData`
+   * untouched and landed here as free text. Measured, not reasoned: ingesting
+   * `{ _gpsUnavailableReason: 'i-invented-this-value' }` put exactly that string
+   * in the column.
+   *
+   * ⭐ THE CHECK BELONGS HERE AS WELL AS AT THE CONTROLLER, because this is the
+   * STORAGE boundary and the controller is only one of its producers — 13-72's
+   * back-scoring re-enqueue and any future replay build `rawData` themselves and
+   * would never pass through that zod schema at all. AC6's promise is that the
+   * column can be counted with a GROUP BY; that promise has to be kept where the
+   * write happens. An unrecognised value is dropped to NULL rather than stored,
+   * because an ungroupable bucket is worse than an absent one.
+   */
+  const rawReason = rawData?._gpsUnavailableReason;
+  const gpsUnavailableReason =
+    typeof rawReason === 'string' && (gpsUnavailableReasons as readonly string[]).includes(rawReason)
+      ? rawReason
+      : null;
 
   await db.insert(submissions).values({
     id: submissionId,
@@ -121,6 +154,13 @@ async function processSubmissionJob(job: Job<WebhookIngestionJobData>): Promise<
     gpsLatitude: gpsLatitude != null && !isNaN(gpsLatitude) ? gpsLatitude : null,
     gpsLongitude: gpsLongitude != null && !isNaN(gpsLongitude) ? gpsLongitude : null,
     completionTimeSeconds: completionTimeSeconds != null && !isNaN(completionTimeSeconds) ? completionTimeSeconds : null,
+    // Review R6 — `>= 0 && isFinite`, not merely `!isNaN`. An accuracy RADIUS is a
+    // distance in metres; a negative or Infinite one is not a worse reading, it is
+    // not a reading. The envelope's `z.number().nonnegative()` says so too, and is
+    // bypassable the same way the reason enum was.
+    gpsAccuracy:
+      gpsAccuracy != null && Number.isFinite(gpsAccuracy) && gpsAccuracy >= 0 ? gpsAccuracy : null,
+    gpsUnavailableReason,
     submittedAt: new Date(submittedAt),
     source,
     processed: false,

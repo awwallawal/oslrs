@@ -74,6 +74,99 @@ GROUP BY 1,2,3 ORDER BY 1 DESC, 4 DESC;
 **about one every 12 minutes**, sustained, single LGA. Use that as the realistic per-person rate when
 sizing a cohort; do not use a theoretical figure.
 
+## 2a. ENUMERATOR — GPS coverage, per person per day (Story 13-71)
+
+⛔ **`u.email NOT LIKE 'lawalkolade%'` IS NOT OPTIONAL AND IS NOT COSMETIC.** Nine of the 28
+enumerator accounts on prod are the operator's own harness logins (`+demo1/2/3`, `+enum1`, `+test`,
+`+testenumerator`, `+testenumeratornew`, `+testfour`, and the bare address); seven of them have
+logged in. Leaving them in is precisely how the go-live gate's F2 came to read **13.5%** when real
+field coverage was **11.4%** — two `ZZSMOKE` operator captures sat in the window and one carried
+GPS. ⚠️ **The `+test` suffix does NOT separate the two populations**: `bashiratfasasi+test` is a real
+enumerator and `lawalkolade+test` is the operator. **Ownership is the discriminator, not the suffix.**
+
+```sql
+SELECT s.submitted_at::date                                   AS day,
+       split_part(u.email,'+',1)                              AS person,
+       count(*)                                               AS submissions,
+       count(s.gps_latitude)                                  AS with_gps,
+       round(100.0 * count(s.gps_latitude) / count(*), 1)     AS pct,
+       round(percentile_cont(0.5) WITHIN GROUP
+             (ORDER BY s.gps_accuracy)::numeric, 1)           AS median_acc_m,
+       count(*) FILTER (WHERE s.gps_unavailable_reason='permission_denied')     AS denied,
+       count(*) FILTER (WHERE s.gps_unavailable_reason='position_unavailable')  AS unavail,
+       count(*) FILTER (WHERE s.gps_unavailable_reason='timeout')               AS timeout,
+       count(*) FILTER (WHERE s.gps_unavailable_reason='unsupported')           AS unsupported,
+       count(*) FILTER (WHERE s.gps_unavailable_reason='other')                 AS other,
+       count(*) FILTER (WHERE s.gps_latitude IS NULL
+                          AND s.gps_unavailable_reason IS NULL)                 AS unexplained
+FROM submissions s
+JOIN users u ON u.id::text = s.submitter_id
+WHERE s.source = 'enumerator'
+  AND u.email NOT LIKE 'lawalkolade%'          -- ⛔ see above
+  AND s.submitted_at > now() - interval '14 days'
+GROUP BY 1,2
+ORDER BY 1 DESC, 3 DESC;
+```
+
+The same thing as one number, for the weekly read:
+
+```sql
+SELECT count(*)                                            AS submissions,
+       count(s.gps_latitude)                               AS with_gps,
+       round(100.0 * count(s.gps_latitude) / count(*), 1)  AS pct,
+       count(DISTINCT s.submitter_id)                      AS enumerators,
+       count(DISTINCT s.submitter_id) FILTER (WHERE s.gps_latitude IS NOT NULL) AS enum_with_gps
+FROM submissions s
+JOIN users u ON u.id::text = s.submitter_id
+WHERE s.source = 'enumerator'
+  AND u.email NOT LIKE 'lawalkolade%'
+  AND s.submitted_at > now() - interval '7 days';
+```
+
+### How to read it
+
+⭐ **`unexplained` is the column to watch, and it is the one that did not exist before.** It counts
+submissions with NO position and NO reason — the state that was previously *every* GPS-less
+submission, because "did not tap the button" and "tapped and was refused" were the same absent
+value. After this story deploys, an enumerator submission can only reach that state through a path
+the requirement does not cover, so **a non-zero `unexplained` on post-deploy rows is a defect report,
+not a coverage statistic.** (A14 — a zero must say which kind of zero it is.) Rows submitted BEFORE
+the deploy are all unexplained and always will be; they are not back-fillable.
+
+**`denied` is the one that needs a human, not a fix.** A browser "Block" is STICKY per origin and the
+re-prompt path is buried in site settings (risk R-a), so a phone that appears here needs someone to
+walk its owner through unblocking it. It will not recover on its own, and it will keep appearing
+every day until it does.
+
+`median_acc_m` separates a satellite fix from a network one. A person whose median sits in the
+hundreds of metres is being located by cell tower, and their captures cannot distinguish a base from
+a neighbourhood even though they count as coverage.
+
+### The deploy-day prediction — WRITTEN DOWN BEFORE IT RUNS
+
+> **Recorded 2026-09-20, before 13-71 was deployed. Do not edit this line after the fact.**
+>
+> **Baseline: 11.4% — 4 of 35 genuine field enumerator submissions carried coordinates**, measured
+> 2026-09-20 by adjudication over the 7-day window, operator captures excluded. ⚠️ The raw query
+> without the `lawalkolade%` exclusion returns **13.5% (5 of 37)** and that figure is wrong; if a
+> re-measurement reproduces 13.5% it has forgotten the exclusion.
+>
+> **Prediction: GPS-carrying enumerator submissions reach >90% within one week of deploy.**
+>
+> **Anything in between is a UX failure to INVESTIGATE, not a success to declare.** The mechanism is
+> automatic capture on form open, so the arithmetic is nearly binary: the population that fails is
+> the population whose browser refused, and `denied` + `unavailable` + `timeout` should account for
+> essentially all of the shortfall. If the shortfall is instead concentrated in `unexplained`, the
+> requirement is being bypassed somewhere and that is a code defect. If it is concentrated in
+> `denied`, the rollout prompted badly on those phones and they need the R-a manual fix.
+> [[pattern-predict-then-compare]]
+>
+> ⚠️ **Minimum sample before either verdict is quoted: N ≥ 20 submissions from ≥ 5 distinct
+> enumerators.** One row moves the percentage by roughly three points at present volumes, so a
+> smaller sample cannot distinguish >90% from 11.4% honestly.
+
+---
+
 ## 3. ENUMERATOR — who cannot get in, and why (the §0.1a monitor)
 
 ```bash

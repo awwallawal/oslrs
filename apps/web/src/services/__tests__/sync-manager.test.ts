@@ -139,6 +139,37 @@ describe('SyncManager.restoreToDraft — 13-4 AC4.3b', () => {
     expect(mockQueueDelete).toHaveBeenCalledWith('sub-1');
   });
 
+  /**
+   * ⛔ REVIEW R7 — THE RESTORED DRAFT IS MARKED, AND THAT MARK IS WHAT STOPS
+   * `FormFillerPage` TAKING A FRESH POSITION FOR AN OLD INTERVIEW.
+   *
+   * This button tells the enumerator "nothing is lost". Until `restoredAt`
+   * existed that was true of the ANSWERS only: the reopened draft carried no
+   * geopoint, so AC1's auto-capture fired and wrote wherever the operator was
+   * standing — typically the office, hours later — as the interview's location.
+   * A false coordinate is worse than an absent one, because only the absent one
+   * is visible as absent.
+   */
+  it('R7: marks the draft as RESTORED so auto-capture cannot invent a location', async () => {
+    mockQueueGet.mockResolvedValue({
+      id: 'sub-3', formId: 'form-1', userId: 'u1', createdAt: '2026-09-19T09:00:00.000Z',
+      status: 'failed', retryCount: 3, error: '422', permanentFailure: true,
+      payload: {
+        responses: { surname: 'Bello' },
+        formVersion: '3',
+        submittedAt: '2026-09-19T09:00:00.000Z',
+      },
+    });
+
+    await expect(new SyncManager().restoreToDraft('sub-3')).resolves.toBe(true);
+
+    const draft = mockDraftsPut.mock.calls[0]![0];
+    expect(draft.restoredAt).toEqual(expect.any(String));
+    // ⭐ The ORIGINAL capture date is kept as `createdAt` — the reopen is not a
+    // new interview and must not look like one.
+    expect(draft.createdAt).toBe('2026-09-19T09:00:00.000Z');
+  });
+
   it('returns false for an unknown id rather than creating an empty draft', async () => {
     mockQueueGet.mockResolvedValue(undefined);
     await expect(new SyncManager().restoreToDraft('nope')).resolves.toBe(false);
@@ -244,6 +275,105 @@ describe('SyncManager', () => {
     const callArgs = mockSubmitSurvey.mock.calls[0][0];
     expect(callArgs).not.toHaveProperty('gpsLatitude');
     expect(callArgs).not.toHaveProperty('gpsLongitude');
+  });
+
+  /**
+   * Story 13-71 AC9 — THE OFFLINE PATH CARRIES THE NEW FIELDS.
+   *
+   * ⛔ `_syncItem` rebuilds the payload FIELD BY FIELD, so a field that is not
+   * named there is dropped with no error and no log line: the submission syncs,
+   * the server returns 201, and the value simply never existed. That is risk R-d,
+   * and it is the case an enumerator without signal hits by definition — the very
+   * population this story's accuracy and unavailable-reason are being collected
+   * from. A test that only checks the ONLINE path proves nothing about it.
+   */
+  it('AC9: an OFFLINE submission carries gpsAccuracy through the payload rebuild', async () => {
+    setupWhereMock([
+      {
+        id: 'item-offline',
+        formId: 'form-1',
+        payload: {
+          responses: { q1: 'answer1' },
+          formVersion: '2.0.0',
+          submittedAt: '2026-01-01T12:00:00.000Z',
+          gpsLatitude: 7.3775,
+          gpsLongitude: 3.947,
+          gpsAccuracy: 14.25,
+        },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-1', status: 'queued' } });
+
+    await manager.syncAll();
+
+    expect(mockSubmitSurvey).toHaveBeenCalledWith(expect.objectContaining({
+      gpsLatitude: 7.3775,
+      gpsLongitude: 3.947,
+      gpsAccuracy: 14.25,
+    }));
+  });
+
+  it('AC9: an OFFLINE refusal carries gpsUnavailableReason through the payload rebuild', async () => {
+    setupWhereMock([
+      {
+        id: 'item-offline-reason',
+        formId: 'form-1',
+        payload: {
+          responses: { q1: 'answer1' },
+          formVersion: '2.0.0',
+          submittedAt: '2026-01-01T12:00:00.000Z',
+          gpsUnavailableReason: 'permission_denied',
+        },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-1', status: 'queued' } });
+
+    await manager.syncAll();
+
+    // ⭐ Without this the server would see a submission with neither coordinates
+    // nor a reason and refuse it with a 422 — turning a phone permission problem
+    // into a permanently stuck queue row for an enumerator with no signal.
+    expect(mockSubmitSurvey).toHaveBeenCalledWith(expect.objectContaining({
+      gpsUnavailableReason: 'permission_denied',
+    }));
+  });
+
+  it('AC9: neither field is INVENTED when the queued payload has none', async () => {
+    setupWhereMock([
+      {
+        id: 'item-bare',
+        formId: 'form-1',
+        payload: {
+          responses: { q1: 'answer1' },
+          formVersion: '2.0.0',
+          submittedAt: '2026-01-01T12:00:00.000Z',
+          gpsLatitude: 7.3775,
+          gpsLongitude: 3.947,
+        },
+        status: 'pending',
+        retryCount: 0,
+        lastAttempt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-1', status: 'queued' } });
+
+    await manager.syncAll();
+
+    const callArgs = mockSubmitSurvey.mock.calls[0][0];
+    expect(callArgs).not.toHaveProperty('gpsAccuracy');
+    expect(callArgs).not.toHaveProperty('gpsUnavailableReason');
   });
 
   it('syncAll marks item as failed on API error', async () => {
@@ -703,5 +833,101 @@ describe('SyncManager', () => {
     await vi.advanceTimersByTimeAsync(5000);
 
     expect(mockFetchSubmissionStatuses).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⛔ REVIEW R12 — AC9'S ROUND TRIP, ACTUALLY CROSSED.
+ *
+ * The AC9 cases above hand-write the queued payload. Both ends happen to name the
+ * same keys, so a rename would red one side — but nothing in the suite ever took
+ * a payload PRODUCED by `useDraftPersistence.completeDraft` and fed it to the
+ * CONSUMER that replays it. That is the precise boundary this file already
+ * carries a scar from: `restoreToDraft` read a `rawData` key the client never
+ * emits, and the unit test missed it because its fixture was written from an
+ * assumption about the shape rather than from the producer — it confirmed the bug
+ * instead of catching it (see the comment on `restoreToDraft`).
+ *
+ * So this test states the producer's contract as data, in one place, and asserts
+ * the consumer honours every field of it. A field added to `SubmitSurveyPayload`
+ * and forgotten in the rebuild fails HERE, which is the only place that can see
+ * both halves. [[pattern-request-test-from-the-schema-not-the-caller]]
+ */
+describe('SyncManager — 13-71 AC9 round trip (review R12)', () => {
+  let manager: SyncManager;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    manager = new SyncManager();
+    manager.setUserId('test-user-A');
+    setupWhereMock();
+    mockUpdate.mockResolvedValue(1);
+    vi.stubGlobal('navigator', { ...window.navigator, onLine: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * The exact envelope `useDraftPersistence.completeDraft` writes into
+   * `submissionQueue.payload` for a capture that succeeded. Keys mirror
+   * `enrichedPayload` there; `responses` carries the answers verbatim.
+   */
+  const PRODUCER_PAYLOAD = {
+    responses: { q1: 'answer1', site_location: { latitude: 7.3775, longitude: 3.947, accuracy: 14.25 } },
+    formVersion: '2.0.0',
+    submittedAt: '2026-09-19T12:00:00.000Z',
+    gpsLatitude: 7.3775,
+    gpsLongitude: 3.947,
+    gpsAccuracy: 14.25,
+    completionTimeSeconds: 412,
+  } as const;
+
+  it('every field the producer writes survives the field-by-field rebuild', async () => {
+    setupWhereMock([
+      {
+        id: 'item-roundtrip', formId: 'form-1', payload: { ...PRODUCER_PAYLOAD },
+        status: 'pending', retryCount: 0, lastAttempt: null,
+        createdAt: '2026-09-19T12:00:00.000Z', error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-1', status: 'queued' } });
+
+    await manager.syncAll();
+
+    const sent = mockSubmitSurvey.mock.calls[0][0] as Record<string, unknown>;
+    // ⭐ Enumerated from the producer's own object, not hand-listed here: adding a
+    // key to the producer and forgetting the rebuild fails this loop.
+    for (const key of Object.keys(PRODUCER_PAYLOAD)) {
+      expect(sent, `'${key}' was dropped by the offline payload rebuild`).toHaveProperty(key);
+      expect(sent[key], `'${key}' changed value crossing the offline boundary`)
+        .toEqual(PRODUCER_PAYLOAD[key as keyof typeof PRODUCER_PAYLOAD]);
+    }
+  });
+
+  it('and the reason travels the same way when there is no position', async () => {
+    const refusalPayload = {
+      responses: { q1: 'answer1', _gpsUnavailableReason: 'timeout' },
+      formVersion: '2.0.0',
+      submittedAt: '2026-09-19T12:00:00.000Z',
+      gpsUnavailableReason: 'timeout',
+    } as const;
+
+    setupWhereMock([
+      {
+        id: 'item-roundtrip-reason', formId: 'form-1', payload: { ...refusalPayload },
+        status: 'pending', retryCount: 0, lastAttempt: null,
+        createdAt: '2026-09-19T12:00:00.000Z', error: null,
+      },
+    ]);
+    mockSubmitSurvey.mockResolvedValue({ data: { id: 'job-1', status: 'queued' } });
+
+    await manager.syncAll();
+
+    const sent = mockSubmitSurvey.mock.calls[0][0] as Record<string, unknown>;
+    for (const key of Object.keys(refusalPayload)) {
+      expect(sent, `'${key}' was dropped by the offline payload rebuild`).toHaveProperty(key);
+    }
   });
 });

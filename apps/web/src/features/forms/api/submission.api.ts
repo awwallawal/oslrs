@@ -1,3 +1,4 @@
+import type { GpsUnavailableReason } from '@oslsr/types';
 import { apiClient } from '../../../lib/api-client';
 
 export interface SubmitSurveyPayload {
@@ -7,6 +8,14 @@ export interface SubmitSurveyPayload {
   responses: Record<string, unknown>;
   gpsLatitude?: number;
   gpsLongitude?: number;
+  /** Story 13-71 AC5 — accuracy radius in metres, as the browser reported it. */
+  gpsAccuracy?: number;
+  /**
+   * Story 13-71 AC4 — the DERIVED reason there are no coordinates. Typed to the
+   * shared vocabulary so an invented string is a compile error here rather than a
+   * 400 from the server's zod enum.
+   */
+  gpsUnavailableReason?: GpsUnavailableReason;
   submittedAt: string;
   completionTimeSeconds?: number;
 }

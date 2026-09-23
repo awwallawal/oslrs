@@ -2,7 +2,7 @@
 
 **Print this. Read it before your first day. Keep it in the bag.**
 
-Version 2026-09-18 · Oyo State Labour & Skills Registry
+Version 2026-09-20 · Oyo State Labour & Skills Registry
 
 ---
 
@@ -11,7 +11,7 @@ Version 2026-09-18 · Oyo State Labour & Skills Registry
 Every person you register gets an **OSLRS number** that looks like `OSL-2026-ABC123`. It is how
 they prove they are on the register.
 
-> ### ⚠️ DO NOT READ OUT A NUMBER UNTIL THE APP SHOWS YOU ONE
+> ### DO NOT READ OUT A NUMBER UNTIL THE APP SHOWS YOU ONE
 >
 > When you finish a survey, the completion screen shows the number **only once it has uploaded**.
 > If it says **"Not issued yet — this entry has not finished uploading"**, then **no number exists
@@ -43,29 +43,36 @@ you do not need to do anything for them.
 
 **If they gave no email, you are the only way they will ever learn their number.**
 
-## 3. Location — press **Capture location** at every interview
+## 3. Location — the app now takes it for you
 
-The **first screen** of the survey asks for the GPS location. It does nothing until you press
-**Capture location**. Pressing **Next** without it submits the form perfectly happily — which is
-why, out of the first 36 field surveys, only 4 carried a location.
+**The app captures the location by itself the moment you open a survey.** You do not have to press
+anything. The first screen shows the coordinates once they arrive; carry on answering questions
+while it works, because nothing waits for it.
 
-**Press it at the door, where the interview happens** — not later in the car, and not back at the
-office. The point is to record where the work was done.
+**Open the survey at the door, where the interview happens** — not later in the car, and not back
+at the office. That is the moment the location is taken, and the point is to record where the work
+was done. The app takes a second reading when you submit, so if you walk while you work, both
+places are recorded.
 
 - The first time, your phone asks **"Allow location?"** — choose **Allow**. If you choose Block,
   the phone remembers, and someone has to fix it in your phone settings before it will ask again.
-- If it says location is unavailable, **move outside or near a window and press it again**. Inside
-  a concrete building it often fails on the first try.
-- If it still will not capture, **tell your supervisor the same day** and say where you were. Do
-  not abandon the interview over it — a survey without a location is still a real registration.
+  Choosing Block is the one thing here you cannot undo yourself in a hurry.
+- If the location does not arrive, **move outside or near a window** and press **Capture location**
+  on the first screen. Inside a concrete building it often fails on the first try.
+- **You cannot submit a field survey with no location and no explanation.** If your phone will not
+  give one, the app shows **"I could not capture a location"** — press it and the survey goes
+  through. The app records the reason your phone gave; you do not have to work out what went wrong.
+- Still **tell your supervisor the same day** and say where you were. **Do not abandon an interview**
+  over a location — pressing that button is always the right answer, and a survey recorded that way
+  is a real registration.
 
 **Why it matters:** the location is how the office knows which areas have been covered and which
-have not, and it is what protects you — it is the record that you were there.
+have not, and it is what protects you — it is the record that you were there. And when it genuinely
+cannot be taken, the survey now says so, so a phone problem stops looking like work not done.
 
-> ### Coming soon
-> The app will capture the location automatically when you open a survey, and will then ask you
-> to either capture it or say why it could not be captured before you submit. Nothing changes for
-> you if you are already pressing the button at every interview.
+**This does mean the app knows where you are while you are working.** It records the location of
+each interview, at the interview. It is not tracking you between them, and it is not running when
+you are not in a survey.
 
 ## 4. Households sharing one phone — read the number back, always
 
@@ -114,7 +121,7 @@ Yes. It is held by the Oyo State registry. They choose whether to appear in the 
 and they can decline and still be registered.
 
 **"Can I change my answers later?"**
-Yes, using their OSLRS number at **oyoskills.com** → check registration.
+Yes, using their OSLRS number at **oyoskills.com** - check registration.
 
 ## 8. Before you go out — checklist
 

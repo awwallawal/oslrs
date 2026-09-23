@@ -13,7 +13,7 @@ import { respondents } from '../db/schema/respondents.js';
 import { users } from '../db/schema/users.js';
 import { submissions } from '../db/schema/submissions.js';
 import { eq, and, inArray, count, sql, gte } from 'drizzle-orm';
-import { UserRole } from '@oslsr/types';
+import { UserRole, gpsUnavailableReasons } from '@oslsr/types';
 
 const checkNinBodySchema = z.object({
   nin: z.string().length(11).regex(/^\d{11}$/, 'NIN must be 11 digits'),
@@ -26,6 +26,21 @@ const submitFormSchema = z.object({
   responses: z.record(z.unknown()),
   gpsLatitude: z.number().optional(),
   gpsLongitude: z.number().optional(),
+  // Story 13-71 AC5 — metres, as the browser reported it. Non-negative: an
+  // accuracy radius is a distance. Optional, because a submission satisfying
+  // the requirement with a REASON carries no position to be accurate about.
+  gpsAccuracy: z.number().nonnegative().optional(),
+  // Story 13-71 AC4/AC6 — the DERIVED reason no position was captured. A zod
+  // enum over the shared vocabulary, so an invented value on THIS FIELD is a 400
+  // rather than an ungroupable string in the column the ops read counts.
+  // ⚠️ This enum guards the ENVELOPE ONLY. `responses` below is
+  // `z.record(z.unknown())` and is not inspected, so the identical `_gps*` keys
+  // carried inside the ANSWERS bypass it completely — which they did until the
+  // adversarial review proved it against a real row (R6). They are stripped
+  // before `rawData` is built, and the ingestion worker validates the value
+  // again at the storage boundary. Neither guard is redundant: this one gives
+  // the client a 400, that one protects the column from every OTHER producer.
+  gpsUnavailableReason: z.enum(gpsUnavailableReasons).optional(),
   submittedAt: z.string().datetime(),
   completionTimeSeconds: z.number().int().nonnegative().optional(),
 });
@@ -128,7 +143,11 @@ export class FormController {
         );
       }
 
-      const { submissionId, formId, responses, submittedAt, gpsLatitude, gpsLongitude, completionTimeSeconds } = parsed.data;
+      const {
+        submissionId, formId, responses, submittedAt,
+        gpsLatitude, gpsLongitude, gpsAccuracy, gpsUnavailableReason,
+        completionTimeSeconds,
+      } = parsed.data;
       const user = (req as Request & { user?: { sub: string; role?: string } }).user;
       const submitterId = user?.sub;
 
@@ -138,9 +157,31 @@ export class FormController {
       const schema = await NativeFormService.getFormSchema(formId);
       const flattened = NativeFormService.flattenForRender(schema, formId);
       const pendingNin = responses['_pendingNin'] === true;
+      /*
+       * Story 13-71 AC3 — the ENUMERATOR path must carry either coordinates or a
+       * reason. Keyed on `getSubmissionSource`, the SAME function the `source`
+       * column already uses, so "which channel is this" is decided in exactly one
+       * place. Five of seven prod roles map to `clerk` and everything unlisted maps
+       * to `webapp` — both are exempt, deliberately (AC7): a clerk transcribing a
+       * paper form records the OFFICE, and office coordinates filed as field
+       * captures would poison the base map this story exists to enable.
+       */
+      const requireGeopoint =
+        FormController.getSubmissionSource(user?.role) === 'enumerator';
+
       const { computed } = validateSubmissionCompleteness(flattened, responses, {
         pendingNin,
         today: new Date(),
+        requireGeopoint,
+        // The envelope carries the coordinates the client derived from the
+        // geopoint ANSWER; pass both so the gate can be satisfied by either, and
+        // an offline replay that reaches us with only the envelope still passes.
+        gpsLatitude,
+        gpsLongitude,
+        gpsUnavailableReason,
+        // Review R7 — WHEN this interview was conducted, so the requirement is not
+        // applied retroactively to a survey captured offline before it existed.
+        submittedAt,
       });
 
       // Story 9-55 — minor age-gate, enforced SYNCHRONOUSLY before queueing
@@ -153,10 +194,36 @@ export class FormController {
         typeof computed.age === 'number' ? computed.age : null,
       );
 
-      const rawData: Record<string, unknown> = { ...responses, ...computed };
+      /*
+       * Story 13-71 — ⛔ ADVERSARIAL REVIEW R6: THE ZOD ENUM DID NOT CONSTRAIN THE
+       * COLUMN, AND THREE COMMENTS SAID IT DID.
+       *
+       * `responses` is `z.record(z.unknown())` — NOTHING in `submitFormSchema`
+       * inspects its contents. It was spread into `rawData` verbatim, and the
+       * ingestion worker reads `rawData._gpsUnavailableReason` / `._gpsAccuracy`
+       * straight into their columns. So a client that put `_gpsUnavailableReason:
+       * 'gps off'` in the ANSWERS bypassed the enum entirely and landed free text
+       * in the column whose whole purpose (AC6) is to be counted with a GROUP BY.
+       * PROVEN by executing it against a real row, not argued: the column read back
+       * `"i-invented-this-value"`.
+       *
+       * These two keys are SERVER-OWNED, exactly like `_referenceCode` below, which
+       * has always been defensively overwritten for the same reason. The client's
+       * copy is discarded here so the only way either value reaches `rawData` is
+       * through the validated envelope. [[pattern-ship-a-fix-that-never-fires]]
+       */
+      const clientResponses: Record<string, unknown> = { ...responses };
+      delete clientResponses._gpsAccuracy;
+      delete clientResponses._gpsUnavailableReason;
+
+      const rawData: Record<string, unknown> = { ...clientResponses, ...computed };
       if (gpsLatitude != null) rawData._gpsLatitude = gpsLatitude;
       if (gpsLongitude != null) rawData._gpsLongitude = gpsLongitude;
       if (completionTimeSeconds != null) rawData._completionTimeSeconds = completionTimeSeconds;
+      // Story 13-71 AC5/AC6 — mirror the `_gps*` threading above exactly. The
+      // ingestion worker reads these two keys into their own columns.
+      if (gpsAccuracy != null) rawData._gpsAccuracy = gpsAccuracy;
+      if (gpsUnavailableReason != null) rawData._gpsUnavailableReason = gpsUnavailableReason;
 
       // Story 9-58 (AC5.2) — the enumerator/clerk path is async (queued). The
       // SERVER is authoritative for the persisted reference code (review M2,
