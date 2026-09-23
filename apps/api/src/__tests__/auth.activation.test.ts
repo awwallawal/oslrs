@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import supertest from 'supertest';
 import sharp from 'sharp';
 import { app } from '../app.js';
@@ -545,10 +545,63 @@ describe('Auth Activation Integration', () => {
     });
   });
 
+  /**
+   * ⛔ THIS BLOCK UPLOADS TO THE REAL BUCKET NAMED IN `.env`, AND UNTIL 2026-09-23
+   * IT NEVER DELETED ANYTHING.
+   *
+   * Found at 13-71's adjudication while chasing a harmless-looking skip-count
+   * wobble (8 ↔ 9). The wobble was this block, skipping or running depending on
+   * whether the laptop could reach `sfo3.digitaloceanspaces.com` at that instant —
+   * and the skip was the only thing limiting the damage.
+   *
+   * MEASURED ON THE LIVE BUCKET, 2026-09-23 (read-only ListObjectsV2):
+   *   staff-photos/original/  830 objects   35.48 MB   2026-02-04 → 2026-09-23
+   *   staff-photos/id-card/   828 objects   25.41 MB   2026-02-04 → 2026-09-23
+   * PRODUCTION REFERENCES 16 OF EACH. So ~1,626 objects (~60 MB) are referenced by
+   * nothing. ⚠️ This block is A known contributor, not provably the only one — a
+   * re-upload replaces a user's URL and orphans the previous object too, so do not
+   * read the whole 1,626 as test litter. ✅ And the prod DATABASE is clean: zero
+   * users carry a `selfie-s3-%@example.com` address, so the tests never wrote rows
+   * there, only objects.
+   *
+   * ⭐ The teardown below stops the accumulation. It does NOT address the two
+   * deeper problems, which are recorded rather than silently accepted:
+   *   1. a local integration test should not target the PRODUCTION bucket at all;
+   *   2. the ~1,626 pre-existing orphans need an owner and a deliberate decision —
+   *      ⛔ NOT deleted here, and not by a test. That is an operator action on live
+   *      storage that shares an account with the backups.
+   */
   describe('Activation with Selfie (S3 Integration)', () => {
     // Check if S3 credentials are available (for CI environments without S3 access)
     const hasS3Config = !!(process.env.S3_ACCESS_KEY && process.env.S3_SECRET_KEY);
     let s3Reachable = false;
+    /** Keys this block actually created, deleted in `afterAll`. */
+    const uploadedKeysForTeardown: string[] = [];
+
+    afterAll(async () => {
+      if (uploadedKeysForTeardown.length === 0) return;
+      // Imported lazily so a run without S3 config never loads the SDK.
+      const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      const s3 = new S3Client({
+        region: process.env.S3_REGION,
+        endpoint: process.env.S3_ENDPOINT,
+        credentials: {
+          accessKeyId: process.env.S3_ACCESS_KEY as string,
+          secretAccessKey: process.env.S3_SECRET_KEY as string,
+        },
+      });
+      // ⚠️ Best-effort and deliberately non-fatal: a teardown that fails the suite
+      // over a network blip would turn a cleanup into a flake, which is the class
+      // this whole change came out of. Report, do not throw.
+      for (const Key of uploadedKeysForTeardown) {
+        try {
+          await s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key }));
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn(`[s3-teardown] could not delete ${Key}:`, (err as Error).message);
+        }
+      }
+    }, 30000);
 
     // Lightweight connectivity pre-check: HEAD request to the S3 endpoint.
     // If unreachable (network down, firewall, VPN), skip rather than wait 60s and timeout.
@@ -613,6 +666,13 @@ describe('Auth Activation Integration', () => {
       // S3 URL assertions only run when S3 is properly configured
       // In CI without S3 credentials, activation succeeds but selfie is skipped (graceful degradation)
       if (hasS3Config && updatedUser?.liveSelfieOriginalUrl) {
+        // ⛔ REGISTER FOR TEARDOWN BEFORE ASSERTING — an assertion that fails
+        // below must not also leak the objects it was checking (adjudication
+        // 2026-09-23). See the `afterAll` at the top of this describe.
+        uploadedKeysForTeardown.push(String(updatedUser.liveSelfieOriginalUrl));
+        if (updatedUser.liveSelfieIdCardUrl) {
+          uploadedKeysForTeardown.push(String(updatedUser.liveSelfieIdCardUrl));
+        }
         // S3 keys should be stored (format: staff-photos/original/{uuid}.jpg)
         expect(typeof updatedUser.liveSelfieOriginalUrl).toBe('string');
         expect(String(updatedUser.liveSelfieOriginalUrl)).toMatch(/^staff-photos\/original\/.+\.jpg$/);
