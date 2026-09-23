@@ -1,6 +1,6 @@
 # Story 13.71: The location is offered and not taken — capture it on open, and require it
 
-Status: in-progress
+Status: review
 
 <!--
 ⛔ STATUS REVERTED `review` → `in-progress` BY ADJUDICATION, 2026-09-23, after `/code-review ultra`
@@ -447,6 +447,16 @@ never the state cell (`isOpenState` returns false for any state containing `REOP
 ⚠️ No literal `|` appears in any cell — the guard splits rows naively and a stray pipe shifts every
 column after it.
 
+⛔ **ID SERIES COLLISION, FOUND WHILE ADDING A ROW AND RECORDED RATHER THAN STEPPED AROUND.** This
+story carries TWO independent `R<n>` series — the residual LEDGER below (R1–R9) and the adversarial
+review's FOLLOW-UP items (R6–R13) — and they **already overlap on R6, R7, R8 and R9**, where the two
+meanings are unrelated: `R8` is a spoofable `submittedAt` in one series and a stale-reason guard in
+the other. The new row below is therefore **R14**, past the end of both, rather than the `R10` that
+came naturally and would have been the fifth collision. ⚠️ Anyone reading a bare `R<n>` in this file
+must check WHICH table it came from. Renumbering either series now would invalidate references in
+three commit messages and the sprint-status entry, so the collision is documented rather than
+"fixed" — and the next id after R14 should keep clear of both.
+
 | ID | Severity | State | Re-runnable evidence | Owner |
 |---|---|---|---|---|
 | **R1** — `select_multiple` array ORDER is still significant in the duplicate comparison. `SelectMultipleInput` appends in TAP order, so two enumerators choosing the same two skills in a different order do not match | **Low** — a MISSED match, never an invented one, so it biases the detector conservatively. Not a regression: non-empty arrays compare exactly as they did before this story | ⚠️ **OPEN — deliberately not fixed here.** Sorting would make these match, which is defensible on the merits and wrong on the timing: it would INCREASE match ratios on the exact channel R-A8 is about to calibrate, trading AC12's bias for its mirror image. AC12's mandate is to remove a bias, not to swap its sign | Pinned by a test that asserts the CURRENT behaviour (`duplicate-response.heuristic.test.ts`, "array ORDER is still significant"), so any future change is a decision that reds a test rather than a silent drift. Re-check by deleting that test's expectation and observing the red. **REOPEN TRIGGER:** R-A8 calibration reaching `duplicate_partial_threshold`, where the effect can be measured on real ratios instead of guessed | R-A8 (calibration) |
@@ -455,9 +465,11 @@ column after it.
 | **R4** — AC12's "zero detections would move" is a PRE-deploy measurement and this story is what invalidates it | **Medium** — R-A8 calibrates against the duplicate channel, and this changes what "equal" means on it | ⛔ **OPEN — DISCHARGE-ON-DEPLOY.** Measured read-only on prod 2026-09-20: **0 of 8,284** detections move, because only **3** have ever run `calculateFieldMatchRatio` (ratios 0.3 / 0.2 / 0.2, all below the 0.7 partial threshold) and **0** carry a geopoint on both sides. The moment AC3 takes effect every enumerator pair carries one, so this number is true today and false shortly after deploy | Re-run the §6b.4 queries in the Debug Log once field traffic has accumulated, and **before R-A8 calibrates** — otherwise R-A8 tunes against a ratio distribution that no longer exists. ⚠️ Note when re-reading: the 68 rows with a non-zero `duplicate_score` are NOT from this heuristic; they were written 2026-09-13 by batch-import identity duplication and carry no `maxMatchRatio` | R-A8 (calibration) |
 | **R5** — the new `unexplained` column must read 0 on post-deploy rows | **Medium** — it is the only signal that would distinguish "the requirement is being bypassed" from "coverage is merely low" | ⛔ **OPEN — DISCHARGE-ON-DEPLOY.** §2a counts enumerator submissions carrying NO position AND NO reason. After this story that state should be unreachable through any supported path, so a non-zero count on a post-deploy row is a DEFECT REPORT, not a coverage statistic (A14 — a zero must say which kind of zero it is) | Run §2a and read the last column, filtering to `submitted_at` after the deploy timestamp. Rows from BEFORE the deploy are all unexplained and are not back-fillable — that is the permanent loss this story exists to stop, not a bug to chase | Awwal / ops |
 | **R6** — iOS Safari can still raise an OS permission dialog on top of a completed survey. With no Permissions API there is nothing to ask, so a permission left in the `prompt` state is only discovered by attempting the refresh | **Low** — costs at most one dialog, bounded by the 5 s `SUBMIT_REFRESH_OPTIONS` deadline, and only for someone who DISMISSED the open-time prompt rather than answering it | ⚠️ **OPEN — ACCEPTED, and the alternative is worse.** Returning false on an absent API is the measured defect the pre-flight predicted: AC2 would silently never fire for the 4 trial enumerators on iOS Safari, with a jsdom mock keeping the test green. The trade buys AC2 for those four at the price of a possible second prompt. Opened by adversarial review 2026-09-21 as R11 | Reproduce on a real iOS Safari device: dismiss the open-time prompt without choosing, complete the survey, observe the dialog at submit. **REOPEN TRIGGER:** any field report of a permission dialog at submit, or iOS Safari shipping `navigator.permissions` for geolocation — at which point the existing prompt/denied branch handles it with no code change | Awwal / field |
-| **R7** — `GEOPOINT_REQUIREMENT_EFFECTIVE_FROM` is set to `2026-09-21T00:00:00Z` and the deploy has not happened yet | **Medium** — a fence dated EARLIER than the code ships refuses exactly the queued rows it was written to protect, which is the failure it exists to prevent | ⛔ **OPEN — STILL A PRE-DEPLOY CHECK, AND IT HAS ALREADY FIRED ONCE. ⚠️ THE SLIP HAPPENED: fence moved `2026-09-21T00:00:00Z` → `2026-09-24T00:00:00Z` at adjudication, RULED by Awwal 2026-09-23** (two-part attribution §2al: exposure measured and the move proposed by adjudication; ruling by Awwal). Adjudication opened on the 21st and resumed on the 23rd, by which point the fence sat **~2.5 days in the past** and would have refused every old-client row submitted in that window. ⭐ **The exposure was measured, not assumed:** the offline path IS used — 2 enumerator rows with >5 min sync lag, one over an hour, **max observed lag 22h 35m** — so a row created on the 22nd can still arrive on the 23rd. Live exposure on the day happened to be nil (1 enumerator submission, and it carried GPS), which is luck, not design. **The asymmetry that set the value: too LATE costs nothing (new-client rows carry coordinates anyway), too EARLY refuses field work no operator can recover from a device that is by definition offline — so round FORWARD, never back.** ⛔ **THIS ROW STAYS OPEN: it must be re-confirmed in the future at the moment of the push**, because the same slip can happen again — see **R9** for the structural fix. Opened by adversarial review 2026-09-21 with the R7 fix | One line in `form-submission-validation.service.ts`: confirm the constant is at or before the deploy timestamp and after the last pre-deploy field capture. Verify AFTER deploy by syncing a pre-dated queued row and observing a 201 rather than a 422. ⚠️ **The fence rests on `submittedAt` being CAPTURE time, not sync time — verified at both ends by the review** (`useDraftPersistence` stamps it when the draft completes on the device; `sync-manager` replays `payload.submittedAt` verbatim). ONE narrow gap follows from that read and is recorded rather than engineered around: `sync-manager` falls back to `?? now` for a queue row carrying NO `submittedAt` at all, which would be treated as current and refused. No such row should exist — `completeDraft` has set the field since Story 4.3 — but it is the one shape the fence cannot rescue | Awwal / deploy |
+| **R7** — `GEOPOINT_REQUIREMENT_EFFECTIVE_FROM` is set to `2026-09-21T00:00:00Z` and the deploy has not happened yet | **Medium** — a fence dated EARLIER than the code ships refuses exactly the queued rows it was written to protect, which is the failure it exists to prevent | ⛔ **OPEN — STILL A PRE-DEPLOY CHECK, AND IT HAS ALREADY FIRED ONCE. ⚠️ THE SLIP HAPPENED: fence moved `2026-09-21T00:00:00Z` → `2026-09-24T00:00:00Z` at adjudication, RULED by Awwal 2026-09-23** (two-part attribution §2al: exposure measured and the move proposed by adjudication; ruling by Awwal). Adjudication opened on the 21st and resumed on the 23rd, by which point the fence sat **~2.5 days in the past** and would have refused every old-client row submitted in that window. ⭐ **The exposure was measured, not assumed:** the offline path IS used — 2 enumerator rows with >5 min sync lag, one over an hour, **max observed lag 22h 35m** — so a row created on the 22nd can still arrive on the 23rd. Live exposure on the day happened to be nil (1 enumerator submission, and it carried GPS), which is luck, not design. **The asymmetry that set the value: too LATE costs nothing (new-client rows carry coordinates anyway), too EARLY refuses field work no operator can recover from a device that is by definition offline — so round FORWARD, never back.** ⛔ **THIS ROW STAYS OPEN: it must be re-confirmed in the future at the moment of the push**, because the same slip can happen again — see **R9** for the structural fix. Opened by adversarial review 2026-09-21 with the R7 fix | One line in `form-submission-validation.service.ts`: confirm the constant is at or before the deploy timestamp and after the last pre-deploy field capture. Verify AFTER deploy by syncing a pre-dated queued row and observing a 201 rather than a 422. ⚠️ **The fence rests on `submittedAt` being CAPTURE time, not sync time — verified at both ends by the review** (`useDraftPersistence` stamps it when the draft completes on the device; `sync-manager` replays `payload.submittedAt` verbatim). ONE narrow gap follows from that read and is recorded rather than engineered around: `sync-manager` falls back to `?? now` for a queue row carrying NO `submittedAt` at all, which would be treated as current and refused. No such row should exist — `completeDraft` has set the field since Story 4.3 — but it is the one shape the fence cannot rescue ⭐ **2026-09-23, dev-story: U2's fix materially LOWERS this row's risk and the ruling should know it.** The new `geopointRequirementAware` flag waives the gate for any payload from a client that predates the feature — which is exactly what every row queued before the deploy is. So a fence that has rotted into the past no longer refuses those rows; the flag catches them on a property that cannot go stale (which code produced it) rather than one that rots daily (when it was captured). ⚠️ This does NOT retire R7: a row from a CURRENT client queued offline before the deploy carries the flag and is still judged on its date, which is the case the fence exists for. It narrows the blast radius from "every offline row" to "offline rows from already-updated devices". | Awwal / deploy |
 | **R8** — the R7 fence keys on client-supplied `submittedAt`, so a modified client could backdate a submission to dodge the geopoint requirement | **Low** — that field already drives `submissions.submitted_at`, the off-hours heuristic and the speed-run heuristic, so backdating is a detectable fraud on signals that ALREADY exist; and the fence is a fixed past date that closes on its own as the queue drains | ⚠️ **OPEN — ACCEPTED WITH A NAMED ALTERNATIVE.** Fencing on row-insert time instead cannot distinguish a genuine week-old offline row from a backdated one either, and would refuse the real ones. Recorded so the trade is visible now rather than discovered against someone else later | Count enumerator submissions whose `submitted_at` predates the fence but which ARRIVED after it, and compare against the queue drain observed in week one. A number still growing after the queue is empty is the signal | R-A8 (calibration) |
 | **R9** — ⛔ **A DATE IN SOURCE IS A PROXY FOR "WHEN THIS CODE STARTED RUNNING", AND IT ROTS SILENTLY.** `GEOPOINT_REQUIREMENT_EFFECTIVE_FROM` must be in the future when the code ships; nothing enforces that, and nothing announces it when it stops being true. **It already rotted once inside this story's own adjudication** — written on the 21st, read on the 23rd, 2.5 days stale, and the only reason it was caught is that a human-paced gap happened to fall across it. A faster session would have shipped it | **Medium** — the failure is silent and one-directional: a stale fence REFUSES genuine offline field work, on a device that is by definition not reachable to retry it, and the enumerator sees only a rejected survey. ⛔ The blast radius scales with the very thing this story is for: every enumerator added widens the offline population the fence protects | **OPEN — DATED 2026-10-15** — same date as 13-70's R4/R5/R6/R8 so one conversation closes them together. ⚠️ Until it lands, **R7 is the manual compensation and must be re-run at the moment of every push** | **THE FIX, and it is small:** assert at module load that `GEOPOINT_REQUIREMENT_EFFECTIVE_FROM` is still in the future, and fail loudly — a startup error, or a `logger.error` the ops digest already watches — rather than degrading in silence. ⛔ **Do NOT "fix" it by deriving the fence from process start time**, which is the tempting one-liner: a routine `pm2 restart` weeks later would slide the fence forward and re-exempt every row submitted before the restart, turning a stale fence into a permanently disabled requirement. That is strictly worse and it fails in the same silent direction. ⭐ **The property to pin is not the date, it is that a wrong date CANNOT be quiet** [[pattern-a-clean-result-must-prove-it-measured]]. **Measured on the day:** `grep -rn "EFFECTIVE_FROM" apps/api/src` returns the constant, its one use site, and one test that now DERIVES from it rather than re-typing it (adjudication fixed that too — the test had hardcoded the old value and would have silently inverted its own meaning when the fence moved). **Reopen trigger, independent of the date:** any deploy in which the fence is found already in the past, or any `submission.geopoint_requirement_waived_pre_effective` still firing more than a week after ship | Awwal (adjudication) — rule with 13-70 R4/R5/R6/R8 |
+
+| **R14** — U2's client capability flag (`geopointRequirementAware`) is client-supplied, so a forged or modified client can omit it and be waived | **Low** — identical in kind and size to R8, whose `submittedAt` is spoofable the same way. Neither is a new exposure: a hostile client can already send a fabricated `gpsUnavailableReason`, which this gate accepts by design | ⚠️ **OPEN — a STATED trade, not an oversight.** The gate is a correctness control against a well-behaved client, never a security control against a hostile one. Taking it as the latter would require signing the envelope, which is a different story | The alternative, if a stricter posture is wanted: pin the waiver to a bounded window after the deploy date instead of leaving it open-ended, at the cost of refusing genuinely stale devices once it closes. **REOPEN TRIGGER:** `submission.geopoint_requirement_waived_legacy_client` still firing more than two weeks after deploy — by then every reachable device has updated, and what remains is either a forgery or a device nobody is supporting | Awwal |
 
 ### Change Log
 
@@ -466,6 +478,7 @@ column after it.
 | 2026-09-18 | Story authored via canonical `*create-story` (yolo) from the 2026-09-18 brief, with both of Awwal's rulings carried in as binding (code-enforced requirement; brief the enumerators first). | The GPS gap is the one field-readiness defect whose data loss is PERMANENT — a missing fraud score can be back-scored, a location never captured cannot. |
 | 2026-09-20 | `dev-story` implemented all 8 tasks + Task 6b. Auto-capture on open, submit-time refresh, code-enforced requirement on the enumerator path (client + server), `gps_accuracy` / `gps_unavailable_reason` as columns, the offline path threaded, the coverage surface with its dated prediction, AC12's duplicate-comparison fix, and the briefing flipped last. Status → `review`, UNCOMMITTED. | Seven mutation proofs, both directions where the AC demanded it. The tests caught a real defect of my own — the auto-captured position reached the payload but never the screen, so an enumerator would still have tapped the button this story exists to remove. |
 | 2026-09-21 | Adversarial code review (Claude Opus 5 1M — ⚠️ the SAME model that developed this story, caveat UNDISCHARGED and compensated by verifying every claim through execution). Eight findings, all fixed and each RED-VERIFIED by mutation: **R6** the zod enum never constrained `gps_unavailable_reason` (proven by ingesting an invented value against a real row and reading the column back) — server-owned `_gps*` keys now stripped from `responses` AND the vocabulary validated at the storage boundary; **R7** the requirement applied retroactively, so every queued offline submission would have been permanently rejected on deploy day and the documented "Reopen — nothing is lost" recovery would have stamped the operator's CURRENT location onto an old interview — fixed with an effective-date fence plus `restoredAt`, so a reopened draft never auto-captures; **R8** the "a position wins over a stale reason" guard was on the envelope while the column is fed from `responses`; **R9** the escape hatch cleared itself before an unguarded `await`; **R10** the briefing PDF had TWO mojibake glyphs, not the one R2 records; **R11/R12** two code comments asserting more than the code does; **R13** AC9's round trip pinned at both ends but never crossed. Three new residuals (R6–R8), one proposed closure (R2), no status change. | The two HIGH findings are the same defect class the story exists to police — a guard placed where the data does not have to pass [[pattern-ship-a-fix-that-never-fires]], and a certifying test that passes over the hole it was written to close. R7 is the one that would have been discovered in the field: it converts a permanent-data-loss story into a permanent-data-loss event on its own deploy day, and its "recovery" manufactures false coordinates that AC10's coverage read cannot distinguish from real ones. |
+| 2026-09-23 | `dev-story` review-continuation: all **15** ultra-review findings fixed and mutation-proved. Status `in-progress` → `review`, UNCOMMITTED. | A different-model pass found fifteen defects that three same-model layers had missed. Three of my own new tests then passed over the hole they were written for, and one of those exposed a defect in my own U9 fix — the mutations, not the green suite, are what caught all four. |
 
 ### ⛔ ULTRA REVIEW FINDINGS — 15 defects, ALL VERIFIED BY ADJUDICATION 2026-09-23
 
@@ -524,6 +537,176 @@ web tests pass; coordinates of exactly 0 survive the chain; `roundCoordinate` ha
 correctly does not import `@oslsr/types`; `restoredAt` needs no Dexie bump; `sync-manager` forwards all
 ten payload fields; the other two `validateSubmissionCompleteness` callers pass `excludeGeopoint: true`,
 so no existing path newly 422s; the new columns are additive-nullable.
+
+### ✅ ULTRA REVIEW FIXES — all 15, dev-story 2026-09-23
+
+**Dev: Claude Opus 5 (1M context), BMAD `dev-story` review-continuation.** Every row below is FIXED
+in the working tree and RED-VERIFIED by mutation. ⛔ **No residual is closed here and no ruling is
+signed** (§2al) — two of these fixes embody a design choice that is Awwal's, and they are marked.
+
+| # | fix | mutation proof |
+|---|---|---|
+| **U1** | Auto-capture is gated on `isEnumerator`. The public route (`App.tsx:1435`) mounted the same `mode="fill"` page, so members of the public were silently geolocated and filed with `source='public'` | remove the gate → **2 red** (public + clerk) |
+| **U2** | New envelope flag `geopointRequirementAware`; the gate waives when it is absent. ⚠️ **DECISION — see D5** | `if (false)` → **2 red** |
+| **U3** | `capturePosition` races its own watchdog. `PositionOptions.timeout` does not run while the permission prompt is open, so neither callback ever fired and the awaiting submit hung forever | remove watchdog → **2 red**, one hanging the full 10 s |
+| **U4** | Pending-NIN exit no longer swallows-then-claims-success | folded into U5's helper |
+| **U5** | One `finishSubmission` helper for all three exits; the primary one had no `try/catch` at all | remove the catch → **3 red** |
+| **U6** | `submissionQueue.put` (idempotent) and best-effort cleanup, so R9's retry affordance is honest | `put`→`add` → **3 red** |
+| **U7** | `SERVER_OWNED_RAW_DATA_KEYS` — all **6** server-owned keys stripped from `responses`, not 2 of 5 | revert to 2 keys → **3 red**, exactly the 3 that were missing |
+| **U8** | Re-entrancy guard in `finishSubmission` + the button disables and reads "Saving…" | remove the ref guard → **1 red** |
+| **U9** | Two refs (`done` / `inFlight`), and the in-flight ref is released **in cleanup** | remove the cleanup release → **1 red** |
+| **U10** | `handleBack` clears `gpsBlocked` | remove → **1 red** |
+| **U11** | The worker falls back to the geopoint ANSWER, so a position that satisfied the gate reaches the column | neuter the fallback → **1 red** |
+| **U12** | The answer-branch test uses `postEffectiveBody`; it was waived by R7's fence before reaching the branch it names | delete the branch → **2 red** (was **0**) |
+| **U13** | Every submit path is handed a **snapshot**; a late capture also retires the amber panel | return the live object → **1 red** |
+| **U14** | Same role gate — a non-enumerator never stamps `other` into AC6's column | covered by U1 |
+| **U15** | `onCaptureError` carries the browser's verdict out of `GeopointInput` | remove → **1 red** |
+
+⭐ **FOUR OF MY OWN TESTS WERE PASSING OVER THE HOLE, AND THE MUTATIONS SAID SO.** Recorded because
+the pattern is the story's own recurring defect and the first draft reproduced it four times.
+⚠️ **This line said THREE until the story was read back against the session** — the fourth (the
+`useDraftPersistence` mock, below) was found while DESIGNING its mutation rather than by running
+one, so it never produced a red and was fixed without being counted. A defect caught before it can
+fail is still a defect, and leaving it out understated the tally in the one section whose whole
+subject is tests that prove less than they appear to:
+
+1. **U8** — the test awaited the in-flight state before tapping again, so React had already
+   disabled the button and `fireEvent.click` was a no-op. Deleting the `submitInFlightRef` guard
+   entirely left it GREEN: it pinned the visual affordance, not the authoritative guard. Retargeted
+   to fire the repeat taps in the SAME TICK, which is also what an impatient thumb does.
+2. **U13** — the test drove the ESCAPE-HATCH exit, which spreads its own copy at the call site, so
+   neutering `snapshotAnswers` changed nothing. Retargeted at the PRIMARY exit, the one that
+   actually consumes that function's return.
+3. **U9** — and this one found a **defect in my own fix**. Releasing the in-flight ref only in the
+   `.then` was not enough: an effect re-run *while a capture is in flight* hit the guard and
+   returned, the cleanup cancelled attempt 1, and attempt 1 resolved into a `cancelled` early
+   return — nothing in flight, nothing done, and no further attempt ever. The capture was still
+   lost, exactly as U9 describes. The release moved into the **cleanup**, which runs before the
+   next effect and therefore lets it retry.
+
+4. **The `useDraftPersistence` queue mock** — and this one never went red, because I caught it
+   while writing the U6 mutation rather than by running it. When `completeDraft` moved from
+   `submissionQueue.add` to `.put`, I pointed BOTH at the same mock function so the existing
+   assertions would keep passing. That made the `add`-vs-`put` choice — the entire substance of
+   U6 — invisible to every test in the file: swapping the call back would have changed nothing.
+   They are separate mocks now, and a test asserts `put` was used and `add` was not.
+
+⭐ **SUB-FINDINGS OF MY OWN, beyond what the fifteen rows state.** Each was fixed in the tree and is
+recorded here because it is not derivable from the finding it sits under:
+
+- **U5's failure had nowhere to render at all.** The review's row says the primary exit has no
+  `try/catch`. The other half is that `gps-submit-error` was nested INSIDE the `gpsBlocked` panel,
+  so even once the rejection was caught there was no element to show it on that path — the escape
+  hatch was the only exit that could report a failure. Now a standalone `submit-error-block`.
+- **U11 had to carry accuracy with the coordinates.** Recovering a position from the geopoint
+  ANSWER while still reading accuracy only from the envelope would have produced rows that gain
+  coordinates and lose the accuracy qualifying them — a 2 km network fix indistinguishable from a
+  5 m satellite one, which is the precise thing AC5 exists to prevent.
+- **U11's shape scan must skip `_gpsOpenCapture`.** The open-time capture (AC2) is an object with
+  two finite coordinates and would otherwise be picked up as the submitted position, filing where
+  the interview STARTED for any row whose answer went missing. Pinned by its own test.
+- **U7's strip includes `_referenceCode` even though it was already overwritten downstream.**
+  Equivalent in effect today, deliberate as a boundary: "something further down happens to
+  overwrite it" is exactly the reasoning that left three of the five keys open in the first place.
+- **A test-authoring trap worth writing down (U9).** Forcing the capture effect to re-run by
+  spreading the form (`{...geoForm}`) does NOT work: `geopointQuestion` is a `useMemo` over
+  `form.questions.find(...)`, so the same question object comes back, the dependency is unchanged
+  and the effect never re-runs. The test failed for the wrong reason until the question object
+  itself was replaced.
+- **A stale `useCallback` dependency after the refactor.** Collapsing the exits into
+  `finishSubmission` left `draft` in `handleContinue`'s dependency array where nothing used it;
+  eslint caught it, not me.
+
+⚠️ **AND A CORRECTION TO U9 ITSELF, recorded rather than smoothed over.** Its headline — "auto-capture
+never works in development at all" — did **not** reproduce. The effect is gated on `draftLoaded`,
+which is false during StrictMode's mount → cleanup → mount pair, so both of those runs return before
+touching the guard and the run that does the work is a later update, which StrictMode does not
+double-invoke. A StrictMode test is included and passes **with and without** the fix; it is a
+regression guard, not the proof. U9's *other* half — a background refetch inside the capture window
+— is real, is what the mutation pins, and is what the cleanup release fixes. The fix is kept
+regardless: the ordering that protects this today is incidental, not designed.
+
+### ⚖️ D5 — A DECISION I DO NOT HAVE THE STANDING TO SETTLE (U2)
+
+U2 has no fix that is purely mechanical, so the option taken is recorded as reversible.
+
+**The problem:** R7's date fence protects rows sitting in an offline QUEUE. It does nothing for a
+device still RUNNING the old bundle — `sw.ts` calls `skipWaiting()` only on an explicit message — and
+every interview that device starts today carries a current `submittedAt`, so it is enforced against
+code that cannot auto-capture and renders no escape hatch. `isPermanentFailure` then classifies the
+422 as permanent and parks the row forever. **A whole day of fieldwork per un-updated device.**
+
+| Option | Verdict |
+|---|---|
+| **(a) A client capability flag — TAKEN.** The client sends `geopointRequirementAware: true`; the gate waives when it is absent | One place, testable, no deploy-order dependency, and it is the same shape as the two fences already ratified: a requirement the submitter cannot satisfy is a lockout, not a requirement |
+| (b) Make the 422 retryable | **Does not work, and this is why the fix is server-side.** The queued payload can never satisfy the gate, so retrying it forever just fails more politely |
+| (c) Force a service-worker update before submitting | Cannot be relied on by the code that needs it — a device that is offline is exactly the one that will not have updated |
+| (d) Accept the rejections | This is the finding |
+
+⚠️ **The cost is R14**, and it is the same trade as R8 stated the same way: a forged client can omit
+the flag exactly as it can backdate `submittedAt`. This gate has never been a control against a
+hostile client — one can simply send a fabricated `gpsUnavailableReason`. **If Awwal prefers a
+stricter posture**, the alternative is to pin the waiver to a short window after the deploy date, at
+the price of refusing genuinely stale devices after it closes.
+
+⚠️ **U1's role gate is also a judgement, and a smaller one.** AC7 exempts the clerk from the
+*requirement*; its stated reasoning ("office coordinates filed as field captures would poison the
+base map") is about who is holding the phone, so I applied it to *capture* as well. Capturing for a
+clerk and then not requiring it was the worst of both — the poisoned coordinate without the
+coverage. Reversible in one line if Awwal reads AC7 more narrowly.
+
+### GATES — RE-RUN AFTER THE ULTRA FIXES, 2026-09-23
+
+| Gate | Result |
+|---|---|
+| `tsc --noEmit` — types, api, web | **0 errors** |
+| `eslint` — api `src scripts`, web `src e2e` | **0 errors.** ⚠️ 1 pre-existing WARNING in `auth.activation.test.ts` (unused eslint-disable), introduced by commit `ab31894`; not touched by this story and not mine to close |
+| Drift guards, run **DIRECT** | registry-read **413** · respondent-write **413** · story-residuals **329** — all clean |
+| **API suite** | **331 files / 4,714 tests — 4,706 passed / 8 skipped / 0 failed, exit 0** |
+| **Web suite** | **283 files / 3,192 tests — 3,190 passed / 2 todo / 0 failed, exit 0** |
+
+⚠️ **Free RAM at suite time was 2.9 GB, marginally under the 3 GB floor** the flakiness note asks
+for, with zero stray node processes available to reclaim. Both suites were run serialised with no
+other work in flight and both passed first time; recorded rather than quietly ignored, because the
+floor exists precisely so a green run under it is not taken on trust.
+
+**TEST-COUNT DELTA — every test accounted for.** Against adjudication's figures (API 4,700 / web 3,174):
+
+API **+14**, no new files:
+
+| File | Now | Δ | what was added |
+|---|---|---|---|
+| `controllers/__tests__/form.controller.test.ts` | 62 | **+11** | U7 forged-key `it.each` ×6, U7 envelope-still-works, U11 queued-answer, U2 ×3 |
+| `workers/__tests__/webhook-ingestion.gps-columns.integration.test.ts` | 11 | **+3** | U11 answer-only, envelope-wins, open-capture-is-metadata |
+
+Web **+18**, no new files:
+
+| File | Now | Δ | what was added |
+|---|---|---|---|
+| `features/forms/pages/__tests__/FormFillerPage.geopoint.test.tsx` | 42 | **+13** | U1/U14 ×4, U9 ×2, U10 ×1, U4/U5 ×2, U8 ×2, U13 ×1, U15 ×1 |
+| `features/forms/lib/__tests__/geo-capture.test.ts` | 25 | **+3** | U3 ×3 |
+| `features/forms/hooks/__tests__/useDraftPersistence.test.ts` | 27 | **+2** | U6 ×2 |
+
+**File List — this pass touched 17 files and created NONE.** Reconciled against
+`git status --short`: 15 code/test files plus this story file and `sprint-status.yaml`. (The first
+draft of this line said "9 files" and then listed 15 — corrected against the tree rather than left,
+because an under-declared File List is the exact defect 13-69's adjudication caught.)
+
+| API (5) | Web (10) | Records (2) |
+|---|---|---|
+| `controllers/form.controller.ts` | `pages/FormFillerPage.tsx` | this story file |
+| `services/form-submission-validation.service.ts` | `lib/geo-capture.ts` | `sprint-status.yaml` |
+| `workers/webhook-ingestion.worker.ts` | `hooks/useDraftPersistence.ts` | |
+| `controllers/__tests__/form.controller.test.ts` | `services/sync-manager.ts` | |
+| `workers/__tests__/webhook-ingestion.gps-columns.integration.test.ts` | `api/submission.api.ts` | |
+| | `components/QuestionRenderer.tsx` | |
+| | `components/GeopointInput.tsx` | |
+| | `lib/__tests__/geo-capture.test.ts` | |
+| | `hooks/__tests__/useDraftPersistence.test.ts` | |
+| | `pages/__tests__/FormFillerPage.geopoint.test.tsx` | |
+
+⛔ No XLSForm, no `test-fixtures/`, no `docs/launch-campaign/`, no `fraud-thresholds.seed.ts`,
+no new files, no Dexie version bump.
 
 ### Review Follow-ups (AI)
 

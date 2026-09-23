@@ -532,9 +532,23 @@ describe('FormController', () => {
      * tests on a schedule. One hour past the constant is always after it, whatever
      * the constant becomes.
      */
+    /*
+     * ⛔ ULTRA REVIEW U2 — AND IT MUST LOOK LIKE A CURRENT CLIENT, NOT JUST A CURRENT DATE.
+     *
+     * The gate now waives for a payload with no `geopointRequirementAware` marker,
+     * because a bundle that predates this feature cannot capture a position or file
+     * a reason, and `isPermanentFailure` turns its 422 into a permanently parked
+     * row — a whole day of fieldwork lost per un-updated device.
+     *
+     * ⭐ Adding the flag here went RED on exactly the two refusal cases, which is
+     * the proof the waiver is load-bearing rather than decorative: without it,
+     * every "is refused" assertion in this block would have been passing because
+     * the submission was WAIVED, not because it was judged.
+     */
     const postEffectiveBody = {
       ...validBody,
       submittedAt: new Date(GEOPOINT_REQUIREMENT_EFFECTIVE_FROM.getTime() + 60 * 60 * 1000).toISOString(),
+      geopointRequirementAware: true,
     };
 
     /** The AppError handed to `next()`, or null when the submission was accepted. */
@@ -578,12 +592,24 @@ describe('FormController', () => {
       );
     });
 
+    /*
+     * ⛔ ULTRA REVIEW U12 — THIS TEST WAS WAIVED BEFORE IT REACHED THE BRANCH IT NAMES.
+     *
+     * It spread `...validBody`, whose `submittedAt` is 2026-02-13 — PRE-EFFECTIVE,
+     * so R7's date fence returned before `isAnsweredGeopoint` was ever consulted.
+     * Deleting the answer branch entirely left the suite green: the only test of
+     * that branch proved nothing about it. [[pattern-test-that-passes-over-a-hole]]
+     *
+     * The file already defines `postEffectiveBody` for exactly this reason, and a
+     * comment above it explains why `validBody` cannot be used here. The fence
+     * opened a hole underneath a test that was correct when it was written.
+     */
     it('13-71 AC3: the geopoint ANSWER satisfies the gate with no envelope coordinates', async () => {
       vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
       mockReq.body = {
-        ...validBody,
+        ...postEffectiveBody,
         responses: {
-          ...validBody.responses,
+          ...postEffectiveBody.responses,
           site_location: { latitude: 7.1, longitude: 3.1, accuracy: 9 },
         },
       };
@@ -594,6 +620,136 @@ describe('FormController', () => {
 
       expect(refusal()).toBeNull();
       expect(statusMock).toHaveBeenCalledWith(201);
+    });
+
+    /**
+     * ULTRA REVIEW U11 — and the position that satisfied the gate must REACH THE COLUMN.
+     *
+     * The gate accepting an answer-only position while the write path read only the
+     * envelope is what produced a row that passed the requirement and then landed
+     * with NULL coordinates and NULL reason. Asserting acceptance alone cannot see
+     * that; this pins the rawData the worker will actually read.
+     */
+    it('13-71 U11: an answer-only position is queued so the worker can still find it', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = {
+        ...postEffectiveBody,
+        responses: {
+          ...postEffectiveBody.responses,
+          site_location: { latitude: 7.1, longitude: 3.1, accuracy: 9 },
+        },
+      };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      const queued = vi.mocked(queueSubmissionForIngestion).mock.calls[0][0] as {
+        rawData: Record<string, unknown>;
+      };
+      expect(queued.rawData.site_location).toEqual({ latitude: 7.1, longitude: 3.1, accuracy: 9 });
+    });
+
+    /**
+     * ⛔ ULTRA REVIEW U7 — FORGED COORDINATES AND A FORGED COMPLETION TIME.
+     *
+     * `responses` is `z.record(z.unknown())`, so zod never inspects it. R6 stripped
+     * two server-owned keys and left three: a client that OMITS the envelope field
+     * and puts `_gpsLatitude` in the ANSWERS wrote it straight into `rawData` and
+     * on into the column — forged positions in the base map, and a forged
+     * `_completionTimeSeconds` that neutralises the speed-run heuristic.
+     */
+    it.each([
+      ['_gpsLatitude', 9.999],
+      ['_gpsLongitude', 9.999],
+      ['_completionTimeSeconds', 1],
+      ['_gpsAccuracy', 1],
+      ['_gpsUnavailableReason', 'i-invented-this'],
+      ['_referenceCode', 'OSL-9999-FORGED'],
+    ])('13-71 U7: a client-supplied %s in the ANSWERS never reaches rawData', async (key, value) => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(permissiveFlattened as never);
+      mockReq.body = {
+        ...postEffectiveBody,
+        responses: { ...postEffectiveBody.responses, [key]: value },
+      };
+      mockReq.user = { sub: 'user-123', role: 'data_entry_clerk' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      const queued = vi.mocked(queueSubmissionForIngestion).mock.calls[0][0] as {
+        rawData: Record<string, unknown>;
+      };
+      expect(queued.rawData[key]).not.toBe(value);
+    });
+
+    it('13-71 U7: a legitimate ENVELOPE value still reaches rawData', async () => {
+      // The strip must not also remove what the validated path puts there.
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(permissiveFlattened as never);
+      mockReq.body = {
+        ...postEffectiveBody,
+        gpsLatitude: 7.3775,
+        gpsLongitude: 3.947,
+        completionTimeSeconds: 240,
+      };
+      mockReq.user = { sub: 'user-123', role: 'data_entry_clerk' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      const queued = vi.mocked(queueSubmissionForIngestion).mock.calls[0][0] as {
+        rawData: Record<string, unknown>;
+      };
+      expect(queued.rawData._gpsLatitude).toBe(7.3775);
+      expect(queued.rawData._completionTimeSeconds).toBe(240);
+    });
+
+    /**
+     * ⛔ ULTRA REVIEW U2 — THE STALE-BUNDLE CASE.
+     *
+     * `sw.ts` calls `skipWaiting()` only on an explicit message, so a device can go
+     * on serving the previous build indefinitely. Every interview it starts TODAY
+     * carries a current `submittedAt` — past R7's date fence, therefore enforced —
+     * while having no auto-capture and no escape hatch. The 422 is then classified
+     * PERMANENT by `sync-manager`, so the row is parked and never retried.
+     * Retrying cannot help: that payload can never satisfy the gate.
+     */
+    it('13-71 U2: a LEGACY client (no capability marker) is WAIVED, not permanently refused', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      // A current date, an enumerator, a geopoint form, and NO position — the exact
+      // shape that is refused above. The only difference is the missing marker.
+      const { geopointRequirementAware: _omitted, ...legacyBody } = postEffectiveBody;
+      mockReq.body = legacyBody;
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+      expect(statusMock).toHaveBeenCalledWith(201);
+    });
+
+    it('13-71 U2: an explicit `false` is treated as a legacy client too', async () => {
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = { ...postEffectiveBody, geopointRequirementAware: false };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+      vi.mocked(queueSubmissionForIngestion).mockResolvedValue('job-abc');
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()).toBeNull();
+    });
+
+    it('13-71 U2: the marker does NOT excuse a current client — it still must comply', async () => {
+      // ⭐ The waiver must not become an off switch. A build that declares itself
+      // capable is held to the requirement.
+      vi.mocked(NativeFormService.flattenForRender).mockReturnValue(geopointFlattened as never);
+      mockReq.body = { ...postEffectiveBody, geopointRequirementAware: true };
+      mockReq.user = { sub: 'user-123', role: 'enumerator' };
+
+      await FormController.submitForm(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(refusal()?.code).toBe('INCOMPLETE_SUBMISSION');
     });
 
     it('13-71 AC4: an ENUMERATOR with a derived REASON and no coordinates is accepted', async () => {

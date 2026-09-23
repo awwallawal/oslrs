@@ -1,3 +1,4 @@
+import type { GpsUnavailableReason } from '@oslsr/types';
 import type { FlattenedQuestion } from '../api/form.api';
 import { TextQuestionInput } from './TextQuestionInput';
 import { EmailQuestionInput } from './EmailQuestionInput';
@@ -29,6 +30,15 @@ export interface QuestionRendererProps {
   onChange: (value: unknown) => void;
   error?: string;
   disabled?: boolean;
+  /**
+   * Story 13-71 (ultra review U15) — a capture ATTEMPT failed, and why.
+   *
+   * Only `GeopointInput` raises it. `onChange` fires on success alone, so before
+   * this the page could not tell a tapped-and-refused button from an untouched
+   * one — which is the precise distinction AC4's derived vocabulary exists to
+   * preserve, lost at the last hop.
+   */
+  onCaptureError?: (reason: GpsUnavailableReason) => void;
 }
 
 export function QuestionRenderer({
@@ -37,8 +47,9 @@ export function QuestionRenderer({
   onChange,
   error,
   disabled,
+  onCaptureError,
 }: QuestionRendererProps) {
-  const props = { question, value, onChange, error, disabled };
+  const props = { question, value, onChange, error, disabled, onCaptureError };
 
   // Story 13-51 (AC3.1) — an email carrier question gets the typo suggestion the public wizard
   // has had since 9-12. Detected BY NAME because the published form schemas have no `email`

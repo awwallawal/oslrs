@@ -52,6 +52,47 @@ interface IngestionResult {
 }
 
 /**
+ * Story 13-71 (ultra review U11) — find a geopoint ANSWER inside a raw payload.
+ *
+ * `GeopointInput` writes `{ latitude, longitude, accuracy }` under the form's own
+ * question name, which the worker does not know (it has no schema here). A
+ * geopoint is the only answer shape that is an object carrying two finite numeric
+ * coordinates, so it is found by SHAPE — the same reasoning, and the same
+ * predicate, as `findCapturedPosition` on the client.
+ *
+ * ⛔ Metadata keys are skipped. `_gpsOpenCapture` holds where the interview STARTED
+ * (AC2) and must never be mistaken for the submitted position; picking it up here
+ * would file the wrong coordinate for any submission whose answer went missing.
+ */
+export function findGeopointAnswer(
+  rawData: Record<string, unknown> | null | undefined,
+): { latitude: number; longitude: number; accuracy: number | null } | null {
+  if (!rawData || typeof rawData !== 'object') return null;
+
+  for (const [key, value] of Object.entries(rawData)) {
+    if (key.startsWith('_')) continue;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+
+    const { latitude, longitude, accuracy } = value as Record<string, unknown>;
+    if (
+      typeof latitude === 'number' && Number.isFinite(latitude) &&
+      typeof longitude === 'number' && Number.isFinite(longitude)
+    ) {
+      return {
+        latitude,
+        longitude,
+        accuracy:
+          typeof accuracy === 'number' && Number.isFinite(accuracy) && accuracy >= 0
+            ? accuracy
+            : null,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Process a single submission job
  */
 async function processSubmissionJob(job: Job<WebhookIngestionJobData>): Promise<IngestionResult> {
@@ -111,15 +152,40 @@ async function processSubmissionJob(job: Job<WebhookIngestionJobData>): Promise<
   // Create new submission record
   const submissionId = uuidv7();
 
-  // Extract GPS coordinates from rawData (controller stores as _gpsLatitude/_gpsLongitude)
-  const gpsLatitude = rawData?._gpsLatitude != null ? Number(rawData._gpsLatitude) : null;
-  const gpsLongitude = rawData?._gpsLongitude != null ? Number(rawData._gpsLongitude) : null;
+  /*
+   * Extract GPS coordinates from rawData (controller stores as _gpsLatitude/_gpsLongitude).
+   *
+   * ⛔ ULTRA REVIEW U11 — THE GATE AND THIS WRITE DISAGREED ABOUT WHERE A POSITION LIVES.
+   *
+   * `assertGeopointCaptured` accepts a submission whose position is in the geopoint
+   * ANSWER (`responses[name] = {latitude, longitude, accuracy}`) — and nothing on
+   * this path read that answer. So such a submission PASSED the requirement and
+   * then landed with NULL coordinates AND NULL reason: straight into R5's
+   * `unexplained` bucket, which is defined as the state the requirement makes
+   * unreachable. The gate was reporting coverage the column could not show.
+   *
+   * ⭐ FIXED TOWARDS KEEPING THE DATA, not towards refusing it. The alternative was
+   * to narrow the gate to envelope-only, which would 422 a submission whose
+   * position we can plainly see. A position that satisfied the requirement must
+   * reach the column that proves it did.
+   *
+   * The envelope still WINS when present — it is the validated path, and the
+   * shipped client always sends it. This is a fallback for a payload built
+   * elsewhere: 13-72's back-scoring re-enqueue composes `rawData` itself and never
+   * passes through the controller at all.
+   */
+  const answerPosition = findGeopointAnswer(rawData);
+  const gpsLatitude =
+    rawData?._gpsLatitude != null ? Number(rawData._gpsLatitude) : answerPosition?.latitude ?? null;
+  const gpsLongitude =
+    rawData?._gpsLongitude != null ? Number(rawData._gpsLongitude) : answerPosition?.longitude ?? null;
   // Story 4.3: Extract completion time for speed-run fraud detection
   const completionTimeSeconds = rawData?._completionTimeSeconds != null ? Number(rawData._completionTimeSeconds) : null;
   // Story 13-71 AC5/AC6: accuracy (metres) and the derived unavailable-reason.
   // Same `Number(...)` + isNaN shape as the coordinates above — a non-numeric
   // accuracy must land as NULL, not as NaN in a double precision column.
-  const gpsAccuracy = rawData?._gpsAccuracy != null ? Number(rawData._gpsAccuracy) : null;
+  const gpsAccuracy =
+    rawData?._gpsAccuracy != null ? Number(rawData._gpsAccuracy) : answerPosition?.accuracy ?? null;
   /*
    * ⛔ ADVERSARIAL REVIEW R6 — THIS WAS A PASS-THROUGH, AND THE COMMENT JUSTIFYING
    * IT WAS WRONG.

@@ -268,6 +268,54 @@ describe('13-71 AC5/AC6 — gps_accuracy and gps_unavailable_reason are COLUMNS'
     expect(row.gps_accuracy).toBeNull();
   });
 
+  /**
+   * ⛔ ULTRA REVIEW U11 — THE GATE AND THIS WRITE DISAGREED ABOUT WHERE A POSITION LIVES.
+   *
+   * `assertGeopointCaptured` accepts a submission whose position is in the geopoint
+   * ANSWER, and nothing here read that answer. Such a row PASSED the requirement
+   * and then landed with NULL coordinates AND NULL reason — straight into R5's
+   * `unexplained` bucket, which is defined as the state the requirement makes
+   * unreachable. The gate was reporting coverage the column could not show.
+   */
+  it('U11: a position living only in the ANSWER still reaches the columns', async () => {
+    const uid = `${TAG}-answeronly`;
+    await ingest(uid, {
+      gender: 'female',
+      // No `_gpsLatitude` envelope key at all — only the geopoint answer.
+      site_location: { latitude: 7.2, longitude: 3.8, accuracy: 6 },
+    });
+
+    const row = await storedRow(uid);
+    expect(row.gps_latitude).toBe(7.2);
+    expect(row.gps_longitude).toBe(3.8);
+    expect(row.gps_accuracy).toBe(6);
+    expect(row.gps_unavailable_reason).toBeNull();
+  });
+
+  it('U11: the validated ENVELOPE still wins over an answer', async () => {
+    const uid = `${TAG}-envelopewins`;
+    await ingest(uid, {
+      _gpsLatitude: 1.5,
+      _gpsLongitude: 2.5,
+      site_location: { latitude: 9.9, longitude: 9.9, accuracy: 1 },
+    });
+
+    const row = await storedRow(uid);
+    expect(row.gps_latitude).toBe(1.5);
+    expect(row.gps_longitude).toBe(2.5);
+  });
+
+  it('U11: the OPEN-TIME capture is metadata and is never read as the position', async () => {
+    // `_gpsOpenCapture` records where the interview STARTED (AC2). Treating it as
+    // the submitted position would file the wrong coordinate for every row whose
+    // answer went missing.
+    const uid = `${TAG}-opencapture`;
+    await ingest(uid, { _gpsOpenCapture: { latitude: 5.5, longitude: 5.5, accuracy: 2 } });
+
+    const row = await storedRow(uid);
+    expect(row.gps_latitude).toBeNull();
+  });
+
   it('a legacy payload with neither key stores NULL in both — nothing is invented', async () => {
     const uid = `${TAG}-legacy`;
     await ingest(uid, { gender: 'female' });

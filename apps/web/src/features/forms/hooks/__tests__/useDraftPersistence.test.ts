@@ -9,6 +9,7 @@ const {
   mockDraftsUpdate,
   mockDraftsAdd,
   mockDraftsDelete,
+  mockSubmissionQueuePut,
   mockSubmissionQueueAdd,
   mockUseAuth,
 } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const {
   mockDraftsUpdate: vi.fn(),
   mockDraftsAdd: vi.fn(),
   mockDraftsDelete: vi.fn(),
+  mockSubmissionQueuePut: vi.fn(),
   mockSubmissionQueueAdd: vi.fn(),
   mockUseAuth: vi.fn(),
 }));
@@ -33,6 +35,12 @@ vi.mock('../../../../lib/offline-db', () => ({
       delete: mockDraftsDelete,
     },
     submissionQueue: {
+      // U6 — completeDraft uses put(), which is idempotent: a retry after a failed
+      // cleanup must OVERWRITE the queue row rather than collide on its primary key
+      // and strand the enumerator in a loop that re-registers a real person.
+      // ⛔ `add` is a SEPARATE mock on purpose. Pointing both at one function made
+      // the choice between them invisible to every assertion in this file.
+      put: mockSubmissionQueuePut,
       add: mockSubmissionQueueAdd,
     },
   },
@@ -60,6 +68,7 @@ describe('useDraftPersistence', () => {
     mockDraftsUpdate.mockResolvedValue(undefined);
     mockDraftsAdd.mockResolvedValue(undefined);
     mockDraftsDelete.mockResolvedValue(undefined);
+    mockSubmissionQueuePut.mockResolvedValue(undefined);
     mockSubmissionQueueAdd.mockResolvedValue(undefined);
   });
 
@@ -184,7 +193,7 @@ describe('useDraftPersistence', () => {
       updatedAt: expect.any(String),
     });
 
-    expect(mockSubmissionQueueAdd).toHaveBeenCalledWith(
+    expect(mockSubmissionQueuePut).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'existing-draft-id',
         formId: 'form-1',
@@ -225,7 +234,7 @@ describe('useDraftPersistence', () => {
       await result.current.completeDraft();
     });
 
-    expect(mockSubmissionQueueAdd).toHaveBeenCalledWith(
+    expect(mockSubmissionQueuePut).toHaveBeenCalledWith(
       expect.objectContaining({
         payload: expect.objectContaining({
           responses: { q1: 'answer', gps_location: { latitude: 7.3775, longitude: 3.947, accuracy: 15 } },
@@ -265,7 +274,7 @@ describe('useDraftPersistence', () => {
       await result.current.completeDraft();
     });
 
-    expect(mockSubmissionQueueAdd).toHaveBeenCalledWith(
+    expect(mockSubmissionQueuePut).toHaveBeenCalledWith(
       expect.objectContaining({
         payload: expect.objectContaining({
           gpsLatitude: 7.3775,
@@ -302,7 +311,7 @@ describe('useDraftPersistence', () => {
       await result.current.completeDraft();
     });
 
-    const addedItem = mockSubmissionQueueAdd.mock.calls[0][0];
+    const addedItem = mockSubmissionQueuePut.mock.calls[0][0];
     expect(addedItem.payload).not.toHaveProperty('gpsLatitude');
     expect(addedItem.payload).not.toHaveProperty('gpsLongitude');
   });
@@ -341,7 +350,7 @@ describe('useDraftPersistence', () => {
       await result.current.completeDraft(opts.override);
     });
 
-    return (mockSubmissionQueueAdd.mock.calls.at(-1)?.[0] as { payload: Record<string, unknown> }).payload;
+    return (mockSubmissionQueuePut.mock.calls.at(-1)?.[0] as { payload: Record<string, unknown> }).payload;
   }
 
   it('13-71 AC5: accuracy reaches the payload — GeopointInput captured it all along', async () => {
@@ -471,9 +480,50 @@ describe('useDraftPersistence', () => {
     expect(payload).not.toHaveProperty('gpsAccuracy');
   });
 
+  /**
+   * ⛔ ULTRA REVIEW U6 — THE RETRY THE UI OFFERS HAS TO BE SAFE TO TAKE.
+   *
+   * R9 gave the escape hatch a retry affordance ("the survey has not been
+   * submitted yet") on the assumption that a failed `completeDraft` left nothing
+   * behind. `submissionQueue.add` was the FIRST write and the `drafts.update`
+   * after it was unguarded — so a rejection there left the queue row COMMITTED
+   * while the UI said nothing had been submitted. Every retry then died on a
+   * duplicate primary key, the enumerator re-entered the interview, and a real
+   * citizen was registered twice.
+   */
+  it('13-71 U6: uses put(), not add(), so a retry overwrites instead of colliding', async () => {
+    await payloadFor({ q1: 'a' });
+    expect(mockSubmissionQueuePut).toHaveBeenCalledTimes(1);
+    expect(mockSubmissionQueueAdd).not.toHaveBeenCalled();
+  });
+
+  it('13-71 U6: a failure to TIDY the draft is not reported as a failure to submit', async () => {
+    // Once the submission is queued the interview is safe. Surfacing a cleanup
+    // error as a submit error is what sent the enumerator round the loop.
+    mockDraftsUpdate.mockRejectedValue(new Error('QuotaExceededError'));
+
+    mockDraftsFirst.mockResolvedValue({
+      id: 'draft-u6', formId: 'form-1', responses: { q1: 'a' },
+      questionPosition: 0, status: 'in-progress',
+    });
+    const { result } = renderHook(() =>
+      useDraftPersistence({
+        formId: 'form-1', formVersion: '2.0.0', formData: { q1: 'a' },
+        currentIndex: 1, enabled: true,
+      }),
+    );
+    await waitFor(() => expect(result.current.resumeData).not.toBeNull());
+
+    // Must RESOLVE: the queue write succeeded, which is the part that matters.
+    await act(async () => {
+      await expect(result.current.completeDraft()).resolves.toBeUndefined();
+    });
+    expect(mockSubmissionQueuePut).toHaveBeenCalled();
+  });
+
   it('completeDraft() queues submission BEFORE deleting draft (correct order)', async () => {
     const callOrder: string[] = [];
-    mockSubmissionQueueAdd.mockImplementation(async () => { callOrder.push('queue-add'); });
+    mockSubmissionQueuePut.mockImplementation(async () => { callOrder.push('queue-add'); });
     mockDraftsDelete.mockImplementation(async () => { callOrder.push('draft-delete'); });
 
     mockDraftsFirst.mockResolvedValue({
@@ -503,7 +553,7 @@ describe('useDraftPersistence', () => {
     });
 
     // Verify both called
-    expect(mockSubmissionQueueAdd).toHaveBeenCalled();
+    expect(mockSubmissionQueuePut).toHaveBeenCalled();
     expect(mockDraftsDelete).toHaveBeenCalledWith('existing-draft-id');
     // Verify order: queue add must happen before draft delete
     expect(callOrder).toEqual(['queue-add', 'draft-delete']);
@@ -615,7 +665,7 @@ describe('useDraftPersistence', () => {
       await result.current.completeDraft();
     });
 
-    expect(mockSubmissionQueueAdd).toHaveBeenCalledWith(
+    expect(mockSubmissionQueuePut).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'test-user-A' })
     );
   });
@@ -664,7 +714,7 @@ describe('useDraftPersistence', () => {
     // Draft should be created first
     expect(mockDraftsAdd).toHaveBeenCalled();
     // Then queued
-    expect(mockSubmissionQueueAdd).toHaveBeenCalled();
+    expect(mockSubmissionQueuePut).toHaveBeenCalled();
     // Then deleted
     expect(mockDraftsDelete).toHaveBeenCalledWith('mock-uuid-v7');
   });

@@ -49,6 +49,16 @@ export const SUBMIT_REFRESH_OPTIONS: PositionOptions = {
   maximumAge: 60000,
 };
 
+/**
+ * Story 13-71 (ultra review U3) — how long past the browser's own deadline we wait
+ * before declaring the platform silent.
+ *
+ * Generous on purpose: the goal is to bound the wait, never to pre-empt a browser
+ * that is about to answer. A real `getCurrentPosition` that honours its `timeout`
+ * always reports first and reports better, because it knows WHY.
+ */
+const WATCHDOG_GRACE_MS = 5000;
+
 /** Is this value a real captured position, as opposed to an empty answer? */
 export function isCapturedPosition(value: unknown): value is CapturedPosition {
   if (!value || typeof value !== 'object') return false;
@@ -80,11 +90,40 @@ export function capturePosition(
     }
 
     let settled = false;
+    // A holder rather than a `let`: the watchdog callback closes over `settle`, and
+    // `settle` must be able to clear the watchdog, so neither can be declared after
+    // the other. A const array breaks the cycle without a forward `let`.
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
     const settle = (result: CaptureResult) => {
       if (settled) return;
       settled = true;
+      for (const timer of timers) clearTimeout(timer);
       resolve(result);
     };
+
+    /*
+     * ⛔ ULTRA REVIEW U3 — A WATCHDOG, BECAUSE `PositionOptions.timeout` IS NOT ONE.
+     *
+     * This promise had no timer of its own. `PositionOptions.timeout` looks like a
+     * deadline and is not: per the W3C Geolocation spec it starts only once the
+     * user has ANSWERED the permission prompt, and the clock does not run while
+     * that dialog is open. A prompt left sitting — the phone put in a pocket
+     * mid-interview, the dialog behind another app — means neither callback ever
+     * fires, and this promise never settles.
+     *
+     * ⭐ THAT IS NOT A HANGING PROMISE, IT IS A LOST INTERVIEW. The submit path
+     * awaits `refreshPositionForSubmit`, which awaits this. The enumerator taps
+     * "Complete Survey" and NOTHING HAPPENS — no completion screen, no error, no
+     * escape hatch, and the answers still only in memory.
+     *
+     * The watchdog is deliberately longer than the browser's own deadline, so a
+     * browser that does honour `timeout` still reports its own richer reason
+     * (`timeout` vs `permission_denied`) and this only fires when the platform has
+     * genuinely gone silent. `settle` was already idempotent, so racing it is safe
+     * and a late browser callback after the watchdog is simply ignored.
+     */
+    const budget = (options.timeout ?? OPEN_CAPTURE_OPTIONS.timeout ?? 10000) + WATCHDOG_GRACE_MS;
+    timers.push(setTimeout(() => settle({ ok: false, reason: 'timeout' }), budget));
 
     try {
       navigator.geolocation.getCurrentPosition(

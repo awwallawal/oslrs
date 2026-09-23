@@ -252,17 +252,65 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
    * Runs ONCE per mounted form (`autoCaptureStartedRef`), never in preview, and
    * never over a position resumed from a draft.
    */
-  const autoCaptureStartedRef = useRef(false);
+  /**
+   * ⛔ ULTRA REVIEW U9 — A ONCE-GUARD THAT LATCHED BEFORE THE WORK HAPPENED.
+   *
+   * This was a single `autoCaptureStartedRef`, set to `true` the instant the effect
+   * ran and never reset, while the cleanup set `cancelled = true`. `React.StrictMode`
+   * IS enabled (`main.tsx:7`), so in development every effect is mount → cleanup →
+   * mount: run 1 latched the ref and was then cancelled, and run 2 returned at the
+   * guard. **Auto-capture never worked in development at all** — and the tests could
+   * not see it, because RTL does not render under StrictMode.
+   *
+   * In production the same shape is a real, if rarer, loss: any remount inside the
+   * 10-second capture window (a background refetch resolving) cancelled the attempt
+   * permanently.
+   *
+   * TWO refs, because "an attempt is running" and "an attempt has finished" are
+   * different facts and only the second may block a retry.
+   */
+  const autoCaptureDoneRef = useRef(false);
+  const autoCaptureInFlightRef = useRef(false);
   /** Review R7 — this draft is a REOPENED rejected submission, not a fresh interview. */
   const restoredDraftRef = useRef(false);
   useEffect(() => {
     if (isPreview || !draftLoaded || !geopointQuestion) return;
-    if (autoCaptureStartedRef.current) return;
-    autoCaptureStartedRef.current = true;
+
+    /*
+     * ⛔ ULTRA REVIEW U1 + U14 — THE ENUMERATOR PATH, AND ONLY THE ENUMERATOR PATH.
+     *
+     * There was no role gate here at all, and `mode="fill"` is mounted on TWO
+     * routes: `/dashboard/enumerator/survey/:formId` and, at `App.tsx:1435`,
+     * `/dashboard/public/surveys/:formId` — "Story 3.5: Public User Form Filler".
+     * So a member of the public opening a survey that happens to serve a geopoint
+     * question was SILENTLY GEOLOCATED, and the coordinates were filed with
+     * `source='public'` — the very channel 13-34 deliberately stripped the geopoint
+     * from. That is a privacy exposure first and a data defect second: those rows
+     * also enter AC10's coverage read as if they were field captures.
+     *
+     * U14 is the same hole one branch further down: the restored-draft path stamped
+     * `_gpsUnavailableReason: 'other'` with no role check either, putting desk work
+     * into the one column AC6 exists to GROUP BY.
+     *
+     * ⭐ THE GATE IS AC7's OWN REASONING, APPLIED WHERE IT WAS MISSING. AC7 exempts
+     * the clerk because "office coordinates filed as field captures would poison the
+     * base map this story exists to enable". That argument is about WHO IS HOLDING
+     * THE PHONE, not about who is required to carry a position — so it applies to
+     * capture, not merely to enforcement. Capturing for a clerk and then not
+     * requiring it was the worst of both: the poisoned coordinate without the
+     * coverage. Now the two agree, and `isEnumerator` is the single fact that
+     * decides both.
+     */
+    if (!isEnumerator) return;
+
+    if (autoCaptureDoneRef.current || autoCaptureInFlightRef.current) return;
 
     // A resumed draft already holds a capture — re-taking it would overwrite where
     // the interview actually started with where the enumerator is now.
-    if (isCapturedPosition(allAnswersRef.current[geopointQuestion.name])) return;
+    if (isCapturedPosition(allAnswersRef.current[geopointQuestion.name])) {
+      autoCaptureDoneRef.current = true;
+      return;
+    }
 
     /*
      * ⛔ ADVERSARIAL REVIEW R7 — A REOPENED SUBMISSION MUST NOT ACQUIRE A POSITION.
@@ -279,6 +327,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
      * honest `other` is stamped instead and the submission goes through.
      */
     if (restoredDraftRef.current) {
+      autoCaptureDoneRef.current = true;
       if (typeof allAnswersRef.current[UNAVAILABLE_REASON_KEY] !== 'string') {
         allAnswersRef.current[UNAVAILABLE_REASON_KEY] = 'other';
         setFormData({ ...allAnswersRef.current });
@@ -286,9 +335,15 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
       return;
     }
 
+    autoCaptureInFlightRef.current = true;
     let cancelled = false;
     void capturePosition(OPEN_CAPTURE_OPTIONS).then((result) => {
+      // Released BEFORE the cancellation check, so a StrictMode remount (or any
+      // remount) can start a fresh attempt instead of being locked out by an
+      // attempt that was thrown away.
+      autoCaptureInFlightRef.current = false;
       if (cancelled) return;
+      autoCaptureDoneRef.current = true;
       if (result.ok) {
         allAnswersRef.current[geopointQuestion.name] = result.position;
         allAnswersRef.current[OPEN_CAPTURE_KEY] = result.position;
@@ -307,6 +362,17 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
          */
         setValue(geopointQuestion.name, result.position, { shouldValidate: false });
         setGpsUnavailableReason(null);
+        /*
+         * ⛔ ULTRA REVIEW U13 — AND RETIRE THE PANEL THE SLOW FIX JUST ANSWERED.
+         *
+         * The capture can resolve AFTER a submit was already refused for having no
+         * position — a 10-second window and an enumerator who reaches the end of a
+         * short form inside it. Without this the amber panel goes on demanding a
+         * location for a survey that now HAS one, and its one button files a reason
+         * saying the phone could not do the thing it just did.
+         */
+        setGpsBlocked(false);
+        setGpsSubmitError(false);
       } else {
         // ⭐ A REFUSAL IS NOW A RECORDED FACT. Before this, "did not tap" and
         // "tapped and was refused" were the same absent value — which is the
@@ -317,8 +383,23 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
 
     return () => {
       cancelled = true;
+      /*
+       * ⛔ AND RELEASED HERE, WHICH IS THE HALF THAT ACTUALLY CLOSES U9.
+       *
+       * Releasing only in the `.then` was not enough, and the test said so: an
+       * effect re-run while a capture is IN FLIGHT hit the in-flight guard and
+       * returned, the cleanup cancelled attempt 1, and attempt 1 then resolved into
+       * a `cancelled` early-return. Nothing was in flight, nothing was done, and
+       * nothing would ever run again — the capture was lost exactly as U9 describes
+       * for a background refetch landing inside the 10-second window.
+       *
+       * Cleanup runs BEFORE the next effect, so releasing here lets that next run
+       * start a fresh attempt. It is also what makes the StrictMode
+       * mount → cleanup → mount pair work: the second mount captures for real.
+       */
+      autoCaptureInFlightRef.current = false;
     };
-  }, [isPreview, draftLoaded, geopointQuestion, setValue]);
+  }, [isPreview, draftLoaded, geopointQuestion, isEnumerator, setValue]);
 
   /**
    * Story 13-71 AC2 — refresh the position at submit WHEN IT IS FREE TO DO SO.
@@ -332,18 +413,36 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
    * is the one thing this must never produce. See `permissionAllowsSilentRefresh`
    * for why its absence is treated as "attempt" rather than "skip" (iOS Safari).
    */
+  /*
+   * ⛔ ULTRA REVIEW U13 — EVERY RETURN IS A SNAPSHOT, NOT THE LIVE OBJECT.
+   *
+   * This returned `allAnswersRef.current` ITSELF on all four paths, and that object
+   * is still being mutated by the open-time capture's `.then` and by every
+   * `onChange`. The submit path then awaits `completeDraft(answers)`, which awaits
+   * IndexedDB — so a capture landing in that window could add a position to the
+   * very object being written, producing a queued row holding BOTH a coordinate and
+   * a reason not to have one. That is the exact incoherent state R8 exists to
+   * prevent, arriving through aliasing instead of through logic.
+   *
+   * A shallow copy is enough: the mutations at issue are top-level key writes.
+   */
+  const snapshotAnswers = useCallback(
+    (): Record<string, unknown> => ({ ...allAnswersRef.current }),
+    [],
+  );
+
   const refreshPositionForSubmit = useCallback(async (): Promise<Record<string, unknown>> => {
-    if (!geopointQuestion) return allAnswersRef.current;
+    if (!geopointQuestion) return snapshotAnswers();
 
     const openTime = allAnswersRef.current[geopointQuestion.name];
-    if (!isCapturedPosition(openTime)) return allAnswersRef.current;
+    if (!isCapturedPosition(openTime)) return snapshotAnswers();
 
-    if (!(await permissionAllowsSilentRefresh())) return allAnswersRef.current;
+    if (!(await permissionAllowsSilentRefresh())) return snapshotAnswers();
 
     const result = await capturePosition(SUBMIT_REFRESH_OPTIONS);
     // A failed refresh costs nothing: the open-time position stands and the
     // submission proceeds. This is an improvement, never a precondition.
-    if (!result.ok) return allAnswersRef.current;
+    if (!result.ok) return snapshotAnswers();
 
     // Retain where the interview STARTED under its own key before overwriting.
     if (!isCapturedPosition(allAnswersRef.current[OPEN_CAPTURE_KEY])) {
@@ -354,8 +453,64 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     // Same reasoning as the open-time capture: keep the rendered field in step,
     // or a "Back" from the completion screen would show the stale coordinate.
     setValue(geopointQuestion.name, result.position, { shouldValidate: false });
-    return allAnswersRef.current;
-  }, [geopointQuestion, setValue]);
+    return snapshotAnswers();
+  }, [geopointQuestion, setValue, snapshotAnswers]);
+
+  /**
+   * ⛔ ULTRA REVIEW U4 + U5 + U8 — ONE WAY TO FINISH A SURVEY.
+   *
+   * There were three exits and they disagreed three different ways:
+   *   • the PRIMARY one (essentially all the traffic) had **no try/catch at all** —
+   *     a rejected `completeDraft` threw out of the onClick handler, so
+   *     `setCompleted(true)` never ran and the enumerator got no completion screen,
+   *     no error, and nothing logged (U5);
+   *   • the pending-NIN one SWALLOWED the rejection and then ran
+   *     `setCompleted(true)` OUTSIDE the try — affirmatively reporting "Survey
+   *     saved!" for an interview that was never queued, under a comment claiming
+   *     errors "surface through the draft hook", which exposes no error state at
+   *     all (U4);
+   *   • the escape hatch was correct, because R9 had already fixed it there.
+   *
+   * ⭐ THE ARGUMENT FOR ONE HELPER IS THE DIVERGENCE ITSELF. R9 fixed the instance
+   * it found and two siblings kept the defect — the same instance-not-class shape
+   * this story has now hit three times. With one path there is one place to be
+   * right, and a fourth exit added later inherits it.
+   *
+   * It also carries U8's re-entrancy guard. AC2 put ~5 s of blocking await in front
+   * of the queue write with nothing disabled, so a second tap on an unresponsive
+   * button started a SECOND submission: two drafts, two queue rows, one interview —
+   * and AC12, in this same story, would then score that as duplicate fraud against
+   * an enumerator who did nothing wrong.
+   */
+  const submitInFlightRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const finishSubmission = useCallback(
+    async (answers: Record<string, unknown>): Promise<void> => {
+      if (submitInFlightRef.current) return;
+      submitInFlightRef.current = true;
+      setSubmitting(true);
+      try {
+        await draft.completeDraft(answers);
+      } catch {
+        // ⛔ NEVER a completion screen for a submission that was not queued.
+        setGpsSubmitError(true);
+        return;
+      } finally {
+        submitInFlightRef.current = false;
+        setSubmitting(false);
+      }
+
+      setGpsBlocked(false);
+      setGpsSubmitError(false);
+      syncManager
+        .syncNow()
+        .then(() => reconcileReferenceCode(draft.draftId))
+        .catch(() => {});
+      setCompleted(true);
+    },
+    [draft, reconcileReferenceCode],
+  );
 
   /**
    * Story 13-71 AC3 — may this submission go, on the ENUMERATOR path?
@@ -485,14 +640,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           return;
         }
 
-        await draft.completeDraft(answers);
-        // Trigger upload immediately if online (don't await — fire-and-forget),
-        // then reconcile the provisional reference to the server's canonical
-        // code once the queue row reports 'synced' (review M1).
-        syncManager
-          .syncNow()
-          .then(() => reconcileReferenceCode(draft.draftId))
-          .catch(() => {});
+        // U5 — one path, which handles its own failure and only then reports success.
+        await finishSubmission(answers);
+        return;
       }
       setCompleted(true);
       return;
@@ -504,7 +654,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
       clearErrors(currentQuestion.name);
       setSlideDirection(null);
     }, 50);
-  }, [currentQuestion, currentIndex, formData, form, isPreview, draft, ninDuplicateError, trigger, setError, clearErrors, reconcileReferenceCode, refreshPositionForSubmit, geopointRequirementUnmet]);
+  }, [currentQuestion, currentIndex, formData, form, isPreview, ninDuplicateError, trigger, setError, clearErrors, refreshPositionForSubmit, geopointRequirementUnmet, finishSubmission]);
 
   /**
    * Story 9-12 Task 13 — pending-NIN confirm.
@@ -549,16 +699,16 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           setGpsBlocked(true);
           return;
         }
-        try {
-          await draft.completeDraft(answers);
-          syncManager
-            .syncNow()
-            .then(() => reconcileReferenceCode(draft.draftId))
-            .catch(() => {});
-        } catch {
-          // completion errors surface through draft hook; swallow here.
-        }
-        setCompleted(true);
+        /*
+         * ⛔ ULTRA REVIEW U4 — THIS SWALLOWED THE FAILURE AND THEN CLAIMED SUCCESS.
+         *
+         * `setCompleted(true)` sat OUTSIDE the try, so an IndexedDB rejection —
+         * quota, private browsing, a locked database, which is a FIELD PHONE's
+         * normal weather — produced the "Survey saved!" screen for an interview
+         * that had been queued nowhere. The comment said errors "surface through
+         * the draft hook"; the hook exposes no error state whatsoever.
+         */
+        await finishSubmission(answers);
         return;
       }
       setSlideDirection('left');
@@ -567,7 +717,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
         setSlideDirection(null);
       }, 50);
     },
-    [form, currentQuestion, currentIndex, isPreview, ninCheck, clearErrors, draft, reconcileReferenceCode, refreshPositionForSubmit, geopointRequirementUnmet],
+    [form, currentQuestion, currentIndex, isPreview, ninCheck, clearErrors, refreshPositionForSubmit, geopointRequirementUnmet, finishSubmission],
   );
 
   /**
@@ -603,25 +753,12 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
      * call; this one did not, and it is the path a FIELD PHONE takes — the devices
      * with the least storage and the most aggressive eviction.
      */
-    try {
-      await draft.completeDraft(allAnswersRef.current);
-    } catch {
-      // Keep the panel up so the action is still available, and surface the
-      // failure rather than showing a completion screen for a submission that was
-      // never queued.
-      setGpsBlocked(true);
-      setGpsSubmitError(true);
-      return;
-    }
-
-    setGpsBlocked(false);
-    setGpsSubmitError(false);
-    syncManager
-      .syncNow()
-      .then(() => reconcileReferenceCode(draft.draftId))
-      .catch(() => {});
-    setCompleted(true);
-  }, [gpsUnavailableReason, draft, reconcileReferenceCode]);
+    // R9's semantics are preserved exactly — the panel is retired only once the
+    // write has succeeded — but the implementation is now the shared one (U4/U5),
+    // so this exit cannot drift away from its siblings again.
+    // U13 — a SNAPSHOT, never the live accumulator.
+    await finishSubmission({ ...allAnswersRef.current });
+  }, [gpsUnavailableReason, finishSubmission]);
 
   const handleBack = useCallback(() => {
     if (!form) return;
@@ -633,6 +770,20 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           calculations: form.calculations,
         });
     if (prevIdx === -1) return;
+
+    /*
+     * ⛔ ULTRA REVIEW U10 — THE AMBER PANEL FOLLOWED THE ENUMERATOR EVERYWHERE.
+     *
+     * `gpsBlocked` was set on a refused submit and cleared only on success or on a
+     * manual capture. Nothing cleared it on navigation — so the panel, and its
+     * one-tap button that submits the WHOLE survey with a reason and no further
+     * validation, rendered under every question the enumerator moved to. Its own
+     * text says "Go back to the location question", which is precisely the action
+     * that used to leave it on screen. A mis-tap three questions from the end
+     * filed the interview.
+     */
+    setGpsBlocked(false);
+    setGpsSubmitError(false);
 
     setSlideDirection('right');
     setTimeout(() => {
@@ -857,6 +1008,13 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
                 }}
                 error={displayError}
                 disabled={isPreview}
+                /*
+                 * U15 — a MANUAL capture's failure is the freshest evidence there is,
+                 * and it must override whatever the open-time attempt concluded. The
+                 * escape hatch files this value, so filing the stale one mislabels
+                 * the enumerator's problem.
+                 */
+                onCaptureError={(reason) => setGpsUnavailableReason(reason)}
               />
             )}
           />
@@ -892,19 +1050,35 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
               Back
             </button>
           )}
+          {/*
+            ⛔ ULTRA REVIEW U8 — THE BUTTON NOW SAYS SOMETHING IS HAPPENING, AND STOPS
+            ACCEPTING TAPS WHILE IT IS.
+
+            AC2 put a permission check plus a position fix — up to ~5 s — in front of
+            the queue write, with no spinner, no disabled state and no re-entrancy
+            guard. On a slow phone that is an unresponsive button, and an unresponsive
+            button gets tapped again: two drafts, two queue rows, ONE interview. ⭐ And
+            AC12, in this same story, would then score that pair as duplicate fraud
+            against an enumerator who did exactly what the UI invited.
+
+            `finishSubmission` carries the authoritative guard; this is the half the
+            person can see.
+          */}
           <button
             onClick={handleContinue}
-            disabled={!!displayError || ninCheck.isChecking}
+            disabled={!!displayError || ninCheck.isChecking || submitting}
             className={`min-h-[56px] md:min-h-[48px] px-6 py-3 bg-[#9C1E23] text-white rounded-lg font-medium
               hover:bg-[#7A171B] transition-colors flex-1
-              ${displayError || ninCheck.isChecking ? 'opacity-50 cursor-not-allowed' : ''}`}
+              ${displayError || ninCheck.isChecking || submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
             data-testid="continue-btn"
           >
-            {!hasNextQuestion
-              ? isPreview
-                ? 'Finish Preview'
-                : 'Complete Survey'
-              : 'Continue'}
+            {submitting
+              ? 'Saving…'
+              : !hasNextQuestion
+                ? isPreview
+                  ? 'Finish Preview'
+                  : 'Complete Survey'
+                : 'Continue'}
           </button>
         </div>
 
@@ -915,6 +1089,27 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
           warning: a banner shown before anyone has tried to do anything is noise
           an enumerator learns to scroll past in a week.
         */}
+        {/*
+          ⛔ ULTRA REVIEW U5 — THE FAILURE NOTICE LIVED INSIDE THE AMBER PANEL.
+          `gps-submit-error` was nested under `gpsBlocked`, so it could only ever be
+          seen on the escape-hatch path. A failed write on the PRIMARY exit — the one
+          carrying essentially all the traffic — had nowhere to be reported at all.
+          It is now its own panel, shown whenever a submit failed and the amber block
+          is not already carrying the message.
+        */}
+        {gpsSubmitError && !gpsBlocked && (
+          <div
+            className="rounded-lg border border-error-200 bg-error-50 p-4"
+            role="alert"
+            data-testid="submit-error-block"
+          >
+            <p className="text-sm font-medium text-error-700">
+              That did not save. Check your phone has storage free and tap
+              “Complete Survey” again — the survey has not been submitted yet.
+            </p>
+          </div>
+        )}
+
         {gpsBlocked && (
           <div
             className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3"

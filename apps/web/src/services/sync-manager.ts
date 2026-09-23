@@ -280,6 +280,9 @@ export class SyncManager {
        */
       const gpsAccuracy = payload.gpsAccuracy as number | undefined;
       const gpsUnavailableReason = payload.gpsUnavailableReason as GpsUnavailableReason | undefined;
+      // U2 — and this one too, or a row queued by a CURRENT client would reach the
+      // server looking like a legacy one and be waived when it should be enforced.
+      const geopointRequirementAware = payload.geopointRequirementAware as boolean | undefined;
 
       const result = await Promise.race([
         submitSurvey({
@@ -292,6 +295,7 @@ export class SyncManager {
           ...(gpsLongitude != null && { gpsLongitude }),
           ...(gpsAccuracy != null && { gpsAccuracy }),
           ...(gpsUnavailableReason != null && { gpsUnavailableReason }),
+          ...(geopointRequirementAware != null && { geopointRequirementAware }),
           ...(completionTimeSeconds != null && { completionTimeSeconds }),
         }),
         new Promise<never>((_, reject) =>

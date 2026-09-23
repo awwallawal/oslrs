@@ -21,6 +21,7 @@ import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-libra
 
 expect.extend(matchers);
 
+import { StrictMode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import FormFillerPage from '../FormFillerPage';
 import type { FlattenedForm } from '../../api/form.api';
@@ -446,6 +447,317 @@ describe('13-71 AC3/AC4 — an enumerator submission with neither is refused', (
     expect(answers[GEO_NAME]).toMatchObject({ latitude: OPEN_POS.latitude });
     // ⛔ No reason rides along beside a real position.
     expect(answers._gpsUnavailableReason).toBeUndefined();
+  });
+});
+
+// ── ULTRA REVIEW FINDINGS ──────────────────────────────────────────────────
+
+describe('13-71 U1/U14 — only the ENUMERATOR path is geolocated', () => {
+  it('⛔ a PUBLIC user opening the same form is NEVER geolocated', async () => {
+    // `mode="fill"` is mounted on TWO routes; `App.tsx:1435` is
+    // `/dashboard/public/surveys/:formId` — "Story 3.5: Public User Form Filler".
+    // With no role gate, a member of the public was silently located and the
+    // coordinates filed with `source='public'` — the channel 13-34 deliberately
+    // stripped the geopoint from. A privacy exposure first, a data defect second.
+    mockUserRole = 'public_user';
+    const getCurrentPosition = stubGeolocation([OPEN_POS]);
+
+    await renderPage();
+    await waitFor(() => expect(screen.getByText('Where is this interview?')).toBeInTheDocument());
+
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('⛔ a CLERK is not geolocated either — AC7 reasoning applied to CAPTURE', async () => {
+    // AC7 exempts the clerk because "office coordinates filed as field captures
+    // would poison the base map". That argument is about who holds the phone, so
+    // it governs capture, not merely enforcement. Capturing for a clerk and then
+    // not requiring it was the worst of both: the poisoned coordinate without the
+    // coverage.
+    mockUserRole = 'data_entry_clerk';
+    const getCurrentPosition = stubGeolocation([OPEN_POS]);
+
+    await renderPage();
+    await waitFor(() => expect(screen.getByText('Where is this interview?')).toBeInTheDocument());
+
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('the ENUMERATOR path still captures — the gate narrows, it does not disable', async () => {
+    mockUserRole = 'enumerator';
+    const getCurrentPosition = stubGeolocation([OPEN_POS]);
+    await renderPage();
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalled());
+  });
+
+  it('U14: a non-enumerator never stamps `other` into the reason column', async () => {
+    mockUserRole = 'public_user';
+    setNavigatorProp('geolocation', undefined);
+
+    await renderPage();
+    await completeSurvey();
+    await waitFor(() => expect(mockCompleteDraft).toHaveBeenCalled());
+
+    // AC6's column exists to be GROUPed BY. Desk work in it is noise that cannot
+    // be explained away by a browser error code.
+    expect(submittedAnswers()._gpsUnavailableReason).toBeUndefined();
+  });
+});
+
+describe('13-71 U9 — auto-capture survives StrictMode double-invocation', () => {
+  it('⛔ still captures when the effect is mounted, cleaned up and re-mounted', async () => {
+    /*
+     * `React.StrictMode` IS enabled in this app (`main.tsx:7`), so in development
+     * every effect runs mount → cleanup → mount. The original once-guard latched
+     * the instant the effect ran and was never released, so run 1 started a
+     * capture and was cancelled, and run 2 returned at the guard: **auto-capture
+     * never worked in development at all.**
+     *
+     * ⭐ And no existing test could see it, because RTL does not render under
+     * StrictMode unless asked. This asks.
+     */
+    const getCurrentPosition = stubGeolocation([OPEN_POS]);
+
+    await act(async () => {
+      render(
+        <StrictMode>
+          <MemoryRouter initialEntries={['/survey/geo-form-id']}>
+            <Routes>
+              <Route path="/survey/:formId" element={<FormFillerPage mode="fill" />} />
+            </Routes>
+          </MemoryRouter>
+        </StrictMode>,
+      );
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`geopoint-display-${GEO_NAME}`)).toBeInTheDocument(),
+    );
+    expect(getCurrentPosition).toHaveBeenCalled();
+  });
+
+  /*
+   * ⚠️ AN HONEST NOTE ABOUT THE TEST ABOVE, recorded rather than smoothed over.
+   *
+   * It passes both WITH and WITHOUT the two-ref fix, so it is a regression guard
+   * and NOT the proof. The reason is worth writing down: the effect is gated on
+   * `draftLoaded`, which is false during the StrictMode mount → cleanup → mount
+   * pair, so BOTH of those runs return before touching the guard, and the run that
+   * does the work is a later update — which StrictMode does not double-invoke.
+   * U9's "auto-capture never works in development at all" therefore does not
+   * reproduce on this path; the finding's OTHER half does, and is pinned below.
+   *
+   * The fix is kept regardless: it costs nothing and the ordering that protects
+   * this today is incidental, not designed.
+   */
+  it('⛔ a re-run while a capture is IN FLIGHT starts a fresh one, not silence', async () => {
+    // U9's production half: "a background refetch inside the 10 s window cancels
+    // it permanently". The old single ref latched before the work finished and was
+    // never released, so the cancelled attempt locked out every later one.
+    let pendingCalls = 0;
+    const getCurrentPosition = vi.fn(() => { pendingCalls += 1; });
+    setNavigatorProp('geolocation', { getCurrentPosition });
+
+    await renderPage();
+    await waitFor(() => expect(pendingCalls).toBe(1));
+
+    // A new schema object identity — exactly what a background refetch produces.
+    // The effect cleans up (cancelling attempt 1) and runs again.
+    // A NEW question object, not just a new wrapper: `geopointQuestion` is a
+    // `useMemo` over `form.questions.find(...)`, so spreading the form alone
+    // returns the identical question and the effect never re-runs.
+    mockHookReturn = {
+      data: { ...geoForm, questions: [{ ...geoForm.questions[0] }, geoForm.questions[1]] },
+      isLoading: false,
+      error: null,
+    };
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('continue-btn'));
+    });
+
+    await waitFor(() => expect(pendingCalls).toBeGreaterThan(1));
+  });
+});
+
+describe('13-71 U10 — the amber panel does not follow the enumerator around', () => {
+  it('⛔ navigating BACK clears the blocked panel', async () => {
+    stubGeolocation([null], 1);
+    await renderPage();
+    await completeSurvey();
+    await waitFor(() => expect(screen.getByTestId('gps-required-block')).toBeInTheDocument());
+
+    // Its own text says "Go back to the location question" — which is precisely
+    // the action that used to leave it rendered on every screen, one mis-tap away
+    // from filing the whole interview.
+    fireEvent.click(screen.getByTestId('back-btn'));
+
+    await waitFor(() => expect(screen.queryByTestId('gps-required-block')).toBeNull());
+  });
+});
+
+describe('13-71 U4/U5 — a failed write is never reported as a saved survey', () => {
+  it('⛔ the PRIMARY exit shows an error and NO completion screen when the write rejects', async () => {
+    stubGeolocation([OPEN_POS, OPEN_POS]);
+    mockCompleteDraft.mockRejectedValue(new Error('QuotaExceededError'));
+
+    await renderPage();
+    await waitFor(() => expect(screen.getByTestId(`geopoint-display-${GEO_NAME}`)).toBeInTheDocument());
+    await completeSurvey();
+
+    // Before the shared helper this path had no try/catch at all: the rejection
+    // threw out of the onClick handler and the enumerator saw nothing happen.
+    await waitFor(() => expect(screen.getByTestId('submit-error-block')).toBeInTheDocument());
+    expect(screen.queryByTestId('completion-screen')).toBeNull();
+  });
+
+  it('a recovered retry then completes normally', async () => {
+    stubGeolocation([OPEN_POS, OPEN_POS]);
+    mockCompleteDraft.mockRejectedValueOnce(new Error('QuotaExceededError'));
+
+    await renderPage();
+    await waitFor(() => expect(screen.getByTestId(`geopoint-display-${GEO_NAME}`)).toBeInTheDocument());
+    await completeSurvey();
+    await waitFor(() => expect(screen.getByTestId('submit-error-block')).toBeInTheDocument());
+
+    // The guard must release on failure, or the retry the UI offers is a lie.
+    mockCompleteDraft.mockResolvedValue(undefined);
+    fireEvent.click(screen.getByTestId('continue-btn'));
+    await waitFor(() => expect(screen.getByTestId('completion-screen')).toBeInTheDocument());
+  });
+});
+
+describe('13-71 U8 — one interview cannot become two queue rows', () => {
+  /*
+   * ⚠️ THIS TEST WAS WRITTEN WRONG THE FIRST TIME, AND THE MUTATION SAID SO.
+   *
+   * The first version awaited the in-flight state before tapping again, so React
+   * had already re-rendered the button as `disabled` and `fireEvent.click` on a
+   * disabled button is a no-op. Deleting the `submitInFlightRef` guard entirely
+   * left the suite GREEN: the test pinned the visual affordance and proved nothing
+   * about the authoritative guard. [[pattern-test-that-passes-over-a-hole]]
+   *
+   * The taps now land in the SAME TICK as the first, before any re-render can
+   * disable anything — which is also what an impatient thumb on a slow phone
+   * actually does.
+   */
+  it('⛔ repeat taps in the same tick do NOT start a second submission', async () => {
+    stubGeolocation([OPEN_POS, OPEN_POS]);
+    let release: (() => void) | undefined;
+    mockCompleteDraft.mockImplementation(
+      () => new Promise<void>((resolve) => { release = () => resolve(); }),
+    );
+
+    await renderPage();
+    await waitFor(() => expect(screen.getByTestId(`geopoint-display-${GEO_NAME}`)).toBeInTheDocument());
+
+    // Walk to the last question WITHOUT submitting.
+    fireEvent.click(screen.getByTestId('continue-btn'));
+    await waitFor(() => expect(screen.getByText('What is your full name?')).toBeInTheDocument());
+
+    const btn = screen.getByTestId('continue-btn');
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+
+    // ⭐ Two queue rows from one interview is not merely untidy: AC12, in this same
+    // story, would score the pair as duplicate fraud against the enumerator.
+    await waitFor(() => expect(mockCompleteDraft).toHaveBeenCalledTimes(1));
+    expect(mockCompleteDraft).toHaveBeenCalledTimes(1);
+
+    release?.();
+    await waitFor(() => expect(screen.getByTestId('completion-screen')).toBeInTheDocument());
+  });
+
+  it('the button says what is happening and stops accepting taps', async () => {
+    stubGeolocation([OPEN_POS, OPEN_POS]);
+    mockCompleteDraft.mockImplementation(() => new Promise<void>(() => {}));
+
+    await renderPage();
+    await waitFor(() => expect(screen.getByTestId(`geopoint-display-${GEO_NAME}`)).toBeInTheDocument());
+    await completeSurvey();
+
+    await waitFor(() => expect(screen.getByTestId('continue-btn')).toBeDisabled());
+    expect(screen.getByTestId('continue-btn')).toHaveTextContent('Saving');
+  });
+});
+
+describe('13-71 U13 — a late capture cannot mutate a submission already being written', () => {
+  /*
+   * ⚠️ RETARGETED AFTER THE MUTATION SAID THE FIRST VERSION PROVED NOTHING.
+   *
+   * It drove the ESCAPE-HATCH exit, which spreads its own copy at the call site —
+   * so neutering `snapshotAnswers` left the suite green. The object that actually
+   * came from `snapshotAnswers` is the one the PRIMARY exit submits, and that is
+   * the path this now uses. [[pattern-test-that-passes-over-a-hole]]
+   */
+  it('⛔ the answers handed to completeDraft are a SNAPSHOT, not the live accumulator', async () => {
+    // The open-time capture is slow and still outstanding.
+    let resolveOpenCapture: ((p: GeolocationPosition) => void) | undefined;
+    setNavigatorProp('geolocation', {
+      getCurrentPosition: (onOk: PositionCallback) => { resolveOpenCapture = onOk; },
+    });
+    // No submit-time refresh, so the primary exit returns the snapshot directly.
+    setNavigatorProp('permissions', { query: async () => ({ state: 'prompt' }) });
+
+    let releaseWrite: (() => void) | undefined;
+    const answersSeen: Array<Record<string, unknown>> = [];
+    mockCompleteDraft.mockImplementation((answers: Record<string, unknown>) => {
+      answersSeen.push(answers);
+      return new Promise<void>((resolve) => { releaseWrite = () => resolve(); });
+    });
+
+    await renderPage();
+    await waitFor(() => expect(screen.getByTestId(`geopoint-capture-${GEO_NAME}`)).toBeInTheDocument());
+
+    // The enumerator gets impatient and taps the button; THAT capture succeeds.
+    const manual = { latitude: 7.5, longitude: 3.5, accuracy: 4 };
+    setNavigatorProp('geolocation', {
+      getCurrentPosition: (onOk: PositionCallback) =>
+        onOk({ coords: manual } as GeolocationPosition),
+    });
+    fireEvent.click(screen.getByTestId(`geopoint-capture-${GEO_NAME}`));
+    await waitFor(() => expect(screen.getByTestId(`geopoint-display-${GEO_NAME}`)).toBeInTheDocument());
+
+    await completeSurvey();
+    await waitFor(() => expect(mockCompleteDraft).toHaveBeenCalled());
+
+    // The ORIGINAL open-time promise finally lands, mid-write, with a DIFFERENT fix.
+    await act(async () => {
+      resolveOpenCapture?.({ coords: OPEN_POS } as GeolocationPosition);
+    });
+    releaseWrite?.();
+
+    // ⛔ The queued interview keeps the position it was submitted with.
+    expect(answersSeen[0][GEO_NAME]).toMatchObject({ latitude: manual.latitude });
+  });
+});
+
+describe('13-71 U15 — a MANUAL capture failure is what gets filed', () => {
+  it('⛔ a permission refusal on the manual button overrides the open-time timeout', async () => {
+    // The open-time attempt TIMES OUT (concrete building); the enumerator walks
+    // outside, taps the button, and is refused PERMISSION. Before U15 the page
+    // never heard the second verdict and filed `timeout` — a phone problem
+    // recorded as a signal problem, which is the one distinction AC4 exists for.
+    const getCurrentPosition = vi.fn(
+      (_ok: PositionCallback, onErr?: PositionErrorCallback) => {
+        const code = getCurrentPosition.mock.calls.length === 1 ? 3 : 1;
+        onErr?.({ code } as GeolocationPositionError);
+      },
+    );
+    setNavigatorProp('geolocation', { getCurrentPosition });
+
+    await renderPage();
+    await waitFor(() => expect(screen.getByTestId(`geopoint-capture-${GEO_NAME}`)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId(`geopoint-capture-${GEO_NAME}`));
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalledTimes(2));
+
+    await completeSurvey();
+    await waitFor(() => expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('gps-unavailable-btn'));
+
+    await waitFor(() => expect(mockCompleteDraft).toHaveBeenCalled());
+    expect(submittedAnswers()._gpsUnavailableReason).toBe('permission_denied');
   });
 });
 

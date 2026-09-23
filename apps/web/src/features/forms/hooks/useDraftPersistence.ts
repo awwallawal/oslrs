@@ -303,6 +303,9 @@ export function useDraftPersistence({
       delete withoutStaleReason._gpsUnavailableReason;
       enrichedPayload.responses = withoutStaleReason;
     }
+    // Story 13-71 (ultra review U2) — stamped by every build that can satisfy the
+    // requirement, so the server can tell this payload from one an old bundle made.
+    enrichedPayload.geopointRequirementAware = true;
     // Story 4.3: Include completion time for speed-run fraud detection
     if (formStartedAt) {
       enrichedPayload.completionTimeSeconds = Math.round((Date.now() - formStartedAt) / 1000);
@@ -319,22 +322,46 @@ export function useDraftPersistence({
       createdAt: now,
       error: null,
     };
-    await db.submissionQueue.add(queueItem);
+    /*
+     * ⛔ ULTRA REVIEW U6 — THIS MUST BE SAFE TO CALL TWICE, BECAUSE THE UI NOW OFFERS
+     * EXACTLY THAT.
+     *
+     * R9 gave the escape hatch a retry affordance ("try again — the survey has not
+     * been submitted yet") on the assumption that a failed `completeDraft` left
+     * nothing behind. It did not. `submissionQueue.add` is the FIRST write, and the
+     * `drafts.update` that followed was UNGUARDED — so a rejection on the update
+     * (quota, an eviction between the two writes) left the queue row COMMITTED while
+     * the UI told the enumerator nothing had been submitted.
+     *
+     * ⭐ THE COST OF THAT IS A REAL CITIZEN REGISTERED TWICE. The enumerator retries;
+     * the retry dies on the queue's duplicate primary key, so it keeps failing; they
+     * give up and re-enter the interview from scratch, and the first queue row syncs
+     * anyway. Two submissions, two respondents, one person — in a registry whose
+     * whole purpose is one row per citizen.
+     *
+     * Two changes make the retry honest:
+     *   1. the queue write is IDEMPOTENT — an existing row for this draft id is
+     *      overwritten with the fresh payload rather than colliding, because the
+     *      second attempt carries the same interview and a newer position; and
+     *   2. everything after it is best-effort. Once the submission is queued the
+     *      interview is SAFE, and a failure to tidy the draft must not be reported
+     *      as a failure to submit — that is what sent the enumerator round the loop.
+     */
+    await db.submissionQueue.put(queueItem);
 
-    // Mark draft as completed (belt-and-suspenders — if delete fails, draft won't show as 'in-progress')
-    // Ordered AFTER queue add so a crash between queue add and status update
-    // leaves draft visible ('in-progress') rather than silently losing data
-    await db.drafts.update(draftIdRef.current, {
-      status: 'completed',
-      updatedAt: now,
-    });
-
-    // Delete draft from IndexedDB — queue item has all data needed for sync.
-    // Wrapped in try/catch: if delete fails, submission is already queued successfully.
     try {
+      // Mark draft as completed (belt-and-suspenders — if delete fails, draft won't
+      // show as 'in-progress'). Ordered AFTER the queue write so a crash between the
+      // two leaves the draft visible rather than silently losing data.
+      await db.drafts.update(draftIdRef.current, {
+        status: 'completed',
+        updatedAt: now,
+      });
+      // Delete draft from IndexedDB — the queue item has all data needed for sync.
       await db.drafts.delete(draftIdRef.current);
     } catch {
-      // Best-effort cleanup — draft is 'completed' so useFormDrafts() won't show it
+      // Best-effort cleanup ONLY. The submission is already queued; a stranded
+      // draft row is recoverable and a lost interview is not.
     }
   }, [formId, formVersion, formData, currentIndex, enabled, userId, formStartedAt, geopointQuestionName]);
 

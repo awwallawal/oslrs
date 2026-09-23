@@ -41,9 +41,41 @@ const submitFormSchema = z.object({
   // again at the storage boundary. Neither guard is redundant: this one gives
   // the client a 400, that one protects the column from every OTHER producer.
   gpsUnavailableReason: z.enum(gpsUnavailableReasons).optional(),
+  /**
+   * Story 13-71 (ultra review U2) — "this client KNOWS about the geopoint
+   * requirement and can satisfy it".
+   *
+   * Sent by every build that ships AC1/AC3. Absent means the payload came from a
+   * bundle that predates the feature, which cannot capture a position on open and
+   * offers no way to file a reason — so enforcing against it refuses an interview
+   * nobody could have submitted correctly.
+   */
+  geopointRequirementAware: z.boolean().optional(),
   submittedAt: z.string().datetime(),
   completionTimeSeconds: z.number().int().nonnegative().optional(),
 });
+
+/**
+ * Story 13-71 (ultra review U7) — keys inside `rawData` that the SERVER owns.
+ *
+ * Every one of these is derived from a VALIDATED envelope field (or minted here),
+ * and every one is read back out of `rawData` by the ingestion worker and written
+ * to a column. `submitFormSchema.responses` is `z.record(z.unknown())`, so
+ * anything a client puts in the answers under one of these names would otherwise
+ * reach that column having passed no validation at all.
+ *
+ * ⛔ ADD TO THIS LIST whenever a new `_`-prefixed key is threaded from the
+ * envelope into `rawData`. The list is the boundary; the individual `delete` calls
+ * that used to sit in `submitForm` were not, and three of five were missing.
+ */
+export const SERVER_OWNED_RAW_DATA_KEYS = [
+  '_gpsLatitude',
+  '_gpsLongitude',
+  '_gpsAccuracy',
+  '_gpsUnavailableReason',
+  '_completionTimeSeconds',
+  '_referenceCode',
+] as const;
 
 export class FormController {
   /**
@@ -146,6 +178,7 @@ export class FormController {
       const {
         submissionId, formId, responses, submittedAt,
         gpsLatitude, gpsLongitude, gpsAccuracy, gpsUnavailableReason,
+        geopointRequirementAware,
         completionTimeSeconds,
       } = parsed.data;
       const user = (req as Request & { user?: { sub: string; role?: string } }).user;
@@ -179,6 +212,9 @@ export class FormController {
         gpsLatitude,
         gpsLongitude,
         gpsUnavailableReason,
+        // Ultra review U2 — WHICH CLIENT produced this, so a bundle that predates
+        // the requirement is waived rather than permanently refused.
+        geopointRequirementAware,
         // Review R7 — WHEN this interview was conducted, so the requirement is not
         // applied retroactively to a survey captured offline before it existed.
         submittedAt,
@@ -212,9 +248,30 @@ export class FormController {
        * copy is discarded here so the only way either value reaches `rawData` is
        * through the validated envelope. [[pattern-ship-a-fix-that-never-fires]]
        */
+      /*
+       * ⛔ ULTRA REVIEW U7 — THE STRIP COVERED 2 OF 5 SERVER-OWNED KEYS.
+       *
+       * R6 deleted `_gpsAccuracy` and `_gpsUnavailableReason` and stopped there.
+       * `_gpsLatitude`, `_gpsLongitude` and `_completionTimeSeconds` were merely
+       * OVERWRITTEN `if (envelope != null)` — so a client that OMITS the envelope
+       * field and puts the key in `responses` writes it straight through, because
+       * `responses` is `z.record(z.unknown())` and zod never looks inside it.
+       *
+       * That is not a metadata nuisance like the reason string. It is:
+       *   • FORGED COORDINATES into the base map this story exists to build, and
+       *     into `gps_clustering`'s view of where an enumerator has been; and
+       *   • a forged `_completionTimeSeconds`, which NEUTRALISES the speed-run
+       *     heuristic — a fraud detector answering to the party it polices.
+       *
+       * The fix is the whole class, not the three instances: every key the SERVER
+       * owns is stripped from the client's answers in one place, so adding a sixth
+       * `_serverKey` later cannot reintroduce this. `_referenceCode` joins the list
+       * explicitly — it was always overwritten below, which is equivalent, but
+       * relying on "something further down happens to overwrite it" is exactly the
+       * reasoning that left three of these open. [[pattern-census-counts-sites-not-callers]]
+       */
       const clientResponses: Record<string, unknown> = { ...responses };
-      delete clientResponses._gpsAccuracy;
-      delete clientResponses._gpsUnavailableReason;
+      for (const key of SERVER_OWNED_RAW_DATA_KEYS) delete clientResponses[key];
 
       const rawData: Record<string, unknown> = { ...clientResponses, ...computed };
       if (gpsLatitude != null) rawData._gpsLatitude = gpsLatitude;

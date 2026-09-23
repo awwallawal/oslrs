@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { geolocationErrorCodeToReason } from '@oslsr/types';
 import type { QuestionRendererProps } from './QuestionRenderer';
 
 interface GeopointValue {
@@ -13,6 +14,7 @@ export function GeopointInput({
   onChange,
   error,
   disabled,
+  onCaptureError,
 }: QuestionRendererProps) {
   const [capturing, setCapturing] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -22,6 +24,7 @@ export function GeopointInput({
   const captureLocation = () => {
     if (!navigator.geolocation) {
       setGeoError('Geolocation is not supported by this browser.');
+      onCaptureError?.('unsupported');
       return;
     }
 
@@ -39,6 +42,23 @@ export function GeopointInput({
       },
       (err) => {
         setCapturing(false);
+        /*
+         * ⛔ ULTRA REVIEW U15 — THE REASON HAS TO LEAVE THIS COMPONENT.
+         *
+         * This switch has always known exactly why the capture failed, and it kept
+         * the answer to itself: `setGeoError` writes a sentence into local state and
+         * nothing else. `onChange` fires only on SUCCESS, so the page never learned
+         * that an attempt had happened at all.
+         *
+         * ⭐ The consequence lands in the column AC6 exists to count. The escape
+         * hatch files `gpsUnavailableReason ?? 'other'` from the OPEN-time capture —
+         * so an enumerator whose auto-capture timed out in a concrete building, who
+         * then walked outside and was refused PERMISSION, filed `timeout`. A phone
+         * problem recorded as a signal problem, which is the one distinction AC4's
+         * derived vocabulary exists to preserve. The fix for the phone is to unblock
+         * the site; the fix for the signal is to move. They are not interchangeable.
+         */
+        onCaptureError?.(geolocationErrorCodeToReason(err.code));
         switch (err.code) {
           case err.PERMISSION_DENIED:
             setGeoError(

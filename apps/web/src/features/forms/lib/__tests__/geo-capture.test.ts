@@ -144,6 +144,67 @@ describe('capturePosition', () => {
   });
 });
 
+/**
+ * ⛔ ULTRA REVIEW U3 — THE CASE WHERE THE PLATFORM NEVER ANSWERS.
+ *
+ * `PositionOptions.timeout` reads like a deadline and is not one: per the W3C
+ * spec its clock does not run while the permission prompt is open. A prompt left
+ * unanswered — the phone pocketed mid-interview — means neither callback ever
+ * fires. Before the watchdog this promise simply never settled, and because the
+ * submit path awaits it, the enumerator tapped "Complete Survey" and NOTHING
+ * HAPPENED: no completion screen, no error, no escape hatch, answers still only
+ * in memory.
+ */
+describe('13-71 U3 — capturePosition always settles, even when the browser never calls back', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('⛔ a getCurrentPosition that NEVER calls back resolves as `timeout`', async () => {
+    // Neither callback is ever invoked — the unanswered-prompt case exactly.
+    setNavigatorProp('geolocation', { getCurrentPosition: vi.fn() });
+
+    const pending = capturePosition(SUBMIT_REFRESH_OPTIONS);
+    await vi.advanceTimersByTimeAsync(60000);
+
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'timeout' });
+  });
+
+  it('does NOT pre-empt a browser that answers within its own deadline', async () => {
+    // The platform reports first and reports BETTER, because it knows why.
+    setNavigatorProp('geolocation', {
+      getCurrentPosition: (_ok: PositionCallback, onErr: PositionErrorCallback) =>
+        setTimeout(() => onErr({ code: 1 } as GeolocationPositionError), 100),
+    });
+
+    const pending = capturePosition(SUBMIT_REFRESH_OPTIONS);
+    await vi.advanceTimersByTimeAsync(60000);
+
+    // `permission_denied`, not the watchdog's blunter `timeout`.
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'permission_denied' });
+  });
+
+  it('a late browser callback after the watchdog cannot change the answer', async () => {
+    setNavigatorProp('geolocation', {
+      getCurrentPosition: (onOk: PositionCallback) =>
+        setTimeout(
+          () => onOk({ coords: { latitude: 1, longitude: 2, accuracy: 3 } } as GeolocationPosition),
+          120000,
+        ),
+    });
+
+    const pending = capturePosition(SUBMIT_REFRESH_OPTIONS);
+    await vi.advanceTimersByTimeAsync(300000);
+
+    // `settle` is idempotent, so the race is safe in both directions.
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'timeout' });
+  });
+});
+
 describe('permissionAllowsSilentRefresh — Permissions API PRESENT', () => {
   beforeEach(() => {
     setNavigatorProp('geolocation', { getCurrentPosition: vi.fn() });

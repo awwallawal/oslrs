@@ -16,6 +16,13 @@ export interface SubmitSurveyPayload {
    * 400 from the server's zod enum.
    */
   gpsUnavailableReason?: GpsUnavailableReason;
+  /**
+   * Story 13-71 (ultra review U2) — this build ships the geopoint requirement and
+   * can satisfy it. Its ABSENCE is how the server recognises a payload from a
+   * bundle that predates the feature and waives the gate rather than permanently
+   * rejecting a day of fieldwork from an un-updated device.
+   */
+  geopointRequirementAware?: boolean;
   submittedAt: string;
   completionTimeSeconds?: number;
 }

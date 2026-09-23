@@ -116,6 +116,25 @@ export interface CompletenessOptions {
   /** The derived reason (AC4 vocabulary) that satisfies the gate without a position. */
   gpsUnavailableReason?: string | null;
   /**
+   * Story 13-71 (ultra review U2) — did the CLIENT that produced this payload know
+   * about the geopoint requirement?
+   *
+   * The date fence (R7/D1) protects rows already sitting in an offline QUEUE. It
+   * does nothing for a device still RUNNING the old bundle: `sw.ts` calls
+   * `skipWaiting()` only on an explicit message, so a stale service worker can
+   * serve the previous build indefinitely, and every interview that device starts
+   * TODAY carries a current `submittedAt` — past the fence, so enforced — while
+   * having no auto-capture and no way to file a reason. `sync-manager`'s
+   * `isPermanentFailure` then classifies the 422 as permanent and parks the row at
+   * `MAX_RETRIES`, never to be retried.
+   *
+   * ⭐ RETRY CANNOT FIX THAT, which is why this is a server-side waiver and not a
+   * client-side backoff: the queued payload can never satisfy the gate, so retrying
+   * it forever just fails more politely. A whole day of fieldwork is lost per
+   * un-updated device.
+   */
+  geopointRequirementAware?: boolean;
+  /**
    * Review R7 — the submission's own `submittedAt` (ISO), used ONLY to decide
    * whether the geopoint requirement had taken effect when this interview was
    * conducted. Absent means "treat as current", so a caller that does not pass it
@@ -252,6 +271,39 @@ export function assertGeopointCaptured(
       });
       return;
     }
+  }
+
+  /*
+   * ⛔ ULTRA REVIEW U2 — A REQUIREMENT THE CLIENT CANNOT MEET IS A LOCKOUT.
+   *
+   * Same reasoning as AC3's form-fence and R7's date fence, applied to the third
+   * way a submission can be unable to comply: the code that produced it predates
+   * the feature. A bundle without AC1 never captures on open and renders no escape
+   * hatch, so refusing it does not improve coverage by one row — it destroys
+   * interviews that were conducted properly.
+   *
+   * ⚠️ AND IT IS THE SAME TRADE AS R8, STATED THE SAME WAY: a forged client can
+   * omit this flag to dodge the gate, exactly as it can backdate `submittedAt`.
+   * This gate has never been a control against a hostile client — a hostile client
+   * can simply send a fabricated `gpsUnavailableReason` — it is a correctness
+   * control against a well-behaved one. Recorded as ledger row **R14**, not left
+   * implicit.
+   *
+   * ⚠️ THIS SAID "R10" UNTIL ADJUDICATION 2026-09-23, AND THE SLIP IS INSTRUCTIVE.
+   * R10 is what the row would naturally have been numbered; it became R14 because
+   * this story carries TWO independent `R<n>` series (the residual ledger, and the
+   * adversarial review's follow-up items, which already collide on R6-R9 with
+   * unrelated meanings). The comment kept the pre-renumber id. ⛔ And because an
+   * `R10` DOES exist in the other series — an iOS permission-dialog trade — the
+   * stale pointer did not dangle, it resolved to the WRONG row, which is worse than
+   * resolving to nothing. Cite the series, not just the number.
+   */
+  if (options.geopointRequirementAware !== true) {
+    logger.info({
+      event: 'submission.geopoint_requirement_waived_legacy_client',
+      formId: form.formId,
+    });
+    return;
   }
 
   const hasReason =
