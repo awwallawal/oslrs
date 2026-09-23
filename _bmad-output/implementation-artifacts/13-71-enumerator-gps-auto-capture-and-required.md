@@ -1,6 +1,23 @@
 # Story 13.71: The location is offered and not taken — capture it on open, and require it
 
-Status: review
+Status: in-progress
+
+<!--
+⛔ STATUS REVERTED `review` → `in-progress` BY ADJUDICATION, 2026-09-23, after `/code-review ultra`
+returned FIFTEEN defects that three prior passes — dev, same-model adversarial review, and
+adjudication itself — had all missed. **Adjudication's earlier verdict of "the work is sound" was
+wrong.** All fifteen were then re-verified against the tree by adjudication; see
+"⛔ ULTRA REVIEW FINDINGS" below for the per-row evidence.
+
+⛔ DO NOT DEPLOY THIS AS IT STANDS. Field-blocking, in rough order:
+  • U1  public respondents are silently geolocated (no role gate on the auto-capture effect)
+  • U4  the pending-NIN exit swallows a failed queue write and shows "Survey saved!"
+  • U5  the PRIMARY submit exit has no try/catch at all
+  • U6  a failed retry path produces DUPLICATE citizen registrations
+  • U7  three server-owned keys bypass zod — forged coordinates and a neutralised speed heuristic
+  • U2  a stale client bundle is a PERMANENT 422, parked and never retried
+-->
+
 
 <!--
 Authored 2026-09-18 by Bob (SM) via the canonical *create-story workflow
@@ -449,6 +466,64 @@ column after it.
 | 2026-09-18 | Story authored via canonical `*create-story` (yolo) from the 2026-09-18 brief, with both of Awwal's rulings carried in as binding (code-enforced requirement; brief the enumerators first). | The GPS gap is the one field-readiness defect whose data loss is PERMANENT — a missing fraud score can be back-scored, a location never captured cannot. |
 | 2026-09-20 | `dev-story` implemented all 8 tasks + Task 6b. Auto-capture on open, submit-time refresh, code-enforced requirement on the enumerator path (client + server), `gps_accuracy` / `gps_unavailable_reason` as columns, the offline path threaded, the coverage surface with its dated prediction, AC12's duplicate-comparison fix, and the briefing flipped last. Status → `review`, UNCOMMITTED. | Seven mutation proofs, both directions where the AC demanded it. The tests caught a real defect of my own — the auto-captured position reached the payload but never the screen, so an enumerator would still have tapped the button this story exists to remove. |
 | 2026-09-21 | Adversarial code review (Claude Opus 5 1M — ⚠️ the SAME model that developed this story, caveat UNDISCHARGED and compensated by verifying every claim through execution). Eight findings, all fixed and each RED-VERIFIED by mutation: **R6** the zod enum never constrained `gps_unavailable_reason` (proven by ingesting an invented value against a real row and reading the column back) — server-owned `_gps*` keys now stripped from `responses` AND the vocabulary validated at the storage boundary; **R7** the requirement applied retroactively, so every queued offline submission would have been permanently rejected on deploy day and the documented "Reopen — nothing is lost" recovery would have stamped the operator's CURRENT location onto an old interview — fixed with an effective-date fence plus `restoredAt`, so a reopened draft never auto-captures; **R8** the "a position wins over a stale reason" guard was on the envelope while the column is fed from `responses`; **R9** the escape hatch cleared itself before an unguarded `await`; **R10** the briefing PDF had TWO mojibake glyphs, not the one R2 records; **R11/R12** two code comments asserting more than the code does; **R13** AC9's round trip pinned at both ends but never crossed. Three new residuals (R6–R8), one proposed closure (R2), no status change. | The two HIGH findings are the same defect class the story exists to police — a guard placed where the data does not have to pass [[pattern-ship-a-fix-that-never-fires]], and a certifying test that passes over the hole it was written to close. R7 is the one that would have been discovered in the field: it converts a permanent-data-loss story into a permanent-data-loss event on its own deploy day, and its "recovery" manufactures false coordinates that AC10's coverage read cannot distinguish from real ones. |
+
+### ⛔ ULTRA REVIEW FINDINGS — 15 defects, ALL VERIFIED BY ADJUDICATION 2026-09-23
+
+⚠️ **THIS SUPERSEDES THE VERDICT IN §0 ABOVE. That verdict — "the work is sound, no defect found in the
+code" — WAS WRONG. It is left standing rather than edited, so the record shows what happened;** commit
+`0fc693e` carries it and is corrected in a follow-up rather than rewritten. A story whose history is
+tidied away teaches nobody.
+
+**How it was found.** `/code-review ultra` — a multi-agent cloud review on DIFFERENT models — was run at
+Awwal's instruction to discharge the model caveat, which had been undischarged for two stories running.
+Three layers had already passed this changeset: the dev, a same-model adversarial review, and
+adjudication. The different-model pass returned **fifteen** findings in one go.
+
+⭐ **The lesson for adjudication, stated specifically.** Adjudication verified the GATES exhaustively —
+both suites, three drift guards, File List reconciliation, the attribution sweep, two RED-verifies — and
+gave the LOGIC far less. Every one of these fifteen is readable in the diff. **Green gates proved the
+story was internally consistent, and that was allowed to stand in for whether the code is correct.**
+
+**Verification standard below:** adjudication re-read the cited code for every row. `CONFIRMED` means the
+mechanism was observed in this tree. Two rows read `CONFIRMED (mechanism)` where the code is confirmed but
+the consequence rests on cited platform behaviour rather than an observed run — flagged, not smoothed over.
+
+| # | file:line | finding | verdict |
+|---|---|---|---|
+| **U1** | `FormFillerPage.tsx:259` | ⛔ The AC1 auto-capture effect has **no role gate**, and `mode="fill"` is also mounted on a PUBLIC route — public respondents are silently geolocated | ✅ **CONFIRMED.** `App.tsx:1435` renders `<FormFillerPage mode="fill" />` under *"Story 3.5: Public User Form Filler"*. The guard is `isPreview / !draftLoaded / !geopointQuestion`; `isEnumerator` is used only by `geopointRequirementUnmet`. Coordinates land with `source='public'` — the channel 13-34 deliberately stripped the geopoint from. **Privacy exposure, and it poisons AC10's coverage read** |
+| **U2** | `form-submission-validation.service.ts:70` | The R7 fence keys on `submittedAt`, so it protects the offline QUEUE but not a stale CLIENT — every new interview from an un-updated bundle is a permanent 422 | ✅ **CONFIRMED (mechanism).** `sw.ts:110-111` calls `skipWaiting()` only on an explicit message, so a stale bundle persists; `sync-manager.ts:38` makes 422 PERMANENT (`s >= 400 && s < 500` minus 408/429/401/403). Both halves observed. ⚠️ Additionally assumes a stale bundle exists in the field — plausible, not observed |
+| **U3** | `geo-capture.ts:74` | `capturePosition` has no timer of its own and can never settle; the submit path awaits it, so the interview becomes unreachable with no error and no escape hatch | ✅ **CONFIRMED (mechanism).** No `setTimeout` anywhere in the file — the only `timeout` values are `PositionOptions` properties (10000/5000). ⚠️ The consequence rests on the W3C rule that `PositionOptions.timeout` excludes time awaiting the permission prompt: cited, not run here. **Cheap fix — `settle` is already idempotent, so race an own timer** |
+| **U4** | `FormFillerPage.tsx:561` | ⛔ The pending-NIN exit **swallows a `completeDraft` rejection and then runs `setCompleted(true)` OUTSIDE the try** — it affirmatively reports success for a submission never queued | ✅ **CONFIRMED verbatim.** `try { await draft.completeDraft(answers); … } catch { /* swallow */ } setCompleted(true);` — and `useDraftPersistence` exposes no error state, so the comment's claim that errors "surface through the draft hook" is false. **The interview is gone and the screen says "Survey saved!"** |
+| **U5** | `FormFillerPage.tsx:488` | ⛔ The PRIMARY submit exit has **no try/catch at all**; R9's fix was applied only to the escape hatch | ✅ **CONFIRMED.** A rejection throws out of the onClick handler: `setCompleted(true)` never runs, no completion screen, no error, nothing logged — on the path carrying essentially all the traffic. ⭐ Three exits now disagree three different ways (bare throw / swallow-and-claim-success / correct), which is the argument for one `finishSubmission` helper |
+| **U6** | `useDraftPersistence.ts:322` | ⛔ R9's retry affordance assumes `completeDraft` is idempotent. It is not — `submissionQueue.add` is the FIRST write and the following `drafts.update` is unguarded | ✅ **CONFIRMED.** Order observed: `await db.submissionQueue.add(queueItem)` → `await db.drafts.update(...)` **unwrapped** → `try { drafts.delete } catch {}`. A rejection on the update leaves the queue row committed while the UI says *"the survey has not been submitted yet"*; every retry then dies on a duplicate key. **The enumerator re-enters the interview and a real citizen is registered twice** |
+| **U7** | `form.controller.ts:215` | ⛔ The R6 strip covers only **2 of 5** server-owned keys — `_gpsLatitude`, `_gpsLongitude` and `_completionTimeSeconds` inside `responses` still reach `rawData` unvalidated | ✅ **CONFIRMED.** Only `_gpsAccuracy` and `_gpsUnavailableReason` are deleted; the other three are merely OVERWRITTEN `if (envelope != null)`. `responses` is `z.record(z.unknown())`, so omitting the envelope field and putting the key in the answers bypasses zod entirely: **forged coordinates into the base map, and a `_completionTimeSeconds` that neutralises the speed heuristic.** The R6 comment is true for two keys and false one line below |
+| **U8** | `FormFillerPage.tsx:897` | ~5 s of blocking await now precedes the queue write with no spinner, no disabled state and no re-entrancy guard — a second tap double-queues | ✅ **CONFIRMED.** Still `disabled={!!displayError / ninCheck.isChecking}`; nothing for submit-in-flight. ⭐ Worst case is two drafts and two queue rows from one interview — which **AC12, in this same diff, then scores as duplicate fraud against an enumerator who did nothing wrong** |
+| **U9** | `FormFillerPage.tsx:261` | `autoCaptureStartedRef` is set BEFORE the capture resolves and never reset, while cleanup sets `cancelled = true` | ✅ **CONFIRMED.** `React.StrictMode` IS enabled (`main.tsx:7`), so in dev every effect is mount→cleanup→mount: run 1 starts and is cancelled, run 2 returns at the ref guard. **Auto-capture never works in development at all**, and the new tests cannot see it because RTL does not render under StrictMode. In production a background refetch inside the 10 s window cancels it permanently |
+| **U10** | `FormFillerPage.tsx:918` | `gpsBlocked` is never cleared by `handleBack`, so the amber panel — and its one-tap, unvalidated, full-survey submit — follows the enumerator to every question | ✅ **CONFIRMED.** Set at 484/549/612, cleared only at 617 and 850; `handleBack` does not touch it. The panel's own text says *"Go back to the location question"*, which leaves it rendered on every screen. A mis-tap submits the whole interview |
+| **U11** | `form-submission-validation.service.ts:266` | `assertGeopointCaptured` accepts a position living only in the geopoint ANSWER, but nothing on the write path reads that answer | ✅ **CONFIRMED.** `webhook-ingestion.worker.ts:115-116` derives the columns exclusively from `rawData._gpsLatitude/_gpsLongitude`, which the controller sets only from the ENVELOPE. **The gate reports coverage the column cannot show** — the row lands with NULL coordinates AND NULL reason, straight into the new `unexplained` bucket |
+| **U12** | `form.controller.test.ts:581` | The only test of "the geopoint ANSWER satisfies the gate" is waived by the R7 fence before it reaches the branch it names | ✅ **CONFIRMED.** It spreads `...validBody`, whose `submittedAt` is `2026-02-13` (line 272) — pre-effective, so the waiver returns before `isAnsweredGeopoint` is consulted. The file defines `postEffectiveBody` for exactly this, and a comment at :514 explains why `validBody` cannot be used. ⛔ **Delete the branch and the suite stays green** [[pattern-test-that-passes-over-a-hole]]. ⚠️ Adjudication edited this very file today and did not notice |
+| **U13** | `FormFillerPage.tsx:290` | The open-time capture is cancelled only on unmount, and its `.then` mutates the same live object every exit hands to `completeDraft` | ✅ **CONFIRMED, both halves.** The `.then` writes the position and deletes the reason but **never calls `setGpsBlocked(false)`** — the amber panel still demands a location for a survey that now has one. And every return path of `refreshPositionForSubmit` returns `allAnswersRef.current` **itself, not a copy**, so a late callback can mutate the object mid-queue — coordinates plus a reason not to have them |
+| **U14** | `FormFillerPage.tsx:281` | The restored-draft branch stamps `_gpsUnavailableReason: 'other'` with no role check | ✅ **CONFIRMED.** Same guard as U1, no `isEnumerator`. A clerk (or public user) reopening a rejected submission writes `'other'` into **the one column AC6 exists to GROUP BY** — desk work counted in the bucket that cannot be explained away by a browser error code |
+| **U15** | `FormFillerPage.tsx:587` | The escape hatch files a reason derived only from the OPEN-time capture; a manual capture's failure never reaches the page | ✅ **CONFIRMED.** `GeopointInput.tsx:41-56` switches on `err.code` and only calls local `setGeoError`; there is no `onError` prop and `onChange` fires only on success. **A phone-permission problem is filed as a signal problem** — precisely the distinction AC4's derived vocabulary exists to preserve |
+
+**Runners-up the review recorded below its cap** — NOT individually verified by adjudication, carried so
+they are not lost: the new S3 `afterAll` builds its own client with bare `process.env` and no
+`forcePathStyle` while the uploader falls back differently, so its deletes may silently fail; no
+server-side mutual exclusion between coordinates and a reason; the client lifts `_gpsUnavailableReason`
+with only a `typeof` check then casts, where a bad value is a permanent 400; the legacy flat-coordinate
+fallback lost its per-coordinate resolution; an unrecognised reason is dropped at the worker with no log
+line; `GEOPOINT_REQUIREMENT_EFFECTIVE_FROM` belongs in `system_settings` (the `wizard.public_form_id`
+precedent) rather than a source literal — which would also retire **R9**; `canonicaliseAnswer` is re-run
+per pair over a 100-row candidate set (~5,000 redundant calls per scored submission, multiplied by
+13-72's replay); and auto-capture's `setFormData` defeats the "no draft until the user enters data"
+guard, so every form OPEN now writes a draft.
+
+⭐ **Signals the review confirmed CLEAN, so nobody re-checks them:** both packages typecheck; the 111 new
+web tests pass; coordinates of exactly 0 survive the chain; `roundCoordinate` handles `-0`;
+`canonicaliseAnswer`'s scalar path is byte-identical to the old `String(v ?? '')`; the Drizzle schema
+correctly does not import `@oslsr/types`; `restoredAt` needs no Dexie bump; `sync-manager` forwards all
+ten payload fields; the other two `validateSubmissionCompleteness` callers pass `excludeGeopoint: true`,
+so no existing path newly 422s; the new columns are additive-nullable.
 
 ### Review Follow-ups (AI)
 
