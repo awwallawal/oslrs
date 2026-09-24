@@ -57,8 +57,11 @@ places are recorded.
 - The first time, your phone asks **"Allow location?"** — choose **Allow**. If you choose Block,
   the phone remembers, and someone has to fix it in your phone settings before it will ask again.
   Choosing Block is the one thing here you cannot undo yourself in a hurry.
-- If the location does not arrive, **move outside or near a window** and press **Capture location**
+- If the location does not arrive, **move outside or near a window** and press **Capture GPS Location**
   on the first screen. Inside a concrete building it often fails on the first try.
+- If the app **already got a location** and you want a fresh one — you moved, or the first reading
+  looks wrong — the button is a small **Recapture** link under the coordinates instead. Same thing,
+  different word, because there is already a location to replace.
 - **You cannot submit a field survey with no location and no explanation.** If your phone will not
   give one, the app shows **"I could not capture a location"** — press it and the survey goes
   through. The app records the reason your phone gave; you do not have to work out what went wrong.
