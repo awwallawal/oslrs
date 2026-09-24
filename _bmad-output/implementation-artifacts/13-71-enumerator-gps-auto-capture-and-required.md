@@ -461,6 +461,53 @@ three commit messages and the sprint-status entry, so the collision is documente
 |---|---|---|---|---|
 | **R1** — `select_multiple` array ORDER is still significant in the duplicate comparison. `SelectMultipleInput` appends in TAP order, so two enumerators choosing the same two skills in a different order do not match | **Low** — a MISSED match, never an invented one, so it biases the detector conservatively. Not a regression: non-empty arrays compare exactly as they did before this story | ⚠️ **OPEN — deliberately not fixed here.** Sorting would make these match, which is defensible on the merits and wrong on the timing: it would INCREASE match ratios on the exact channel R-A8 is about to calibrate, trading AC12's bias for its mirror image. AC12's mandate is to remove a bias, not to swap its sign | Pinned by a test that asserts the CURRENT behaviour (`duplicate-response.heuristic.test.ts`, "array ORDER is still significant"), so any future change is a decision that reds a test rather than a silent drift. Re-check by deleting that test's expectation and observing the red. **REOPEN TRIGGER:** R-A8 calibration reaching `duplicate_partial_threshold`, where the effect can be measured on real ratios instead of guessed | R-A8 (calibration) |
 | **R2** — the briefing renders mojibake in the generated PDF. ⚠️ **AMENDED BY THE ADVERSARIAL REVIEW 2026-09-21: there were TWO glyphs, not one.** `⚠️` at line 14 (the one this row originally named) AND `→` at line 124, in §7's "oyoskills.com → check registration" | **Low** — cosmetic, but the PDF is what is printed and handed to enumerators, and the second glyph sat in the answer to a question respondents actually ask | ⚠️ **OPEN — THE FIX IS IN THE TREE; THE RULING IS NOT.** Both glyph sources are removed and the PDF was re-rendered and read back clean. This row stays OPEN because a review may propose a closure and may never sign one (handoff §2al) — the state cell is the guard's input, not a summary of the work | ⚖️ **PROPOSED for closure — awaiting Awwal's ruling. Two-part attribution: evidence by the adversarial review 2026-09-21; ruling outstanding.** Re-runnable: render via `renderBriefingPdf()`, extract the text, confirm `DO NOT READ OUT A NUMBER` and `oyoskills.com - check registration` both read clean and no unrenderable character remains. ⛔ **DO NOT write the word C-L-O-S-E-D into column 3 when ruling** — `isOpenState` (`story-residual-guard.ts:246`) treats any state containing it as closed, so the obvious phrasing for a proposal would have silently disarmed the guard on an unruled row. Strike the id (`~~R2~~`) or rewrite the state without that word | Awwal |
+⛔ **POST-DEPLOY READ ATTEMPTED 2026-09-24 11:02 UTC — AND IT CANNOT BE RUN. R3, R4 AND R5 STAY OPEN
+FOR A REASON THAT IS NOT ABOUT THIS STORY.**
+
+Deployed `7b13ec3` 2026-09-23 17:45 UTC; the requirement went live at the fence, `2026-09-24T00:00:00Z`.
+Measured read-only on prod:
+
+| window | submissions |
+|---|---|
+| since the deploy (~17 h) | **0** |
+| since the fence (the enforced window) | **0** |
+
+**The trial has not tapered, it has STOPPED.** Enumerator submissions per day: 19 (09-16) → 7 → 1 → 4 →
+1 → **0 → 0 → 0**. Last enumerator submission **2026-09-21 14:23 WAT**; last public one 09-22 11:46.
+
+✅ **AND IT IS NOT US — checked before concluding anything, because 13-70's limiter deploy landed
+2026-09-20 and R1's reopen trigger is exactly this shape:** zero `login_ip_flood_limit_exceeded` and zero
+`rate_limit_exceeded` in the last 3,000 log lines; **0 accounts locked, 0 with failed attempts**; 8 of the
+11 who have ever logged in did so within 7 days, most recently 09-21 14:10 WAT — they logged in,
+submitted, and then stopped. Logins work. Nobody is shut out.
+
+⭐ **SO THE BINDING CONSTRAINT ON THIS STORY IS NO LONGER ENGINEERING.** 13-71 is deployed and cannot be
+proven, because proving it needs field traffic and there is none. F2's target (≥90% over **N ≥ 20** from
+**≥ 5 distinct enumerators**) is not "not yet met" — it is unmeasurable at zero submissions per day, and
+waiting does not fix it. The same zero blocks R-A8's field evidence.
+
+⚠️ **This also weakens the urgency argument for 13-73's AC5** (the form-identity snapshot is not
+retroactive, so "every day without it loses interpretability" assumed rows were arriving — none are).
+
+**RE-RUN THE READ WITH THESE, once traffic resumes** — the discharge is mechanical, not a judgement:
+```sql
+-- R5 must read unexplained = 0; R3 compares pct against the 11.4% (4 of 35) baseline
+SELECT source, count(*) AS rows,
+       count(*) FILTER (WHERE gps_latitude IS NOT NULL)          AS with_gps,
+       count(*) FILTER (WHERE gps_unavailable_reason IS NOT NULL) AS with_reason,
+       count(*) FILTER (WHERE gps_latitude IS NULL
+                          AND gps_unavailable_reason IS NULL)     AS unexplained,
+       count(DISTINCT enumerator_id)                              AS distinct_enumerators
+FROM submissions
+WHERE submitted_at >= '2026-09-24T00:00:00Z' AND source <> 'backfill'
+GROUP BY 1 ORDER BY 1;
+```
+⛔ Exclude operator accounts from any coverage figure (`email NOT LIKE 'lawalkolade%'`), or F2 reads 13.5%
+again instead of 11.4%. And watch two log events on the first real traffic:
+`submission.geopoint_requirement_waived_pre_effective` (the offline queue draining — should stop within a
+day or two) and `submission.geopoint_requirement_waived_legacy_client` (a phone still on the old bundle;
+if that keeps firing, someone has not updated).
+
 | **R3** — AC10's deploy-day prediction cannot be compared until this deploys | **Medium** — it is the story's own success criterion, and an uncompared prediction is just a sentence | ⛔ **OPEN — DISCHARGE-ON-DEPLOY.** Recorded 2026-09-20 BEFORE the run, against a baseline of **11.4% (4 of 35 genuine field submissions)**: GPS-carrying enumerator submissions reach **>90% within one week**. Anything in between is a UX failure to INVESTIGATE, not a success to declare | Run §2a of `docs/runbooks/ops-activity-monitoring.md`. ⛔ The `email NOT LIKE 'lawalkolade%'` exclusion is MANDATORY — nine of 28 enumerator accounts are the operator's own harness logins, and omitting it is exactly how F2 once read 13.5% instead of 11.4%. Minimum sample before quoting either verdict: **N ≥ 20 from ≥ 5 distinct enumerators**, because one row moves the figure ~3 points at present volumes. If the shortfall sits in `denied`, the rollout prompted badly and those phones need the R-a manual fix; if it sits in `unexplained`, see R5 | Awwal / ops |
 | **R4** — AC12's "zero detections would move" is a PRE-deploy measurement and this story is what invalidates it | **Medium** — R-A8 calibrates against the duplicate channel, and this changes what "equal" means on it | ⛔ **OPEN — DISCHARGE-ON-DEPLOY.** Measured read-only on prod 2026-09-20: **0 of 8,284** detections move, because only **3** have ever run `calculateFieldMatchRatio` (ratios 0.3 / 0.2 / 0.2, all below the 0.7 partial threshold) and **0** carry a geopoint on both sides. The moment AC3 takes effect every enumerator pair carries one, so this number is true today and false shortly after deploy | Re-run the §6b.4 queries in the Debug Log once field traffic has accumulated, and **before R-A8 calibrates** — otherwise R-A8 tunes against a ratio distribution that no longer exists. ⚠️ Note when re-reading: the 68 rows with a non-zero `duplicate_score` are NOT from this heuristic; they were written 2026-09-13 by batch-import identity duplication and carry no `maxMatchRatio` | R-A8 (calibration) |
 | **R5** — the new `unexplained` column must read 0 on post-deploy rows | **Medium** — it is the only signal that would distinguish "the requirement is being bypassed" from "coverage is merely low" | ⛔ **OPEN — DISCHARGE-ON-DEPLOY.** §2a counts enumerator submissions carrying NO position AND NO reason. After this story that state should be unreachable through any supported path, so a non-zero count on a post-deploy row is a DEFECT REPORT, not a coverage statistic (A14 — a zero must say which kind of zero it is) | Run §2a and read the last column, filtering to `submitted_at` after the deploy timestamp. Rows from BEFORE the deploy are all unexplained and are not back-fillable — that is the permanent loss this story exists to stop, not a bug to chase | Awwal / ops |
