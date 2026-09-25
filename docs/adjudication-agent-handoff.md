@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-09-20 · 🆕 **NEW PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-09-25 · ⛔ **READ §3's FIRST BOX: a different-model review found FIFTEEN defects in 13-71 that the dev, a same-model review AND adjudication had all approved. Adjudication's "the work is sound" was WRONG. Read the diff for LOGIC before reading the story's account of it; green gates are a precondition, never evidence.** · ✅ **13-70 + 13-71 + 13-73 all on prod (`1248be3`), all still `review` — none can close** · ⛔ **The enumerator trial is STOPPED deliberately, so 13-71 is deployed and unprovable** · 🆕 **PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1120,6 +1120,53 @@ decision, it was the signature.**
   (`grep -c "PROPOSED-CLOSED"` = 0), so it cannot red the repo, per §2ab's blast-radius rule.
 
 
+### 2am. ⭐⭐ GREEN GATES PROVE CONSISTENCY, NOT CORRECTNESS — READ THE DIFF FOR LOGIC FIRST
+*Added 2026-09-25. The most expensive adjudication error this role has made.*
+
+**13-71 was approved by three passes — dev, a same-model adversarial review, and adjudication — and a
+different-model review then found FIFTEEN defects.** Public respondents silently geolocated; three
+separate paths that lost an interview while showing *"Survey saved!"*; three server-owned keys bypassing
+zod so coordinates could be forged; a stale client permanently 422'd. **Every one was readable in the
+diff.** Adjudication's verdict had been *"the work is sound, no defect found in the code."*
+
+⛔ **The failure was not laziness — it was substituting one kind of rigour for another.** The gates were
+verified exhaustively: both suites sharded, three drift guards run direct, File List reconciled to
+`git status`, an attribution sweep, two RED-verifies restored md5-identical. All real work. **None of it
+can tell you whether the code is correct.** A green suite says the code agrees with its own tests.
+
+- ✅ **THE ORDER, and it is the whole fix: read the DIFF for logic BEFORE reading the story's account of
+  it.** The story is an argument for the code. Reading it first anchors you to its framing, and you then
+  spend your attention confirming rather than checking. On the 13-73 pass this order was followed and it
+  held up.
+- ✅ **Then mutate the mechanisms that would fail SILENTLY.** Not the ones with obvious tests — the ones
+  where being wrong produces no error. On 13-71's fix pass that meant the capability flag the whole
+  requirement rides on (make the waiver fire always → 3 tests red) and the server-owned key strip (remove
+  one key → the test named for it reds).
+- ⚠️ **Ask of each fix: what would this look like if it were wrong?** If the answer is "exactly the same",
+  no suite will help you and a mutation is the only instrument.
+- ⭐ **And treat "all findings addressed + gates green" as the START of adjudication, not the end.** The
+  13-71 fix pass introduced no new defects, but only because someone looked for them.
+
+### 2an. ⛔ `it.each` MAKES A GREP UNDERCOUNT — ACCOUNT A TEST DELTA FROM THE RUNNER, NOT THE SOURCE
+*Added 2026-09-25, after reporting four tests "unaccounted" that were never missing.*
+
+§2ah says an unexplained test-count delta is unrecorded work until proven otherwise. **The corollary
+nobody had written: how you count matters, and the obvious method is wrong.**
+
+Adjudicating 13-73, the measured API total was **4,742** against a committed baseline of 4,714. A
+`grep -cE "^\s*(it|test)\("` over every changed test file summed to **+22**, so adjudication reported
+**four tests unaccounted** and told Awwal it would not commit a figure it could not reconcile.
+
+⛔ **The four were an artefact of the count. `it.each` expands ONE source line into N cases**, so a grep
+undercounts precisely where a table-driven test is added — here by **6 across three files**. Taking the
+per-file counts from the runner's own output instead, the delta accounted **exactly to +28**.
+
+- ✅ **The method: `pnpm vitest run --shard=n/4 > run-n.log 2>&1`, then read the per-file
+  `path (N tests)` lines out of the log.** That is the expanded truth; the source is not.
+- ⚠️ **It fails in the safe direction only by luck.** A grep undercount makes real work look unaccounted
+  (noisy but recoverable); the same blind spot would make *removed* `it.each` cases look accounted for.
+- ⭐ Sibling of §2ah and §2af: **suspect the accounting, and suspect the instrument you used to do it.**
+
 ### 2i. Delegating to sub-agents (forks / Explore)
 - Useful for broad multi-file traces (e.g. the send-ownership triangulation used 2 parallel Explore agents). BUT **a sub-agent's self-report can claim edits it never persisted** — always `git status`/diff to confirm side-effects landed; if not, do them yourself. ([[feedback_verify_delegated_agent_disk_state]]) An Explore agent's headline can also contradict its own body (13-34 draft-resume: header said "blast-blocking", body proved the opposite) — read the evidence, not the summary.
 
@@ -1156,7 +1203,85 @@ sit on opposite sides of a boundary — and the far side of a boundary is exactl
 
 ---
 
-## 3. Current state (2026-09-20) — READ THIS ONE
+## 3. Current state (2026-09-25) — READ THIS ONE
+
+⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds. As of 2026-09-25 prod, origin and
+local all read `1248be3`, health 200, tree clean — but verify, do not read.
+
+### ⛔ THE ONE THING TO READ IF YOU READ NOTHING ELSE
+
+**A different-model review found FIFTEEN defects in Story 13-71 that three passes had approved — the dev,
+a same-model adversarial review, and adjudication.** Among them: public respondents silently geolocated,
+and THREE separate paths that lost an interview while showing the enumerator *"Survey saved!"*.
+**Adjudication's verdict had been "the work is sound, no defect found in the code", and it was wrong.**
+
+⭐ **The failure was specific and it is the standing correction for this role: adjudication verified the
+GATES exhaustively — both suites, three drift guards, File List reconciliation, attribution sweep, two
+RED-verifies — and gave the LOGIC far less.** Every one of the fifteen was readable in the diff. Green
+gates proved the story was internally *consistent*, and that was allowed to stand in for *correct*.
+
+⚠️ **So: read the diff for logic BEFORE reading the story's account of it, and treat green gates as a
+precondition, not as evidence.** On the 13-73 pass that order was followed and it worked.
+
+⛔ **AND THE MODEL CAVEAT IS NOW A STANDING COST, NOT A ONE-OFF.** It had been undischarged for two
+stories running when it finally bit. `/code-review ultra` (multi-agent, different models, user-triggered
+and billed) is the discharge. **Build it into anything touching field data, privacy or money** — do not
+reach for it when someone remembers. 13-73's review was ALSO same-model (none available) and said so.
+
+### What shipped, 2026-09-20 → 09-25
+
+- ✅ **13-70 — limiter hygiene.** *A refusal is not a request* is true on **eight route families / twelve
+  limiters**. **R2 DISCHARGED ON PROD: the decrement works against `rate-limit-redis@4`, predicted 21,
+  measured 21.** ⚠️ The story's own post-deploy procedure was UNRUNNABLE (it drove a login refusal, but
+  `verifyCaptcha` sits between the ceiling and the burst limiter, so it needs real hCaptcha tokens).
+  Substituted `GET /auth/activate/:token/validate` — the ceiling→token pair with no captcha, where a
+  bogus UUID returns `200 {"valid":false}`. Still `review`: R5/R6/R8 open, dated 2026-10-15.
+- ✅ **13-71 — GPS auto-capture, deployed `7b13ec3`.** Then fifteen ultra findings, all fixed and all
+  re-verified by adjudication, then deployed. ⛔ **Status `review` and it CANNOT close:** R3/R4/R5 need
+  field traffic and there is none.
+- ✅ **13-73 — the silent-zero class, deployed `1248be3`.** AC2's `no_form_schema` marker (keyed on
+  `formSchema == null`, never on "deleted", so the 10 sentinel rows are covered too), AC4's `deleteForm`
+  guard, AC5's form-identity snapshot written by **all three** producers. **This unblocks 13-72 pass 2.**
+- ✅ **The staff-photos incident.** A test uploaded to the PRODUCTION bucket for seven months and never
+  cleaned up: 1,658 objects, 32 referenced. Teardown added, **1,624 deleted under explicit authorisation
+  (58.33 MB), the 2 genuine one-offs preserved.** Story **13-74** carries the class.
+
+### ⛔ THE BINDING CONSTRAINT IS NOT ENGINEERING — THE ENUMERATOR TRIAL IS STOPPED
+
+**Deliberately, by Awwal, to land the GPS work.** Enumerator submissions per day: 19 → 7 → 1 → 4 → 1 →
+**0 → 0 → 0**; last one 2026-09-21 14:23 WAT. ✅ **Checked it was not us** (13-70's limiter deploy landed
+09-20 and R1's trigger is exactly this shape): zero flood/rate-limit refusals, **0 accounts locked, 0
+failed attempts**, logins fine. ⭐ **The PUBLIC channel is alive and independent — 1–6 submissions a day,
+still arriving.** So 13-71 is deployed and unprovable: F2's target (≥90% over **N ≥ 20** from **≥ 5
+distinct enumerators**) is not "not yet met", it is *unmeasurable* at zero a day, and waiting will not fix
+it. **Re-provisioning the 8 and restarting the trial is the only action that unblocks anything.**
+
+### ⏭️ NEXT
+
+1. 🔴 **Two ZZSMOKE captures** from `lawalkolade+test@gmail.com` on `oslsr_master_v3` — one allowing
+   location, one BLOCKING it **in a fresh incognito window** (the permission is remembered, so the same
+   browser would silently not test the denial path). Discharges 13-73 R7 and gives 13-71 its first
+   evidence on both branches. ⚠️ Operator account — proves the MECHANISM, is NOT field coverage.
+2. **13-73's post-deploy sequence, steps 4/6/7/8/9** — the orphan re-score, then the `019f8ed3` restore
+   (adjudication applies it AFTER deploy so the new `deleteForm` protects the restored archived row),
+   then AC10, then step 9 using **R9's** queries, never R6's.
+3. 🟡 **Re-provision the 8 → restart the trial.** Then F1 and F2 become measurable together.
+4. **13-72** (needs no dev slot — AC10 forbids code outside `scripts/`), then **R-A8** last.
+
+### Rulings and open items carried out of these sessions
+
+- **13-73 R3 — EXPLAINED:** a submission vanished with no audit trail because the cohort teardown is a
+  **raw psql block, and raw SQL cannot write an audit row**. 🐞 **Its secondary finding is OPEN, owner
+  Awwal:** the runbook says *"audit_logs are never deleted… an auditor can see it"* — true about rows not
+  being destroyed, **misleading about the teardown's own deletions, which are never WRITTEN.**
+- **13-73 R2 — DECIDED:** restore `019f8ed3` only; `019d7d40` covers 0 rows and the vanished row was
+  deleted, not re-pointed. Reopen trigger recorded.
+- **13-73 R9 — RULED:** replace R6's reopen query (it JOINs the very form row the race deletes, so it
+  reads 0 in exactly the case it exists to catch) and keep R6 accepted. **R10:** amend 13-72 AC8's TEXT.
+- **13-71 R14, 13-70 R1** — both accepted-with-trigger; the flood ceiling's headroom was sized on "17
+  enumerators", a figure that **mixed field staff with nine operator harness accounts**.
+
+## 3-old10. Current state (2026-09-20) — superseded by §3 above
 
 ⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds — run them, do not read a number.
 ⚠️ At 2026-09-20 13:00Z prod was on **`a4660cc`** while §3 and `MEMORY.md` both still said `826147f` —
