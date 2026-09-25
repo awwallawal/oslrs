@@ -191,6 +191,68 @@ describe('straightLiningHeuristic', () => {
     expect(result.score).toBe(0);
   });
 
+  /*
+   * Story 13-73 AC1 (13-69 R5). The prod row that proved R5 analysed 1 of 2
+   * batteries — so the PARTIAL drop is the case that matters, not only total loss.
+   */
+  describe('an under-answered battery is named, not dropped (13-73 AC1)', () => {
+    const twoBatteries = {
+      sections: [
+        { id: 'skills', questions: Array.from({ length: 6 }, (_, i) => ({ name: `s_q${i}`, type: 'select_one' })) },
+        { id: 'labour', questions: Array.from({ length: 6 }, (_, i) => ({ name: `l_q${i}`, type: 'select_one' })) },
+      ],
+    };
+
+    it('names the dropped battery with its counts while still scoring the one it analysed', async () => {
+      const rawData: Record<string, unknown> = {};
+      for (let i = 0; i < 6; i++) rawData[`s_q${i}`] = '3'; // skills: fully answered, straight-lined
+      for (let i = 0; i < 4; i++) rawData[`l_q${i}`] = '3'; // labour: 4 of 6 — the master form's skip-logic cap
+
+      const result = await straightLiningHeuristic.evaluate(
+        makeSubmission({ formSchema: twoBatteries, rawData }),
+        defaultConfig,
+      );
+
+      expect(result.details.reason).toBe('battery_below_min_answered');
+      expect(result.details.skippedBatteries).toEqual([{ sectionId: 'labour', questionCount: 6, answered: 4 }]);
+      expect(result.details.batteryCount).toBe(2);
+      expect(result.details.analyzedBatteries).toBe(1);
+      // The reason labels a partial measurement; it does NOT void the analysed battery's score.
+      expect(result.score).toBeGreaterThan(0);
+      expect(result.details.flags as string[]).toContain('single_battery_straight_lining');
+    });
+
+    it('carries no reason and an empty skippedBatteries when every battery was measured', async () => {
+      const rawData: Record<string, unknown> = {};
+      for (let i = 0; i < 6; i++) {
+        rawData[`s_q${i}`] = String(i);
+        rawData[`l_q${i}`] = String(i);
+      }
+
+      const result = await straightLiningHeuristic.evaluate(
+        makeSubmission({ formSchema: twoBatteries, rawData }),
+        defaultConfig,
+      );
+
+      expect(result.details.reason).toBeUndefined();
+      expect(result.details.skippedBatteries).toEqual([]);
+      expect(result.details.analyzedBatteries).toBe(2);
+    });
+
+    it('accounts for every battery it found: batteryCount === analyzed + skipped', async () => {
+      const rawData: Record<string, unknown> = { s_q0: '1', l_q0: '1' }; // both under-answered
+      const result = await straightLiningHeuristic.evaluate(
+        makeSubmission({ formSchema: twoBatteries, rawData }),
+        defaultConfig,
+      );
+
+      const skipped = result.details.skippedBatteries as unknown[];
+      expect(result.score).toBe(0);
+      expect(result.details.reason).toBe('battery_below_min_answered');
+      expect(Number(result.details.analyzedBatteries) + skipped.length).toBe(result.details.batteryCount);
+    });
+  });
+
   it('reports correct heuristic metadata', () => {
     expect(straightLiningHeuristic.key).toBe('straight_lining');
     expect(straightLiningHeuristic.category).toBe('straightline');

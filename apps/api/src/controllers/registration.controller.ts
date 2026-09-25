@@ -26,6 +26,7 @@ import {
 import { canonicalizeLgaId } from '../services/lga-canonical.service.js';
 import { normaliseNigerianPhone, isStorableNigerianPhone } from '../lib/normalise/index.js'; // Story 13-57 (AC1)
 import { resolveBoundQuestionnaireFormId } from '../utils/questionnaire-form-binding.js'; // Story 13-23
+import { snapshotFormIdentity } from '../services/form-identity.js'; // Story 13-73 (AC5)
 import { SubmissionProcessingService } from '../services/submission-processing.service.js'; // Story 13-21 (AC2)
 import { sendTelegramMessage } from '../services/alerting/telegram-channel.js'; // Story 13-27 (review M1)
 import pino from 'pino';
@@ -1082,10 +1083,18 @@ export class RegistrationController {
         const effectiveReferenceCode = existingRespondent?.referenceCode ?? referenceCode;
 
         const now = new Date();
+        // Story 13-73 AC5 — snapshot the bound form's identity, fail-open (see
+        // form-identity.ts): provenance must never be able to abort a registration.
+        // `tx` is passed so the lookup runs on THIS connection in a savepoint rather
+        // than taking a second pool connection mid-transaction (13-73 code review).
+        // A sentinel binding (`no-form-pinned-at-submit`) → nulls.
+        const formIdentity = await snapshotFormIdentity(questionnaireFormId, tx);
         await tx.insert(submissions).values({
           id: newSubmissionId,
           submissionUid: newSubmissionUid,
           questionnaireFormId,
+          formIdLogical: formIdentity.formIdLogical,
+          formVersion: formIdentity.formVersion,
           submitterId: null,
           respondentId: row.id,
           enumeratorId: null,

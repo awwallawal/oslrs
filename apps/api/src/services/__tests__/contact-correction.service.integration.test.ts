@@ -15,6 +15,7 @@ import { sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { roles } from '../../db/schema/roles.js';
 import { db } from '../../db/index.js';
+import { ensureRoles } from '../../__tests__/helpers/ensure-roles.js'; // 13-73 R4
 import { respondents } from '../../db/schema/respondents.js';
 import { submissions } from '../../db/schema/submissions.js';
 import { magicLinkTokens } from '../../db/schema/magic-link-tokens.js';
@@ -107,6 +108,8 @@ async function seedRespondent(opts: {
 }
 
 describe('contact-correction.service (13-51 AC2) — real DB', () => {
+  // 13-73 R4 (code review) — `FROM roles LIMIT 1` below needs SOME role to exist.
+  beforeAll(() => ensureRoles('enumerator'));
   beforeAll(cleanup);
   beforeEach(cleanup);
   afterAll(cleanup);

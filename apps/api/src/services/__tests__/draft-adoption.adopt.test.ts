@@ -17,6 +17,7 @@ const { mocks } = vi.hoisted(() => ({
     insertedSubmissions: [] as Record<string, unknown>[],
     submissionUpdates: [] as Record<string, unknown>[],
     processSubmission: vi.fn(),
+    snapshotFormIdentity: vi.fn(),
     respondentUpdates: [] as Record<string, unknown>[],
     respondentInserts: [] as Record<string, unknown>[],
     existingRespondent: null as Record<string, unknown> | null,
@@ -74,6 +75,9 @@ vi.mock('../submission-processing.service.js', () => ({
   SubmissionProcessingService: { processSubmission: mocks.processSubmission },
 }));
 
+// Story 13-73 AC5 — the form-identity snapshot adoption copies onto its submission.
+vi.mock('../form-identity.js', () => ({ snapshotFormIdentity: mocks.snapshotFormIdentity }));
+
 const { adoptDraft, computeEnrichmentFill, enrichExistingRespondent } = await import(
   '../draft-adoption/adopt.js'
 );
@@ -108,6 +112,8 @@ beforeEach(() => {
   mocks.priorAdoption = null;
   mocks.processSubmission.mockReset();
   mocks.processSubmission.mockResolvedValue({ action: 'processed', respondentId: 'resp-1' });
+  mocks.snapshotFormIdentity.mockReset();
+  mocks.snapshotFormIdentity.mockResolvedValue({ formIdLogical: 'oslsr_public_core_v1', formVersion: 'pubcore-3' });
 });
 
 describe('13-49 adopt — adoptDraft (D1/D3)', () => {
@@ -143,6 +149,14 @@ describe('13-49 adopt — adoptDraft (D1/D3)', () => {
     expect(s.questionnaireFormId).toBe(FORM_ID);
     expect(s.source).toBe('public');
     expect(s.submitterId).toBeNull();
+  });
+
+  it('snapshots the pinned form’s identity onto the submission (13-73 AC5)', async () => {
+    await run();
+    expect(mocks.snapshotFormIdentity).toHaveBeenCalledWith(FORM_ID);
+    const s = mocks.insertedSubmissions[0]!;
+    expect(s.formIdLogical).toBe('oslsr_public_core_v1');
+    expect(s.formVersion).toBe('pubcore-3');
   });
 
   it('carries the full answer payload including the Master-only orphans', async () => {

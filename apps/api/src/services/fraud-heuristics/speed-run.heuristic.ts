@@ -31,6 +31,17 @@ export function calculateMedian(values: number[]): number {
 }
 
 /**
+ * Every question the floor below can count, walked exactly as it walks them — so
+ * "zero countable questions" (13-73 R5) can never disagree with the floor it explains.
+ */
+function schemaQuestions(formSchema: Record<string, unknown>): Array<Record<string, unknown>> {
+  const sections = (formSchema.sections ?? formSchema.pages ?? []) as Array<Record<string, unknown>>;
+  return sections.flatMap(
+    (section) => (section.questions ?? section.fields ?? []) as Array<Record<string, unknown>>,
+  );
+}
+
+/**
  * Calculate theoretical minimum completion time based on form question types.
  * Formula: (closedQ * 3s) + (openQ * 8s) + (numericQ * 4s) + 30s overhead.
  */
@@ -42,22 +53,17 @@ export function calculateTheoreticalMinimum(formSchema: Record<string, unknown> 
   let numericQ = 0;
 
   // Parse form schema to count question types
-  const sections = (formSchema.sections ?? formSchema.pages ?? []) as Array<Record<string, unknown>>;
-
-  for (const section of sections) {
-    const questions = (section.questions ?? section.fields ?? []) as Array<Record<string, unknown>>;
-    for (const q of questions) {
-      const type = String(q.type ?? '').toLowerCase();
-      if (['select_one', 'select_multiple', 'radio', 'checkbox', 'boolean', 'likert'].includes(type)) {
-        closedQ++;
-      } else if (['text', 'textarea', 'string'].includes(type)) {
-        openQ++;
-      } else if (['number', 'integer', 'decimal', 'numeric'].includes(type)) {
-        numericQ++;
-      } else {
-        // Default to closed question timing for unknown types
-        closedQ++;
-      }
+  for (const q of schemaQuestions(formSchema)) {
+    const type = String(q.type ?? '').toLowerCase();
+    if (['select_one', 'select_multiple', 'radio', 'checkbox', 'boolean', 'likert'].includes(type)) {
+      closedQ++;
+    } else if (['text', 'textarea', 'string'].includes(type)) {
+      openQ++;
+    } else if (['number', 'integer', 'decimal', 'numeric'].includes(type)) {
+      numericQ++;
+    } else {
+      // Default to closed question timing for unknown types
+      closedQ++;
     }
   }
 
@@ -98,6 +104,7 @@ export const speedRunHeuristic: FraudHeuristic = {
 
     let referenceTime: number;
     let referenceType: 'empirical_median' | 'theoretical_minimum';
+    let reason: 'no_form_schema' | 'no_countable_questions' | undefined;
 
     if (historicalTimes.length >= bootstrapN) {
       // Enough data — use empirical median
@@ -107,6 +114,31 @@ export const speedRunHeuristic: FraudHeuristic = {
       // Bootstrap fallback — theoretical minimum
       referenceTime = calculateTheoreticalMinimum(formSchema);
       referenceType = 'theoretical_minimum';
+      /*
+       * Story 13-73 AC2 (13-69 R8) — SAY WHEN THE FLOOR IS A GUESS.
+       *
+       * With no schema, `calculateTheoreticalMinimum` returns a flat 60 s, and a
+       * submission of a form whose real floor is 246 s is measured against it
+       * without a word. ⛔ Keyed on "the schema is null", NEVER on "the form was
+       * deleted": the null arrives from a deleted form row, from a sentinel
+       * `questionnaire_form_id` (`self-edit`, `no-form-pinned-at-submit`) that the
+       * engine's UUID guard never looks up, and from anything else that resolves
+       * nothing — and all of them are the same guess.
+       *
+       * Only on THIS branch: an empirical median is computed from the enumerator's
+       * own history of the same form and does not consult the schema, so it is not
+       * a guess and carries no reason. The score is kept — AC8 fences thresholds and
+       * scoring out of this story; the marker makes the number labelled, not void.
+       */
+      if (formSchema == null) reason = 'no_form_schema';
+      /*
+       * Story 13-73 R5 (ruled "fix" by Awwal, 2026-09-24) — the same guess in a
+       * different costume. A schema that is PRESENT but yields no countable question
+       * (no sections, empty sections, or a shape this walker does not read) makes the
+       * floor a flat 30 s of overhead. Every live form parses to sections/questions
+       * today, so this is a guard against the next shape, not a live population.
+       */
+      else if (schemaQuestions(formSchema).length === 0) reason = 'no_countable_questions';
     }
 
     // Prevent division by zero
@@ -132,6 +164,7 @@ export const speedRunHeuristic: FraudHeuristic = {
     return {
       score,
       details: {
+        ...(reason ? { reason } : {}),
         completionTimeSeconds,
         referenceTime: Math.round(referenceTime),
         referenceType,

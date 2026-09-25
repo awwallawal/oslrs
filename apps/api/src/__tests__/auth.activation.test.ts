@@ -597,7 +597,6 @@ describe('Auth Activation Integration', () => {
         try {
           await s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key }));
         } catch (err) {
-          // eslint-disable-next-line no-console
           console.warn(`[s3-teardown] could not delete ${Key}:`, (err as Error).message);
         }
       }

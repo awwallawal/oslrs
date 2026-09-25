@@ -48,6 +48,20 @@ export const submissions = pgTable('submissions', {
   // Form reference — stores questionnaire_forms.id UUID
   questionnaireFormId: text('questionnaire_form_id').notNull(),
 
+  // Story 13-73 AC5 — THE FORM IDENTITY, SNAPSHOT AT INSERT.
+  // `questionnaire_forms.form_id` + `.version` of the form this submission was
+  // answered against, copied when the row is written. Until now the form row was
+  // the ONLY record of what a submission was answered against, and deleting it
+  // (283 rows across 5 form ids, measured 2026-09-18) made them uninterpretable.
+  // With the logical id + version, the schema can be matched to a backup or a
+  // re-upload even if the row id is gone — 13-34's standing lesson: pin to
+  // form_id + version, never a row id.
+  // Nullable and NOT back-filled: legacy rows' schemas are what is missing, and a
+  // sentinel `questionnaire_form_id` (`self-edit`, `import:<source>`, …) names a
+  // channel rather than a form, so it has no identity to snapshot.
+  formIdLogical: text('form_id_logical'),
+  formVersion: text('form_version'),
+
   // Submitter info
   submitterId: text('submitter_id'),
 

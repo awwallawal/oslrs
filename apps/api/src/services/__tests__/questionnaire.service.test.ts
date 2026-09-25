@@ -6,7 +6,8 @@ import {
   questionnaireFiles,
   questionnaireVersions,
 } from '../../db/schema/index.js';
-import { users, roles, auditLogs } from '../../db/schema/index.js';
+import { users, roles, auditLogs, submissions } from '../../db/schema/index.js';
+import { AppError } from '@oslsr/utils';
 import { eq, inArray } from 'drizzle-orm';
 import { withAuditLogsMutable } from '../../__tests__/helpers/audit-safe-teardown.js';
 import { QuestionnaireService } from '../questionnaire.service.js';
@@ -434,6 +435,87 @@ describe('QuestionnaireService', () => {
 
       await expect(QuestionnaireService.deleteForm(uploaded.id, testUserId))
         .rejects.toThrow('Only draft or archived forms can be deleted');
+    });
+
+    /*
+     * Story 13-73 AC4 — A FORM ANY SUBMISSION REFERENCES CANNOT BE DELETED.
+     *
+     * The status check alone let an ARCHIVED form be deleted, and archiving is
+     * exactly what a superseded form gets — the mechanism that orphaned 283
+     * submissions across 5 form ids (measured 2026-09-18), including a form behind
+     * 73 live submissions deleted while submissions were still arriving against it.
+     * Both directions are tested on the ARCHIVED path, because that is the one that
+     * did the damage; a draft with a referencing row is refused too.
+     */
+    describe('refuses a form that submissions reference (13-73 AC4)', () => {
+      const submissionUids: string[] = [];
+
+      afterAll(async () => {
+        if (submissionUids.length > 0) {
+          await db.delete(submissions).where(inArray(submissions.submissionUid, submissionUids));
+        }
+      });
+
+      async function uploadInStatus(tag: string, status: 'draft' | 'archived') {
+        const buffer = createValidOslsrForm(`${tag}_${Date.now()}`, '1.0.0');
+        const uploaded = await QuestionnaireService.uploadForm(
+          { buffer, originalname: `${tag}.xlsx`, mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: buffer.length },
+          testUserId,
+        );
+        if (status === 'archived') {
+          // The SUPERSEDED path, as prod takes it: published → deprecated → archived.
+          await QuestionnaireService.updateFormStatus(uploaded.id, 'published', testUserId);
+          await QuestionnaireService.updateFormStatus(uploaded.id, 'deprecated', testUserId);
+          await QuestionnaireService.updateFormStatus(uploaded.id, 'archived', testUserId);
+        }
+        return uploaded;
+      }
+
+      async function submitAgainst(formRowId: string) {
+        const uid = `s1373-${uuidv7()}`;
+        submissionUids.push(uid);
+        await db.insert(submissions).values({
+          submissionUid: uid,
+          questionnaireFormId: formRowId,
+          rawData: {},
+          submittedAt: new Date(),
+          source: 'public',
+        });
+      }
+
+      it('refuses an ARCHIVED form with a referencing submission, and leaves the row in place', async () => {
+        const uploaded = await uploadInStatus('ref_archived', 'archived');
+        testFormIds.push(uploaded.id);
+        await submitAgainst(uploaded.id);
+        await submitAgainst(uploaded.id);
+
+        const err = await QuestionnaireService.deleteForm(uploaded.id, testUserId).catch((e) => e);
+        expect(err).toBeInstanceOf(AppError);
+        expect(err.code).toBe('FORM_HAS_SUBMISSIONS');
+        expect(err.statusCode).toBe(409);
+        expect(err.details).toMatchObject({ submissionCount: 2 });
+
+        // The whole point: the schema those two rows were answered against survives.
+        const still = await QuestionnaireService.getFormById(uploaded.id);
+        expect(still?.id).toBe(uploaded.id);
+      });
+
+      it('refuses a DRAFT form with a referencing submission too — the guard is about references, not status', async () => {
+        const uploaded = await uploadInStatus('ref_draft', 'draft');
+        testFormIds.push(uploaded.id);
+        await submitAgainst(uploaded.id);
+
+        await expect(QuestionnaireService.deleteForm(uploaded.id, testUserId))
+          .rejects.toMatchObject({ code: 'FORM_HAS_SUBMISSIONS' });
+      });
+
+      it('still deletes an ARCHIVED form that no submission references', async () => {
+        const uploaded = await uploadInStatus('unref_archived', 'archived');
+
+        await QuestionnaireService.deleteForm(uploaded.id, testUserId);
+
+        expect(await QuestionnaireService.getFormById(uploaded.id)).toBeNull();
+      });
     });
   });
 

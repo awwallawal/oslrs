@@ -31,14 +31,15 @@
  * the first test below. A new detector therefore cannot ship a silent zero without
  * someone deciding, in this file, what its evidence looks like.
  *
- * ⚠️ THE KNOWN VIOLATIONS ARE PINNED, NOT SKIPPED (see the last describe block).
- * R5 and R8 are real and are NOT fixed here — `fraud-heuristics/` is out of scope
- * by 13-69 AC10, and the fix is a threshold/design question. Hiding them behind an
- * allowlist would make this file a test that passes over a hole
- * [[pattern-test-that-passes-over-a-hole]], so instead the current wrong behaviour
- * is asserted explicitly. **Those tests RED when R5 or R8 is fixed** — that is
- * intentional, and the fix is to move the heuristic's row from the violations
- * block into the contract sweep above it.
+ * ✅ THE KNOWN VIOLATIONS BLOCK IS EMPTY (Story 13-73 AC3). 13-69 shipped this
+ * file with R5 and R8 pinned as asserted-wrong behaviour rather than skipped, so
+ * the class was countable — two. 13-73 fixed both and PROMOTED them into the sweep
+ * below as two new contexts: an under-answered battery (R5), and a schema that is
+ * absent (R8). The second is a stronger clause than "describes itself", because
+ * R8 always passed that one — it reports a `tier` — while measuring against a
+ * guessed 60-second floor. See the last describe block for why it is behavioural.
+ * ⛔ A future violation goes back into a pinned block here, never into an allowlist
+ * [[pattern-test-that-passes-over-a-hole]].
  */
 
 import { describe, it, expect } from 'vitest';
@@ -149,21 +150,12 @@ describe('fraud heuristics — the self-description contract', () => {
       expect(describesItself(h.key, details), `${h.key} → ${JSON.stringify(details)}`).toBe(true);
     }
   });
-});
 
-/*
- * ⛔ THE KNOWN VIOLATIONS, ASSERTED AS THEY CURRENTLY BEHAVE.
- *
- * Both are recorded residuals of 13-69 and both are out of scope by AC10. They are
- * here so the class is COUNTABLE — two, today — rather than rediscovered. When
- * either is fixed these tests go red, which is the signal to move that heuristic
- * into the contract sweep above and delete its block here.
- */
-describe('fraud heuristics — known contract violations (13-69 R5, R8)', () => {
-  it('R5: straight_lining drops an under-answered battery with NO reason', async () => {
+  it('describes itself when a battery is FOUND but under-answered (13-69 R5, promoted by 13-73)', async () => {
     // A real battery (5 `select_one` in one section) with only 3 answered — exactly
     // what the master form's labour battery produces, because its skip logic caps a
-    // respondent at 4 of 6 against `straightline_min_battery_size = 5`.
+    // respondent at 4 of 6 against `straightline_min_battery_size = 5`. Until 13-73
+    // this returned `batteryCount: 1, analyzedBatteries: 0` and nothing else.
     const ctx = emptyContext({
       formSchema: {
         sections: [
@@ -176,31 +168,112 @@ describe('fraud heuristics — known contract violations (13-69 R5, R8)', () => 
       rawData: { q1: 'no', q2: 'no', q3: 'no' },
     });
 
-    const h = heuristicsFor(ctx).find((x) => x.key === 'straight_lining')!;
-    const { score, details } = await h.evaluate(ctx, []);
+    const failures: string[] = [];
+    let slDetails: Record<string, unknown> | undefined;
+    for (const h of heuristicsFor(ctx)) {
+      const { details } = await h.evaluate(ctx, []);
+      if (h.key === 'straight_lining') slDetails = details;
+      if (!describesItself(h.key, details)) failures.push(`${h.key} → ${JSON.stringify(details)}`);
+    }
 
-    expect(score).toBe(0);
-    expect(details.batteryCount).toBe(1); // it FOUND the battery …
-    expect(details.analyzedBatteries).toBe(0); // … and then dropped it,
-    expect(hasReason(details)).toBe(false); // … saying nothing. ← R5
-    expect(describesItself('straight_lining', details)).toBe(false);
+    // Non-vacuity (13-73 code review): the pin this replaced asserted the battery was
+    // FOUND. Without it, a drift in battery detection turns this fixture into
+    // `no_batteries_found` — which "describes itself" — and the clause stops testing R5.
+    expect(slDetails, 'straight_lining did not run on this context').toBeDefined();
+    expect(slDetails).toMatchObject({ batteryCount: 1, analyzedBatteries: 0 });
+    expect(failures, 'Silent zeroes on an under-answered battery:\n' + failures.join('\n')).toEqual([]);
   });
 
-  it('R8: speed_run uses the 60s fallback when the form schema is GONE, and does not say so', async () => {
-    // 293 live rows resolve to a null schema — 283 whose form row was deleted, plus
-    // the `self-edit` and `no-form-pinned-at-submit` sentinels. The real floor for
-    // the master form is 246s; measuring against 60 under-flags and is invisible.
-    const ctx = emptyContext({ completionTimeSeconds: 800, formSchema: null });
+  /*
+   * ⭐ R8, PROMOTED — AND WHY THIS CLAUSE IS BEHAVIOURAL RATHER THAN A LIST.
+   *
+   * `speed_run` always passed "describes itself": it reports a `tier`. What it did
+   * not do was say that the reference the tier was computed against was a GUESS —
+   * `calculateTheoreticalMinimum(null)` is a flat 60 s. So the property here is
+   * stronger: **if a heuristic's result DEPENDS on the form schema, then when the
+   * schema is absent it must carry a `reason`.**
+   *
+   * Dependence is DETECTED, not declared: every heuristic is run on the same
+   * answers and clock with the schema and without it, and any whose details differ
+   * is schema-dependent by observation. A declared list would be one more registry
+   * a new heuristic could be left out of; this cannot be — a heuristic that starts
+   * reading `formSchema` is enrolled by the act of reading it.
+   *
+   * The context is chosen so the schema MATTERS to both readers today (a full
+   * battery for `straight_lining`, a countable question set whose floor is not 60 s
+   * for `speed_run`). The first assertion proves that, so this test cannot pass
+   * vacuously by comparing two identical outputs.
+   */
+  it('says so when the form schema is ABSENT, for every heuristic whose result depends on it (13-69 R8, promoted by 13-73)', async () => {
+    const answers = { q1: 'a', q2: 'b', q3: 'c', q4: 'd', q5: 'e' };
+    const schema = {
+      sections: [
+        { id: 'battery', questions: Object.keys(answers).map((name) => ({ name, type: 'select_one' })) },
+      ],
+    };
+    const withSchema = emptyContext({ completionTimeSeconds: 800, rawData: answers, formSchema: schema });
+    const withoutSchema = emptyContext({ completionTimeSeconds: 800, rawData: answers, formSchema: null });
 
-    const h = heuristicsFor(ctx).find((x) => x.key === 'speed_run')!;
-    const { details } = await h.evaluate(ctx, []);
+    const dependent: string[] = [];
+    const silent: string[] = [];
+    for (const h of heuristicsFor(withSchema)) {
+      const a = (await h.evaluate(withSchema, [])).details;
+      const b = (await h.evaluate(withoutSchema, [])).details;
+      if (JSON.stringify(a) === JSON.stringify(b)) continue;
+      dependent.push(h.key);
+      if (!hasReason(b)) silent.push(`${h.key} → ${JSON.stringify(b)}`);
+    }
 
-    expect(details.referenceTime).toBe(60); // the fallback, not a real floor
-    expect(details.referenceType).toBe('theoretical_minimum');
-    // ⚠️ It passes the self-description contract (it reports a `tier`), which is why
-    // R8 needs its own marker: nothing here distinguishes "computed from the form"
-    // from "the form is missing and I guessed 60".
-    expect(details.schemaMissing).toBeUndefined(); // ← R8: the marker that should exist
-    expect(describesItself('speed_run', details)).toBe(true);
+    // Non-vacuity: both of today's schema readers were observed to depend on it.
+    expect(dependent).toEqual(expect.arrayContaining(['speed_run', 'straight_lining']));
+    expect(
+      silent,
+      'These computed a result WITHOUT the schema their result depends on, and did not say so:\n' +
+        silent.join('\n'),
+    ).toEqual([]);
+  });
+
+  /*
+   * 13-73 R5 (ruled "fix" by Awwal, 2026-09-24) — AN EMPTY SCHEMA IS AS ABSENT AS A
+   * NULL ONE. Same behavioural clause as above, with `{ sections: [] }` in place of
+   * `null`: `speed_run` fell back to a flat 30 s floor here and said nothing. The
+   * detection is again by observation, so a future reader of the schema is enrolled
+   * by reading it.
+   */
+  it('says so when the form schema is present but EMPTY, for every heuristic whose result depends on it (13-73 R5)', async () => {
+    const answers = { q1: 'a', q2: 'b', q3: 'c', q4: 'd', q5: 'e' };
+    const schema = {
+      sections: [
+        { id: 'battery', questions: Object.keys(answers).map((name) => ({ name, type: 'select_one' })) },
+      ],
+    };
+    const withSchema = emptyContext({ completionTimeSeconds: 800, rawData: answers, formSchema: schema });
+    const emptySchema = emptyContext({ completionTimeSeconds: 800, rawData: answers, formSchema: { sections: [] } });
+
+    const dependent: string[] = [];
+    const silent: string[] = [];
+    for (const h of heuristicsFor(withSchema)) {
+      const a = (await h.evaluate(withSchema, [])).details;
+      const b = (await h.evaluate(emptySchema, [])).details;
+      if (JSON.stringify(a) === JSON.stringify(b)) continue;
+      dependent.push(h.key);
+      if (!hasReason(b)) silent.push(`${h.key} → ${JSON.stringify(b)}`);
+    }
+
+    expect(dependent).toEqual(expect.arrayContaining(['speed_run', 'straight_lining']));
+    expect(
+      silent,
+      'These computed a result from an EMPTY schema and did not say so:\n' + silent.join('\n'),
+    ).toEqual([]);
   });
 });
+
+/*
+ * ✅ THE KNOWN VIOLATIONS — NONE (Story 13-73 AC3, 2026-09-24).
+ *
+ * A describe block here held R5 and R8 as asserted-wrong behaviour from 13-69 until
+ * 13-73 fixed both; each now lives in the sweep above as a context of its own. The
+ * count is ZERO. The next violation found goes HERE as a pinned block — asserting
+ * its current wrong output, so it goes red when fixed — never into an allowlist and
+ * never skipped.
+ */

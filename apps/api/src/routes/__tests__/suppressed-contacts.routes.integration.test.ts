@@ -38,6 +38,7 @@ const { submissions } = await import('../../db/schema/submissions.js');
 const { magicLinkTokens } = await import('../../db/schema/magic-link-tokens.js');
 const { users } = await import('../../db/schema/users.js');
 const { roles } = await import('../../db/schema/roles.js');
+const { ensureRoles } = await import('../../__tests__/helpers/ensure-roles.js'); // 13-73 R4
 const { emailSuppressions } = await import('../../db/schema/email-suppressions.js');
 const routerModule = await import('../suppressed-contacts.routes.js');
 
@@ -104,6 +105,7 @@ async function seed(opts: {
 describe('suppressed-contacts routes (13-51) — real service, real DB', () => {
   beforeAll(async () => {
     await cleanup();
+    await ensureRoles('enumerator'); // 13-73 R4 (code review) — the LIMIT 1 below needs SOME role
     const role = await db.select({ id: roles.id }).from(roles).limit(1);
     await db.insert(users).values({
       id: ACTOR_ID,

@@ -38,6 +38,7 @@ const {
   mockSendRegistrationAutoEmails,
   mockRunPostSubmissionSideEffects,
   mockLoggerWarn,
+  mockSnapshotFormIdentity,
 } = vi.hoisted(() => ({
   mockPeekToken: vi.fn(),
   mockConsumeTokenTx: vi.fn(),
@@ -63,6 +64,12 @@ const {
   // present in the log output. This is the story's keystone observability; a
   // silent removal must fail the suite (the 13-21 silent-fallback lesson).
   mockLoggerWarn: vi.fn(),
+  // Story 13-73 AC5 — the form-identity snapshot the wizard copies onto its submission.
+  mockSnapshotFormIdentity: vi.fn(),
+}));
+
+vi.mock('../../services/form-identity.js', () => ({
+  snapshotFormIdentity: mockSnapshotFormIdentity,
 }));
 
 // Story 13-23 (AC3) — the controller creates `const logger = pino(...)` at
@@ -288,6 +295,8 @@ beforeEach(() => {
   // Story 13-27 (AC1) — shared post-submission side-effects entrypoint is fired
   // fire-and-forget (`void ...catch`); resolve so the .catch never triggers.
   mockRunPostSubmissionSideEffects.mockResolvedValue(undefined);
+  // Story 13-73 AC5 — default: no identity resolved (the sentinel / missing-row shape).
+  mockSnapshotFormIdentity.mockResolvedValue({ formIdLogical: null, formVersion: null });
   // Default: transactions just invoke the callback with a passthrough tx that
   // returns the same mock chains so the controllers' tx.insert/tx.delete/etc
   // calls behave like the top-level db. Individual tests override.
@@ -1094,6 +1103,53 @@ describe('POST /registration/wizard', () => {
       .send(validBody({ nin: '12345678901' }));
     expect(res.status).toBe(201);
     expect(res.body.data).toMatchObject({ respondentId: 'resp-1', status: 'active' });
+  });
+
+  /*
+   * Story 13-73 AC5 — the wizard's submission row carries the bound form's IDENTITY.
+   * The columns themselves are proven against PostgreSQL in
+   * webhook-ingestion.form-identity.integration.test.ts; this proves the wizard's
+   * own insert asks for the snapshot of the form it BOUND to and writes what it got.
+   */
+  it('Story 13-73 — snapshots the bound form identity (form_id + version) onto the submission row', async () => {
+    const boundFormId = '019f48c2-0001-7000-8000-000000000001';
+    mockSnapshotFormIdentity.mockResolvedValue({ formIdLogical: 'oslsr_public_core_v1', formVersion: 'pubcore-3' });
+    mockRespondentsFindFirst.mockResolvedValueOnce(null);
+    const submissionValues = vi.fn(() => Promise.resolve(undefined));
+    let wizardTx: unknown;
+    mockTransactionImpl.mockImplementationOnce(async (cb: (tx: unknown) => unknown) => {
+      const tx = {
+        query: {
+          wizardDrafts: {
+            findFirst: () => Promise.resolve({
+              createdAt: new Date('2026-05-20T07:00:00Z'),
+              formData: { questionnaireFormId: boundFormId },
+            }),
+          },
+        },
+        insert: vi.fn()
+          .mockReturnValueOnce({ values: () => ({ returning: () => Promise.resolve([{ id: 'resp-1', status: 'active' }]) }) })
+          .mockReturnValueOnce({ values: submissionValues }),
+        delete: () => ({ where: () => Promise.resolve() }),
+        execute: vi.fn(),
+      };
+      wizardTx = tx;
+      return cb(tx);
+    });
+
+    const res = await request(buildApp()).post('/registration/wizard').send(validBody({ nin: '12345678919' }));
+
+    expect(res.status).toBe(201);
+    // 13-73 code review — the WIZARD'S OWN tx is passed, so the lookup runs on its
+    // connection (in a savepoint) instead of taking a second one from the pool.
+    expect(mockSnapshotFormIdentity).toHaveBeenCalledWith(boundFormId, wizardTx);
+    expect(submissionValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        questionnaireFormId: boundFormId,
+        formIdLogical: 'oslsr_public_core_v1',
+        formVersion: 'pubcore-3',
+      }),
+    );
   });
 
   it('Story 13-15 — still rejects a malformed NIN (format guard retained)', async () => {

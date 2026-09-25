@@ -162,6 +162,24 @@ export const straightLiningHeuristic: FraudHeuristic = {
       flagged: boolean;
     }> = [];
 
+    /*
+     * Story 13-73 AC1 (13-69 R5) — A DROPPED BATTERY IS NAMED, WITH THE COUNTS.
+     *
+     * An under-answered battery used to `continue` with no trace, so
+     * `analyzedBatteries: 0` could not be told from a clean measurement — and on the
+     * master form the labour battery is dropped on every submission, because its
+     * skip logic caps a respondent at 4 answered against a minimum of 5. That is the
+     * battery a real straight-liner would trip.
+     *
+     * `reason` is set whenever ANY battery was dropped, not only when all were: the
+     * prod case that proved R5 analysed 1 of 2, and a reason present only on total
+     * loss would hide exactly that row from a `GROUP BY details->>'reason'`. ⚠️ So
+     * here `reason` does NOT mean "the score is void" — batteries that WERE analysed
+     * still score. It means "part of this form was not measured, and here is why".
+     * Invariant: batteryCount === analyzedBatteries + skippedBatteries.length.
+     */
+    const skippedBatteries: Array<{ sectionId: string; questionCount: number; answered: number }> = [];
+
     let flaggedCount = 0;
 
     for (const battery of batteries) {
@@ -175,7 +193,13 @@ export const straightLiningHeuristic: FraudHeuristic = {
       }
 
       if (responses.length < minBatterySize) {
-        continue; // Not enough answered questions in this battery
+        // Not enough answered questions to measure this battery — recorded, not dropped.
+        skippedBatteries.push({
+          sectionId: battery.sectionId,
+          questionCount: battery.questionNames.length,
+          answered: responses.length,
+        });
+        continue;
       }
 
       const pir = calculatePIR(responses);
@@ -229,8 +253,10 @@ export const straightLiningHeuristic: FraudHeuristic = {
     return {
       score,
       details: {
+        ...(skippedBatteries.length > 0 ? { reason: 'battery_below_min_answered' } : {}),
         batteryCount: batteries.length,
         analyzedBatteries: batteryResults.length,
+        skippedBatteries,
         flaggedBatteries: flaggedCount,
         maxLIS,
         minEntropy: minEntropy === Infinity ? null : minEntropy,

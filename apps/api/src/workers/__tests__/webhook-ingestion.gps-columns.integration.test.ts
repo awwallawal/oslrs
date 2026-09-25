@@ -27,6 +27,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db/index.js';
+import { ensureRoles } from '../../__tests__/helpers/ensure-roles.js'; // 13-73 R4
 
 /*
  * Mock ONLY the transport. The BullMQ `Worker` is constructed at module import
@@ -125,6 +126,7 @@ async function storedRow(uid: string) {
 }
 
 beforeAll(async () => {
+  await ensureRoles('enumerator'); // 13-73 R4
   // `questionnaire_forms.uploaded_by` is NOT NULL, so the form needs an owner.
   // The role is NAMED rather than `LIMIT 1` — on this database an unnamed pick
   // can hand back `PERF_USER`, and a fixture that quietly changes identity is

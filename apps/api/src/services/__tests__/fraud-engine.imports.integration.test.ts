@@ -19,6 +19,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db/index.js';
+import { ensureRoles } from '../../__tests__/helpers/ensure-roles.js'; // 13-73 R4
 import { fraudDetections } from '../../db/schema/index.js';
 import { FraudEngine } from '../fraud-engine.service.js';
 import { AssessorService } from '../assessor.service.js';
@@ -54,6 +55,7 @@ const ROLL = [
 ];
 
 beforeAll(async () => {
+  await ensureRoles('enumerator'); // 13-73 R4 (code review) — `FROM roles r LIMIT 1` needs SOME role
   const [u] = (await db.execute(sql`
     INSERT INTO users (id, email, full_name, role_id, status, auth_provider, created_at, updated_at)
     SELECT gen_random_uuid(), ${`${TAG}@test.local`}, ${`${TAG} uploader`}, r.id, 'active', 'local', now(), now()

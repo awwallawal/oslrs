@@ -3,9 +3,10 @@ import {
   questionnaireForms,
   questionnaireFiles,
   questionnaireVersions,
+  submissions,
 } from '../db/schema/index.js';
 import { AuditService } from './audit.service.js';
-import { eq, desc, count } from 'drizzle-orm';
+import { eq, desc, count, sql } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { AppError } from '@oslsr/utils';
 import { XlsformParserService } from './xlsform-parser.service.js';
@@ -460,7 +461,7 @@ export class QuestionnaireService {
   }
 
   /**
-   * Delete a draft form (only drafts can be deleted)
+   * Delete a draft or archived form that NO submission references (Story 13-73 AC4).
    */
   static async deleteForm(id: string, userId: string): Promise<void> {
     const form = await db.query.questionnaireForms.findFirst({
@@ -481,6 +482,44 @@ export class QuestionnaireService {
     }
 
     await db.transaction(async (tx) => {
+      /*
+       * Story 13-73 AC4 — A FORM ANY SUBMISSION REFERENCES CANNOT BE DELETED.
+       *
+       * The status check above permits `archived`, and archiving is exactly what a
+       * superseded form gets — so the lifecycle's normal end was a hard delete of the
+       * ONLY copy of the schema its submissions were answered against. Measured
+       * 2026-09-18: 283 submissions across 5 deleted form ids, one of them behind 73
+       * live submissions and deleted while submissions were still arriving against it.
+       * Without the schema, the fraud engine's speed floor collapses to a 60 s guess
+       * and straight-lining has nothing to find batteries in.
+       *
+       * ⚠️ A TEXT comparison, not a foreign key: `questionnaire_form_id` also holds
+       * channel sentinels (`import:<source>`, `self-edit`, …), so it cannot gain a FK.
+       *
+       * The form row is locked first so two concurrent deletes serialise. ⚠️ A
+       * submission INSERT does not take that lock (there is no FK to make it), so a
+       * row arriving in the milliseconds between this count and the delete is not
+       * caught here — AC5's `form_id_logical` / `form_version` snapshot is what keeps
+       * such a row interpretable. An archived form taking live traffic is itself the
+       * anomaly this guard exists to stop turning into data loss.
+       */
+      await tx.execute(sql`SELECT id FROM questionnaire_forms WHERE id = ${id} FOR UPDATE`);
+      const [{ value: submissionCount }] = await tx
+        .select({ value: count() })
+        .from(submissions)
+        .where(eq(submissions.questionnaireFormId, id));
+
+      if (submissionCount > 0) {
+        throw new AppError(
+          'FORM_HAS_SUBMISSIONS',
+          `This form cannot be deleted: ${submissionCount} submission(s) were answered against it, ` +
+            'and deleting it would destroy the only record of the questions they answered. ' +
+            'Leave it archived instead.',
+          409,
+          { submissionCount, currentStatus: form.status },
+        );
+      }
+
       // Delete version records first (FK constraint)
       await tx
         .delete(questionnaireVersions)

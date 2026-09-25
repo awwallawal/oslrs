@@ -80,6 +80,18 @@ so that **R-A8 tunes thresholds against the trial cohort's own field behaviour i
 
 ## Dev Notes
 
+### ⏳ Pass 2's blocker — 13-73 status, 2026-09-24 (13-73 AC10): IN REVIEW, NOT YET UNBLOCKED
+
+Recorded by 13-73's dev-story so this story's reader does not have to open that one. **Pass 2 stays BLOCKED** until BOTH are true on prod:
+1. **13-73 is deployed** and a null-schema row is scored with `speed_details.reason = 'no_form_schema'` — code written and tested 2026-09-24, uncommitted, in code review.
+2. **13-73's AC6 restore is APPLIED** (its R1) — the SQL is prepared and rehearsed; the prod write is adjudication/operator's.
+
+⚠️ **Before pass 2's AC8 check (added by 13-73 code review, 2026-09-25):** AC8 says "`speed_details.reason` absent for the rows that carry a completion time". After 13-73, every NULL-SCHEMA row in pass 2 stores `speed_details.reason = 'no_form_schema'` by design, so that check will read as failing on them. Do not "fix" the marker — the reading awaits Awwal's ruling in **13-73 R10**. Pass 1 (rows on a live form) is unaffected.
+
+**What pass 2 will then look like (re-measured 2026-09-24, read-only on prod `7b13ec3`):** **282** submissions on a deleted form row (was 283 — the one enumerator row on `019d7d40` is gone, unaudited; 13-73 R3), all public, across 4 ids; **204** of them (`019f8ed3`) regain a real schema once the restore is applied; the other **78** + the 10 sentinels (**88**) are scored with the `no_form_schema` marker. ⭐ Rehearsed on one such row through the real engine: restored → reference 155 s, `speeder`, speed 12; absent → reference 60 s, `normal`, speed 0, marked. ⚠️ Straight-lining will also carry `battery_below_min_answered` on master-form enumerator rows now (13-73 AC1) — that `reason` means "the labour battery was not measured", NOT "the heuristic did not run"; `analyzedBatteries` still says what it measured.
+
+The "pass 2 UNBLOCKED" line is written by the session that deploys 13-73 and applies the restore (13-73 R8) — not before. ⚠️ **Ruled by Awwal 2026-09-24:** because the trial is paused, R8 is discharged by TWO deliberate re-scores — one of the 78 unrecoverable orphans (must store `no_form_schema`) and one of the 204 restored rows (must store a real floor, no reason). Those two rows are effectively pass 2's first rows; the sequence is 13-73's "Post-deploy sequence — for adjudication".
+
 ### The measured baseline (2026-09-18, read-only against prod `5c4cc93`) — RE-MEASURE BEFORE RUNNING
 
 | | |

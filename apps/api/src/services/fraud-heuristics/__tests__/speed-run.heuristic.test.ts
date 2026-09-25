@@ -154,6 +154,71 @@ describe('speedRunHeuristic', () => {
     expect(result.details.referenceType).toBe('theoretical_minimum');
   });
 
+  /*
+   * Story 13-73 AC2 (13-69 R8). The reason keys on "the schema is null" and only on
+   * the theoretical-minimum branch — the one that consults the schema.
+   */
+  describe('says when its floor is a guess (13-73 AC2)', () => {
+    const recentOf = (n: number, seconds: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `sub-${i}`,
+        submittedAt: new Date(Date.now() - i * 3600000).toISOString(),
+        gpsLatitude: null,
+        gpsLongitude: null,
+        completionTimeSeconds: seconds,
+        rawData: null,
+        enumeratorId: 'enum-1',
+        questionnaireFormId: 'form-1',
+      }));
+
+    it('marks no_form_schema on the 60 s fallback and keeps the score it computed', async () => {
+      // 10 s against a 60 s guess is a superspeeder: the marker labels that number, it does not void it (AC8).
+      const result = await speedRunHeuristic.evaluate(
+        makeSubmission({ completionTimeSeconds: 10, formSchema: null }),
+        defaultConfig,
+      );
+      expect(result.details.reason).toBe('no_form_schema');
+      expect(result.details.referenceTime).toBe(60);
+      expect(result.details.referenceType).toBe('theoretical_minimum');
+      expect(result.details.tier).toBe('superspeceder');
+      expect(result.score).toBe(25);
+    });
+
+    it('carries no reason when the floor is computed from a real schema', async () => {
+      const formSchema = { sections: [{ id: 's1', questions: [{ name: 'q1', type: 'text' }] }] };
+      const result = await speedRunHeuristic.evaluate(makeSubmission({ formSchema }), defaultConfig);
+      expect(result.details.reason).toBeUndefined();
+      expect(result.details.referenceTime).toBe(38); // 1 open question × 8 s + 30 s overhead
+    });
+
+    /*
+     * Story 13-73 R5 (ruled "fix" by Awwal, 2026-09-24): a schema that is PRESENT but
+     * yields no countable question makes the floor a flat 30 s — the same guess as
+     * the null case, in a different costume.
+     */
+    it.each([
+      ['no sections', { sections: [] }],
+      ['sections with no questions', { sections: [{ id: 's1', questions: [] }] }],
+      ['a shape the parser does not read', { groups: [{ items: [{ name: 'q1' }] }] }],
+    ])('marks no_countable_questions when the schema has %s', async (_label, formSchema) => {
+      const result = await speedRunHeuristic.evaluate(
+        makeSubmission({ formSchema: formSchema as Record<string, unknown> }),
+        defaultConfig,
+      );
+      expect(result.details.reason).toBe('no_countable_questions');
+      expect(result.details.referenceTime).toBe(30);
+    });
+
+    it('carries no reason on an empirical median, which never consults the schema', async () => {
+      const result = await speedRunHeuristic.evaluate(
+        makeSubmission({ formSchema: null, recentSubmissions: recentOf(30, 400) }),
+        defaultConfig,
+      );
+      expect(result.details.referenceType).toBe('empirical_median');
+      expect(result.details.reason).toBeUndefined();
+    });
+  });
+
   it('reports correct heuristic metadata', () => {
     expect(speedRunHeuristic.key).toBe('speed_run');
     expect(speedRunHeuristic.category).toBe('speed');

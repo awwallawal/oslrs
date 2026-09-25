@@ -20,6 +20,7 @@ import { db } from '../../db/index.js';
 import { respondents } from '../../db/schema/respondents.js';
 import { submissions } from '../../db/schema/submissions.js';
 import { SubmissionProcessingService } from '../submission-processing.service.js';
+import { snapshotFormIdentity } from '../form-identity.js';
 import {
   ADOPTION_MARKER,
   assertConsentActionable,
@@ -129,10 +130,16 @@ export async function adoptDraft({
   const submissionId = uuidv7();
   const submissionUid = uuidv7();
 
+  // Story 13-73 AC5 — adoption writes a REAL form id (the one the draft was filled
+  // against), so it snapshots the identity like every other real-form producer.
+  const { formIdLogical, formVersion } = await snapshotFormIdentity(questionnaireFormId);
+
   await db.insert(submissions).values({
     id: submissionId,
     submissionUid,
     questionnaireFormId,
+    formIdLogical,
+    formVersion,
     submitterId: null,
     respondentId: null,
     enumeratorId: null,

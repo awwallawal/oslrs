@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '../../db/index.js';
+import { ensureRoles } from '../../__tests__/helpers/ensure-roles.js'; // 13-73 R4
 import { users, roles } from '../../db/schema/index.js';
 import { StaffService } from '../staff.service.js';
 
@@ -36,6 +37,7 @@ const adminEmail = `admin-${tag}@example.test`;
 const createdIds: string[] = [];
 
 async function roleIdFor(name: string): Promise<string> {
+  await ensureRoles(name); // 13-73 R4 — never depend on another file having seeded it
   const row = await db.query.roles.findFirst({ where: eq(roles.name, name) });
   if (!row) throw new Error(`role ${name} missing from the test DB — run db:seed`);
   return row.id;

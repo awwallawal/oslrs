@@ -35,6 +35,7 @@ import {
 // import this (schema files must not depend on @oslsr/types) and names it as its
 // source instead; the worker is where that naming is actually enforced.
 import { gpsUnavailableReasons } from '@oslsr/types';
+import { snapshotFormIdentity } from '../services/form-identity.js';
 
 const logger = pino({ name: 'webhook-ingestion-worker' });
 
@@ -211,10 +212,16 @@ async function processSubmissionJob(job: Job<WebhookIngestionJobData>): Promise<
       ? rawReason
       : null;
 
+  // Story 13-73 AC5 — the form's logical id + version, so the row stays
+  // interpretable if the form row is ever gone.
+  const { formIdLogical, formVersion } = await snapshotFormIdentity(questionnaireFormId);
+
   await db.insert(submissions).values({
     id: submissionId,
     submissionUid,
     questionnaireFormId,
+    formIdLogical,
+    formVersion,
     submitterId: submitterId ?? null,
     rawData: rawData ?? null,
     gpsLatitude: gpsLatitude != null && !isNaN(gpsLatitude) ? gpsLatitude : null,

@@ -43,6 +43,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db/index.js';
+import { ensureRoles } from '../../__tests__/helpers/ensure-roles.js'; // 13-73 R4
 import { XlsformParserService } from '../xlsform-parser.service.js';
 import { convertToNativeForm } from '../xlsform-to-native-converter.js';
 
@@ -176,6 +177,8 @@ function assertAnswersAreRealFor(schema: Record<string, unknown>, answers: Recor
 const schemas: Record<string, Record<string, unknown>> = {};
 
 beforeAll(async () => {
+  // 13-73 R4 — create the roles this file SELECTs, rather than hope another file seeded them.
+  await ensureRoles('enumerator', 'data_entry_clerk');
   /*
    * ⛔ THE ROLE IS NAMED — 13-69 REVIEW H2. This used to be `FROM roles r LIMIT 1`,
    * which on the test DB can hand back `PERF_USER`. It did not matter to the
@@ -306,6 +309,22 @@ beforeAll(async () => {
   ids['sub-joined'] = await fieldSubmission('joined', ids['resp-joined'], {
     enumerator: true, form: ids['form-master'], completion: 750, answers: MASTER_ANSWERS,
   });
+
+  /*
+   * Story 13-73 AC2 — the TWO shapes of a null schema, as prod holds them. A
+   * well-formed UUID naming no `questionnaire_forms` row (a deleted form: 283 rows
+   * measured 2026-09-18) passes the engine's UUID guard and finds nothing; a
+   * sentinel (`self-edit`) never reaches the lookup at all. Different causes, one
+   * guess — and the marker must fire on both.
+   */
+  ids['resp-orphan'] = await respondent('Orphan');
+  ids['sub-orphan'] = await fieldSubmission('orphan', ids['resp-orphan'], {
+    enumerator: false, form: crypto.randomUUID(), completion: 600, answers: PUBLIC_ANSWERS,
+  });
+  ids['resp-selfedit'] = await respondent('SelfEdit');
+  ids['sub-selfedit'] = await fieldSubmission('selfedit', ids['resp-selfedit'], {
+    enumerator: false, form: 'self-edit', completion: 600, answers: PUBLIC_ANSWERS,
+  });
 });
 
 afterAll(async () => {
@@ -383,7 +402,11 @@ describe('13-69 — the producer and the worker, joined end to end (AC1)', () =>
     expect(stored.speed_details).toHaveProperty('tier');
     expect(stored.speed_details).not.toHaveProperty('reason');
     expect(stored.duplicate_details).not.toHaveProperty('reason');
-    expect(stored.straightline_details).not.toHaveProperty('reason');
+    // 13-73 AC1: straight-lining may now carry `battery_below_min_answered` WHILE having
+    // measured — a present `reason` no longer means unreached. Reachability is: not
+    // `no_batteries_found`, and at least one battery analysed.
+    expect(stored.straightline_details).not.toMatchObject({ reason: 'no_batteries_found' });
+    expect(Number((stored.straightline_details as Record<string, unknown>).analyzedBatteries)).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -437,7 +460,10 @@ describe('13-69 — the four non-GPS detectors REACH their computation (AC2)', (
   it('straight-lining found and analysed a real battery on the master form', async () => {
     const d = await storedDetectionFor(ids['sub-field']);
     const sl = d.straightline_details as Record<string, unknown>;
-    expect(sl).not.toHaveProperty('reason'); // not `no_batteries_found`
+    // 13-73 AC1 narrowed this from 'no reason at all' to what it always meant: the
+    // labour battery's drop is now NAMED (`battery_below_min_answered`), which is not
+    // the same as failing to reach the computation.
+    expect(sl.reason).not.toBe('no_batteries_found');
     expect(Number(sl.analyzedBatteries)).toBeGreaterThanOrEqual(1);
   });
 
@@ -499,11 +525,23 @@ describe('13-69 REVIEW H1 — straight-lining REACHES its computation and still 
     const sl = d.straightline_details as Record<string, unknown>;
 
     // Reached (AC2) …
-    expect(sl).not.toHaveProperty('reason');
     expect(Number(sl.batteryCount)).toBe(2);
     // … but only ONE of the two is ever analysed: the labour battery's skip logic
     // caps a real respondent at 4 of its 6 questions, below minBatterySize.
     expect(Number(sl.analyzedBatteries)).toBe(1);
+    /*
+     * ⭐ STORY 13-73 AC1 CHANGED THIS ASSERTION, DELIBERATELY. It read
+     * `expect(sl).not.toHaveProperty('reason')` — true, and it was R5: the labour
+     * battery was dropped with no trace. The dropped battery is now NAMED with its
+     * counts, on the stored row. The score is still zero and the identity-battery
+     * ceiling below is untouched: 13-73 makes the heuristic say what it could not
+     * measure; whether straight-lining is viable on this form is a separate ruling.
+     */
+    expect(sl.reason).toBe('battery_below_min_answered');
+    const skipped = sl.skippedBatteries as Array<Record<string, unknown>>;
+    expect(skipped).toHaveLength(1);
+    expect(Number(skipped[0].questionCount)).toBe(6);
+    expect(Number(skipped[0].answered)).toBeLessThan(Number((sl.thresholds as Record<string, unknown>).minBatterySize));
     expect(Number(sl.flaggedBatteries)).toBe(0);
     expect(Number(d.straightline_score)).toBe(0);
 
@@ -590,5 +628,38 @@ describe('13-69 — what the PUBLIC channel can and cannot measure (AC3)', () =>
     expect(d.straightline_details).toMatchObject({ reason: 'no_batteries_found' });
     expect(d.duplicate_details).toMatchObject({ reason: 'no_data_or_history' });
     expect(d.gps_details).toEqual({ reason: 'no_gps_data' });
+  });
+});
+
+describe('13-73 AC2 — a null schema says so ON THE STORED ROW', () => {
+  /**
+   * The unit and contract tests prove `speed_run` RETURNS the marker. This proves
+   * it is WRITTEN: the worker persists `details` whole into `speed_details`, and a
+   * fix that exists in code but never reaches the column is the defect 13-69 was
+   * about [[pattern-ship-a-fix-that-never-fires]]. Both null-schema shapes, read
+   * back from PostgreSQL by column name.
+   */
+  it.each([
+    ['a DELETED form (well-formed uuid, no row)', 'orphan'],
+    ['a SENTINEL form id (`self-edit`)', 'selfedit'],
+  ])('%s → speed_details.reason = no_form_schema, against the 60 s floor', async (_label, key) => {
+    const result = await runWorker({
+      id: `${TAG}-${key}`,
+      data: { submissionId: ids[`sub-${key}`], respondentId: ids[`resp-${key}`] },
+    });
+    expect(result).toMatchObject({ processed: true });
+
+    const d = await storedDetectionFor(ids[`sub-${key}`]);
+    const speed = d.speed_details as Record<string, unknown>;
+    expect(speed.reason).toBe('no_form_schema');
+    expect(speed.referenceTime).toBe(60);
+    expect(speed.referenceType).toBe('theoretical_minimum');
+    // And straight-lining, the other schema reader, was already honest here:
+    expect(d.straightline_details).toMatchObject({ reason: 'no_batteries_found' });
+  });
+
+  it('a submission on a LIVE form carries no such marker (the control)', async () => {
+    const d = await storedDetectionFor(ids['sub-public']);
+    expect(d.speed_details).not.toHaveProperty('reason');
   });
 });
