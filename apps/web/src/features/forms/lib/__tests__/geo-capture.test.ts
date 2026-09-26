@@ -17,6 +17,8 @@ import {
   permissionAllowsSilentRefresh,
   isCapturedPosition,
   OPEN_CAPTURE_OPTIONS,
+  OPEN_CAPTURE_WATCHDOG_MS,
+  isRetryableCaptureFailure,
   SUBMIT_REFRESH_OPTIONS,
 } from '../geo-capture';
 
@@ -170,6 +172,64 @@ describe('13-71 U3 — capturePosition always settles, even when the browser nev
 
     const pending = capturePosition(SUBMIT_REFRESH_OPTIONS);
     await vi.advanceTimersByTimeAsync(60000);
+
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'timeout' });
+  });
+
+  /*
+   * ⛔ FIELD DEFECT 2026-09-26 — the watchdog was racing the permission prompt.
+   * A real capture reported "I had to click the gps after allowing": the survey's
+   * 15 s budget expired while the "Allow location?" dialog was still on screen, so
+   * auto-capture settled as `timeout` and never took a position.
+   */
+  it('a transient failure is RETRYABLE; a settled one is not (field defect 2026-09-26)', () => {
+    // ⭐ The half of the fix a page test cannot reach: the caller latches its
+    // once-guard on this answer, so getting it wrong retires auto-capture for the
+    // whole survey. Both directions, because latching too little is a wasted
+    // request and latching too much is a lost position.
+    expect(isRetryableCaptureFailure({ ok: false, reason: 'timeout' })).toBe(true);
+    expect(isRetryableCaptureFailure({ ok: false, reason: 'position_unavailable' })).toBe(true);
+    expect(isRetryableCaptureFailure({ ok: false, reason: 'permission_denied' })).toBe(false);
+    expect(isRetryableCaptureFailure({ ok: false, reason: 'unsupported' })).toBe(false);
+    expect(
+      isRetryableCaptureFailure({ ok: true, position: { latitude: 1, longitude: 2, accuracy: 3 } }),
+    ).toBe(false);
+  });
+
+  it('⛔ the OPEN-time budget does NOT expire while a permission prompt is unanswered for 15s', async () => {
+    let fire: ((p: unknown) => void) | undefined;
+    setNavigatorProp('geolocation', {
+      getCurrentPosition: vi.fn((ok: (p: unknown) => void) => { fire = ok; }),
+    });
+
+    const pending = capturePosition(OPEN_CAPTURE_OPTIONS, OPEN_CAPTURE_WATCHDOG_MS);
+
+    // The enumerator reads the dialog and taps Allow after 15s — longer than the
+    // OLD budget (timeout 10s + 5s grace), which is precisely the reported case.
+    await vi.advanceTimersByTimeAsync(15_000);
+    fire?.({ coords: { latitude: 7.3775, longitude: 3.947, accuracy: 12 } });
+
+    await expect(pending).resolves.toEqual({
+      ok: true,
+      position: { latitude: 7.3775, longitude: 3.947, accuracy: 12 },
+    });
+  });
+
+  it('but the OPEN-time budget is still BOUNDED, so an in-flight guard cannot latch forever', async () => {
+    setNavigatorProp('geolocation', { getCurrentPosition: vi.fn() });
+
+    const pending = capturePosition(OPEN_CAPTURE_OPTIONS, OPEN_CAPTURE_WATCHDOG_MS);
+    await vi.advanceTimersByTimeAsync(OPEN_CAPTURE_WATCHDOG_MS + 1_000);
+
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'timeout' });
+  });
+
+  it('and the SUBMIT refresh keeps its TIGHT deadline — an await must never hang', async () => {
+    setNavigatorProp('geolocation', { getCurrentPosition: vi.fn() });
+
+    const pending = capturePosition(SUBMIT_REFRESH_OPTIONS);
+    // 5s timeout + 5s grace: settled well before the open-time budget would.
+    await vi.advanceTimersByTimeAsync(11_000);
 
     await expect(pending).resolves.toEqual({ ok: false, reason: 'timeout' });
   });

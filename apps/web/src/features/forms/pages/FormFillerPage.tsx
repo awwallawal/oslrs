@@ -32,8 +32,10 @@ import type { GpsUnavailableReason } from '@oslsr/types';
 import {
   capturePosition,
   isCapturedPosition,
+  isRetryableCaptureFailure,
   permissionAllowsSilentRefresh,
   OPEN_CAPTURE_OPTIONS,
+  OPEN_CAPTURE_WATCHDOG_MS,
   SUBMIT_REFRESH_OPTIONS,
 } from '../lib/geo-capture';
 
@@ -337,13 +339,30 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
 
     autoCaptureInFlightRef.current = true;
     let cancelled = false;
-    void capturePosition(OPEN_CAPTURE_OPTIONS).then((result) => {
+    void capturePosition(OPEN_CAPTURE_OPTIONS, OPEN_CAPTURE_WATCHDOG_MS).then((result) => {
       // Released BEFORE the cancellation check, so a StrictMode remount (or any
       // remount) can start a fresh attempt instead of being locked out by an
       // attempt that was thrown away.
       autoCaptureInFlightRef.current = false;
       if (cancelled) return;
-      autoCaptureDoneRef.current = true;
+      /*
+       * ⛔ FIELD DEFECT 2026-09-26 — THE ONCE-GUARD LATCHED ON "WE STOPPED WAITING".
+       *
+       * This was an unconditional `autoCaptureDoneRef.current = true` before the
+       * `result.ok` check, so ANY outcome retired auto-capture for the rest of the
+       * survey. Paired with a watchdog that was racing the permission prompt, a
+       * slow tap on "Allow" meant the position was never taken and the enumerator
+       * had to press the button the briefing says they will not need.
+       *
+       * ⭐ NOT EVERY FAILURE IS A FACT ABOUT THE WORLD. `permission_denied` and
+       * `unsupported` are settled answers — the phone will not give a position and
+       * asking again changes nothing, so latch and let AC4 record the reason.
+       * `timeout` and `position_unavailable` are the OPPOSITE: they mean we did not
+       * get one YET, indoors or mid-prompt, and a later attempt may well succeed.
+       * Latching those converts a transient miss into a permanent absence — and
+       * AC10 then counts it as a coverage failure the phone never actually had.
+       */
+      if (!isRetryableCaptureFailure(result)) autoCaptureDoneRef.current = true;
       if (result.ok) {
         allAnswersRef.current[geopointQuestion.name] = result.position;
         allAnswersRef.current[OPEN_CAPTURE_KEY] = result.position;

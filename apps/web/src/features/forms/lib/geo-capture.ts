@@ -59,6 +59,48 @@ export const SUBMIT_REFRESH_OPTIONS: PositionOptions = {
  */
 const WATCHDOG_GRACE_MS = 5000;
 
+/**
+ * The OPEN-time watchdog, and it is deliberately far longer than the browser's own
+ * deadline (field defect 2026-09-26 — see the note at the timer).
+ *
+ * ⛔ It must not race a human. This clock starts when the survey opens, and on a
+ * first-ever open the "Allow location?" dialog is sitting in front of the
+ * enumerator for part of it — `PositionOptions.timeout` does not run during the
+ * prompt. Two minutes is longer than anyone takes to read one sentence and tap a
+ * button, and nothing waits on this capture, so a generous bound costs nothing.
+ *
+ * ⚠️ It is still BOUNDED on purpose. An unbounded promise would leave
+ * `autoCaptureInFlightRef` latched for the life of the page, which is the retry
+ * lockout U9 exists to prevent, arriving from the other direction.
+ */
+export const OPEN_CAPTURE_WATCHDOG_MS = 120_000;
+
+/**
+ * Is this failure worth trying again, or is it a settled fact about the phone?
+ *
+ * ⛔ FIELD DEFECT 2026-09-26 — the caller used to latch its once-guard on ANY
+ * outcome, so a transient miss retired auto-capture for the rest of the survey and
+ * the enumerator had to tap the button the briefing says they will not need.
+ *
+ * ⭐ THE VOCABULARY ALREADY MAKES THE DISTINCTION; nothing was reading it.
+ *   • `permission_denied` — the phone has been told no. Asking again changes
+ *     nothing until someone edits browser settings, and AC4 exists to record it.
+ *   • `unsupported`       — there is no Geolocation API. It will not appear.
+ *   • `timeout`           — we did not get one YET. Indoors, mid-prompt, cold GPS.
+ *   • `position_unavailable` — the platform could not fix a position THIS time.
+ *
+ * The last two are the ones a second attempt can win, and treating them as final
+ * is how a coverage number comes to describe the software rather than the field.
+ *
+ * ⚠️ Lives here, beside the vocabulary, rather than inline in the page — a two-line
+ * conditional buried in an effect is a decision nothing can test, and this one was
+ * wrong once already.
+ */
+export function isRetryableCaptureFailure(result: CaptureResult): boolean {
+  if (result.ok) return false;
+  return result.reason === 'timeout' || result.reason === 'position_unavailable';
+}
+
 /** Is this value a real captured position, as opposed to an empty answer? */
 export function isCapturedPosition(value: unknown): value is CapturedPosition {
   if (!value || typeof value !== 'object') return false;
@@ -80,6 +122,7 @@ export function isCapturedPosition(value: unknown): value is CapturedPosition {
  */
 export function capturePosition(
   options: PositionOptions = OPEN_CAPTURE_OPTIONS,
+  watchdogMs?: number,
 ): Promise<CaptureResult> {
   return new Promise((resolve) => {
     // No geolocation at all — the one reason the browser cannot tell us itself,
@@ -122,7 +165,38 @@ export function capturePosition(
      * genuinely gone silent. `settle` was already idempotent, so racing it is safe
      * and a late browser callback after the watchdog is simply ignored.
      */
-    const budget = (options.timeout ?? OPEN_CAPTURE_OPTIONS.timeout ?? 10000) + WATCHDOG_GRACE_MS;
+    /*
+     * ⛔ FIELD DEFECT 2026-09-26 — THE WATCHDOG WAS RACING A HUMAN, AND THE HUMAN LOST.
+     *
+     * Reported from a real prod capture: "I had to click the gps after allowing."
+     * Auto-capture (AC1) had not populated, so the enumerator tapped the button the
+     * briefing promises they will not need.
+     *
+     * The cause is this timer meeting U9's once-guard. The budget was
+     * `timeout + grace` = 10 s + 5 s, and it starts when the SURVEY OPENS — which
+     * includes the time the "Allow location?" dialog sits waiting for an answer,
+     * because `PositionOptions.timeout` does not run during the prompt (that is
+     * exactly what U3 established). A first-ever open where the enumerator takes
+     * more than 15 s to read and tap Allow therefore settled as
+     * `{ ok: false, reason: 'timeout' }`, `autoCaptureDoneRef` latched on that
+     * settlement, and auto-capture never tried again for that survey.
+     *
+     * ⭐ TWO CORRECT FIXES COMBINED INTO A DEFECT, which is the thing to notice: U3
+     * was right that a never-settling promise loses an interview, and U9 was right
+     * that a once-guard must latch on settlement. Neither is wrong alone.
+     *
+     * ⛔ AND THE WATCHDOG WAS NEVER NEEDED HERE. U3's harm is a HANGING AWAIT: the
+     * submit path does `await capturePosition(SUBMIT_REFRESH_OPTIONS)` and a promise
+     * that never settles means the enumerator taps "Complete Survey" and nothing
+     * happens. The OPEN-time capture is `void capturePosition(...).then(...)` —
+     * nothing awaits it, so a late answer is simply a late answer.
+     *
+     * So the deadline is now PER CALL SITE: tight where an await can hang, and
+     * generous where it cannot. Still bounded, so `autoCaptureInFlightRef` can
+     * never latch forever — U3's guarantee is kept, it is just not pointed at a
+     * person's reaction time.
+     */
+    const budget = watchdogMs ?? ((options.timeout ?? OPEN_CAPTURE_OPTIONS.timeout ?? 10000) + WATCHDOG_GRACE_MS);
     timers.push(setTimeout(() => settle({ ok: false, reason: 'timeout' }), budget));
 
     try {
