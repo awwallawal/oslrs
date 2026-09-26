@@ -23,6 +23,14 @@ vi.mock('../../api/wizard.api', async (importOriginal) => {
 });
 const mockedLgas = vi.mocked(fetchPublicLgas);
 
+// Pitfall #37 / feedback_local_full_suite_flakiness. testing-library's own
+// asyncUtilTimeout defaults to 1000ms and is NOT governed by vitest's
+// testTimeout (10000). The mocked fetchPublicLgas resolves immediately, so the
+// only cost here is the cold jsdom render — measured at 1134ms green and 1945ms
+// red on an otherwise idle machine, and reliably over budget when the pre-push
+// suite is CPU-contended. Explicit budget, matching Step1BasicInfo.test.tsx.
+const ASYNC_TIMEOUT = { timeout: 3000 };
+
 const EGBEDA_UUID = '018e5f2a-1234-7890-abcd-1234567890ab';
 const LGAS = [
   { id: EGBEDA_UUID, name: 'Egbeda', code: 'egbeda' },
@@ -52,7 +60,11 @@ describe('Step2ContactLga LGA slug write (Story 13-16 AC1)', () => {
 
   it('renders LGA options whose value is the slug (lga.code), not the row UUID', async () => {
     renderStep2();
-    const option = (await screen.findByRole('option', { name: 'Egbeda' })) as HTMLOptionElement;
+    const option = (await screen.findByRole(
+      'option',
+      { name: 'Egbeda' },
+      ASYNC_TIMEOUT,
+    )) as HTMLOptionElement;
     expect(option.value).toBe('egbeda');
     const option2 = screen.getByRole('option', { name: 'Ibadan North' }) as HTMLOptionElement;
     expect(option2.value).toBe('ibadan_north');
@@ -60,12 +72,15 @@ describe('Step2ContactLga LGA slug write (Story 13-16 AC1)', () => {
 
   it('remaps a stale UUID draft value to the slug once the LGA list loads', async () => {
     const { mergeFields } = renderStep2({ lgaId: EGBEDA_UUID });
-    await waitFor(() => expect(mergeFields).toHaveBeenCalledWith({ lgaId: 'egbeda' }));
+    await waitFor(
+      () => expect(mergeFields).toHaveBeenCalledWith({ lgaId: 'egbeda' }),
+      ASYNC_TIMEOUT,
+    );
   });
 
   it('leaves a slug draft value untouched (no remap churn)', async () => {
     const { mergeFields } = renderStep2({ lgaId: 'egbeda' });
-    await screen.findByRole('option', { name: 'Egbeda' });
+    await screen.findByRole('option', { name: 'Egbeda' }, ASYNC_TIMEOUT);
     expect(mergeFields).not.toHaveBeenCalled();
   });
 });
