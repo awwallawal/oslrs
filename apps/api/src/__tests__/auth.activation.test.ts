@@ -12,6 +12,7 @@ import { StaffService } from '../services/staff.service.js';
 import { EmailService } from '../services/email.service.js';
 import { generateValidNin } from '@oslsr/testing/helpers/nin';
 import { BACK_OFFICE_ROLES, FIELD_ROLES, isBackOfficeRole, UserRole } from '@oslsr/types';
+import { resolveTestS3Config, s3GuardEnvFrom } from '../../test/s3-guard.js';
 
 /**
  * Generate a valid test image as base64
@@ -572,14 +573,35 @@ describe('Auth Activation Integration', () => {
    *      storage that shares an account with the backups.
    */
   describe('Activation with Selfie (S3 Integration)', () => {
-    // Check if S3 credentials are available (for CI environments without S3 access)
-    const hasS3Config = !!(process.env.S3_ACCESS_KEY && process.env.S3_SECRET_KEY);
+    /*
+     * Story 13-74 AC1 — THE ONLY PLACE THIS BLOCK MAY OBTAIN S3 SETTINGS.
+     *
+     * ⛔ The previous gate was `!!(S3_ACCESS_KEY && S3_SECRET_KEY)`, which asks
+     * whether credentials EXIST and never asks which bucket they open. On a
+     * developer machine the root `.env` holds production keys for
+     * `oslsr-full-access`, so "configured" meant "pointed at the bucket that
+     * shares an account with the backups" — 1,624 objects over ~7 months.
+     *
+     * `resolveTestS3Config` refuses that target instead of throwing, so the
+     * block SKIPS and the suite stays green while production stays untouched.
+     */
+    const s3Config = resolveTestS3Config(s3GuardEnvFrom(process.env));
+    const hasS3Config = s3Config.usable;
+    if (!s3Config.usable && s3Config.kind === 'refused') {
+      // ⭐ Loud on purpose. A silent skip is what made this invisible: the only
+      // symptom was a skip count moving 8 ↔ 9, which read as noise for months.
+      console.warn(`[s3-guard] S3 integration tests skipped — ${s3Config.reason}`);
+    }
     let s3Reachable = false;
     /** Keys this block actually created, deleted in `afterAll`. */
     const uploadedKeysForTeardown: string[] = [];
 
     afterAll(async () => {
       if (uploadedKeysForTeardown.length === 0) return;
+      // AC1 — the teardown must not be a second doorway to the bucket the gate
+      // just refused. Nothing can be in this list unless the config was usable,
+      // so this is a narrowing, not a new condition.
+      if (!s3Config.usable) return;
       // Imported lazily so a run without S3 config never loads the SDK.
       const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
       const s3 = new S3Client({
@@ -595,7 +617,7 @@ describe('Auth Activation Integration', () => {
       // this whole change came out of. Report, do not throw.
       for (const Key of uploadedKeysForTeardown) {
         try {
-          await s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key }));
+          await s3.send(new DeleteObjectCommand({ Bucket: s3Config.bucketName, Key }));
         } catch (err) {
           console.warn(`[s3-teardown] could not delete ${Key}:`, (err as Error).message);
         }
