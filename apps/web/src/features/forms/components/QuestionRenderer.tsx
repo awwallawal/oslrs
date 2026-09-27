@@ -39,6 +39,12 @@ export interface QuestionRendererProps {
    * preserve, lost at the last hop.
    */
   onCaptureError?: (reason: GpsUnavailableReason) => void;
+  /**
+   * Story 13-75 AC7 — the page's last recorded capture failure (the open-time
+   * auto-capture included), so the location question can say what to fix while
+   * fixing it is free, instead of the enumerator first hearing at submit.
+   */
+  captureFailureReason?: GpsUnavailableReason | null;
 }
 
 export function QuestionRenderer({
@@ -48,8 +54,9 @@ export function QuestionRenderer({
   error,
   disabled,
   onCaptureError,
+  captureFailureReason,
 }: QuestionRendererProps) {
-  const props = { question, value, onChange, error, disabled, onCaptureError };
+  const props = { question, value, onChange, error, disabled, onCaptureError, captureFailureReason };
 
   // Story 13-51 (AC3.1) — an email carrier question gets the typo suggestion the public wizard
   // has had since 9-12. Detected BY NAME because the published form schemas have no `email`

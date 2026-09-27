@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { geolocationErrorCodeToReason } from '@oslsr/types';
+import { geolocationErrorCodeToReason, type GpsUnavailableReason } from '@oslsr/types';
+import { gpsRemediation } from '../lib/gps-remediation';
 import type { QuestionRendererProps } from './QuestionRenderer';
 
 interface GeopointValue {
@@ -15,21 +16,47 @@ export function GeopointInput({
   error,
   disabled,
   onCaptureError,
+  captureFailureReason,
 }: QuestionRendererProps) {
   const [capturing, setCapturing] = useState(false);
-  const [geoError, setGeoError] = useState<string | null>(null);
+  /**
+   * Story 13-75 AC4 — the REASON this component's own last attempt failed, not a
+   * sentence. The sentence comes from `gpsRemediation`, the same source the amber
+   * block at submit reads, so the two surfaces cannot tell an enumerator different
+   * things about the same failure.
+   */
+  const [localFailure, setLocalFailure] = useState<GpsUnavailableReason | null>(null);
 
   const geoValue = value as GeopointValue | null;
 
+  /*
+   * Story 13-75 AC7 — the enumerator learns what is wrong HERE, mid-interview, where
+   * fixing it is free, instead of at the submit refusal.
+   *
+   * ⛔ Review L5 — WHEN THE PAGE SUPPLIES A REASON, THE PAGE'S IS THE FRESHEST. This
+   * component's own failures reach the page through `onCaptureError`, and so do the
+   * open-time and in-banner ones, so the page's value is always the last verdict
+   * seen. Preferring the local one let a form whose geopoint is the LAST question
+   * show an old failure on the question beside a newer one in the amber block.
+   * `undefined` means no page is tracking (a caller that passes nothing), and then
+   * the local failure is all there is.
+   *
+   * A held position hides it — unless THIS component's recapture just failed, which
+   * the enumerator needs to hear about even over a position they already have.
+   */
+  const latestFailure = captureFailureReason !== undefined ? captureFailureReason : localFailure;
+  const shownFailure = geoValue && !localFailure ? null : latestFailure;
+  const remediation = shownFailure ? gpsRemediation(shownFailure) : null;
+
   const captureLocation = () => {
     if (!navigator.geolocation) {
-      setGeoError('Geolocation is not supported by this browser.');
+      setLocalFailure('unsupported');
       onCaptureError?.('unsupported');
       return;
     }
 
     setCapturing(true);
-    setGeoError(null);
+    setLocalFailure(null);
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -45,8 +72,8 @@ export function GeopointInput({
         /*
          * ⛔ ULTRA REVIEW U15 — THE REASON HAS TO LEAVE THIS COMPONENT.
          *
-         * This switch has always known exactly why the capture failed, and it kept
-         * the answer to itself: `setGeoError` writes a sentence into local state and
+         * This callback has always known exactly why the capture failed, and it kept
+         * the answer to itself: `setGeoError` wrote a sentence into local state and
          * nothing else. `onChange` fires only on SUCCESS, so the page never learned
          * that an attempt had happened at all.
          *
@@ -59,21 +86,13 @@ export function GeopointInput({
          * the site; the fix for the signal is to move. They are not interchangeable.
          */
         onCaptureError?.(geolocationErrorCodeToReason(err.code));
-        switch (err.code) {
-          case err.PERMISSION_DENIED:
-            setGeoError(
-              'Location access denied. GPS data will not be recorded.'
-            );
-            break;
-          case err.POSITION_UNAVAILABLE:
-            setGeoError('Location information is unavailable.');
-            break;
-          case err.TIMEOUT:
-            setGeoError('Location request timed out. Please try again.');
-            break;
-          default:
-            setGeoError('An unknown error occurred.');
-        }
+        /*
+         * ⛔ STORY 13-75 AC5 — the old copy for code 1 was "Location access denied.
+         * GPS data will not be recorded." It assumed the site was the problem and
+         * told the enumerator to give up. On iOS Safari code 1 can mean the phone's
+         * Location Services is off, and the fix for that is a toggle, not a waiver.
+         */
+        setLocalFailure(geolocationErrorCodeToReason(err.code));
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
@@ -132,10 +151,13 @@ export function GeopointInput({
         </button>
       )}
 
-      {geoError && (
-        <p className="text-sm text-amber-600" role="alert">
-          {geoError}
-        </p>
+      {remediation && (
+        <div className="space-y-1" role="alert" data-testid={`geopoint-remediation-${question.name}`}>
+          <p className="text-sm text-amber-700">{remediation.action}</p>
+          {remediation.secondary && (
+            <p className="text-sm text-amber-700">{remediation.secondary}</p>
+          )}
+        </div>
       )}
       {error && (
         <p className="text-sm text-red-600" role="alert">

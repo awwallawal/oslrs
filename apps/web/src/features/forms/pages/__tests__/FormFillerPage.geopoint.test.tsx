@@ -177,7 +177,8 @@ async function renderPage() {
 async function completeSurvey() {
   // Question 1 (geopoint) → Continue
   fireEvent.click(screen.getByTestId('continue-btn'));
-  await waitFor(() => expect(screen.getByText('What is your full name?')).toBeInTheDocument());
+  // 13-75 — explicit timeout: asyncUtilTimeout (1000 ms) is not testTimeout.
+  await waitFor(() => expect(screen.getByText('What is your full name?')).toBeInTheDocument(), { timeout: 5000 });
   // Question 2 (last) → Complete Survey
   fireEvent.click(screen.getByTestId('continue-btn'));
 }
@@ -353,7 +354,14 @@ describe('13-71 AC3/AC4 — an enumerator submission with neither is refused', (
     expect(mockCompleteDraft).not.toHaveBeenCalled();
   });
 
-  it('offers exactly ONE action, and it is a confirmation rather than a diagnosis', async () => {
+  /*
+   * ⚠️ SUPERSEDED BY 13-75 AC1, deliberately. This asserted exactly ONE button in
+   * the block. 13-75 adds the fix (a live capture) beside the waiver, because the
+   * one action on offer was the exit, and the first human to reach it used it on a
+   * retryable `timeout`. What 13-71 cared about survives: the waiver is still a
+   * confirmation, never a <select> of causes.
+   */
+  it('offers the fix and ONE waiver — and the waiver is a confirmation, not a diagnosis', async () => {
     stubGeolocation([null], 1);
     await renderPage();
     await waitFor(() => expect(screen.getByTestId('continue-btn')).toBeInTheDocument());
@@ -361,10 +369,10 @@ describe('13-71 AC3/AC4 — an enumerator submission with neither is refused', (
     await waitFor(() => expect(screen.getByTestId('gps-required-block')).toBeInTheDocument());
 
     const block = screen.getByTestId('gps-required-block');
-    // ⛔ One button. Not a <select>, not a list of causes whose first item is the
-    // easy way out of the requirement.
-    expect(block.querySelectorAll('button')).toHaveLength(1);
+    // ⛔ Not a <select>, not a list of causes whose first item is the easy way out.
+    expect(block.querySelectorAll('button')).toHaveLength(2);
     expect(block.querySelector('select')).toBeNull();
+    expect(screen.getByTestId('gps-block-capture-btn')).toHaveTextContent('Capture GPS Location');
     expect(screen.getByTestId('gps-unavailable-btn')).toHaveTextContent('I could not capture a location');
   });
 
@@ -385,7 +393,12 @@ describe('13-71 AC3/AC4 — an enumerator submission with neither is refused', (
     await renderPage();
     await waitFor(() => expect(screen.getByTestId('continue-btn')).toBeInTheDocument());
     await completeSurvey();
-    await waitFor(() => expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('gps-required-block')).toBeInTheDocument(), { timeout: 5000 });
+
+    // 13-75 AC6 — `timeout` is retryable, so the waiver is offered only after one
+    // in-banner attempt has failed. That attempt times out again here.
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument(), { timeout: 3000 });
 
     fireEvent.click(screen.getByTestId('gps-unavailable-btn'));
     await waitFor(() => expect(mockCompleteDraft).toHaveBeenCalled());
@@ -954,5 +967,629 @@ describe('13-71 review R9 — a failed escape-hatch submit says so', () => {
 
     expect(screen.queryByTestId('gps-submit-error')).not.toBeInTheDocument();
     expect(submittedAnswers()._gpsUnavailableReason).toBe('permission_denied');
+  });
+});
+
+// ── STORY 13-75 — the blocked submit offers the fix ────────────────────────
+/*
+ * ⚠️ Every async query added below carries an explicit `{ timeout: N }`.
+ * testing-library's `asyncUtilTimeout` is 1000 ms and is NOT governed by vitest's
+ * `testTimeout` — a missing element under suite contention dies at 1 s
+ * (pitfall-asyncutiltimeout-not-governed-by-testtimeout, 2026-09-26).
+ */
+const T = { timeout: 5000 };
+
+/*
+ * ⚠️ AC11 (added after review, ruled 2026-09-27) puts ONE silent capture at submit
+ * when the open-time miss was RETRYABLE. So in every script below that opens on a
+ * `3` (timeout) and then refuses, the SECOND call is that silent retry, and the
+ * in-banner tap is the THIRD. The extra `3` in those scripts is that call failing
+ * too — which is what it takes to reach the amber block at all now.
+ */
+
+/**
+ * A geolocation whose calls are answered by `script[i]` for call i: a position,
+ * an error code, or `'hold'` (never answers until `release(i, …)` is called).
+ */
+function scriptGeolocation(script: Array<typeof OPEN_POS | number | 'hold'>) {
+  const held: Array<{ ok: PositionCallback; err?: PositionErrorCallback }> = [];
+  const getCurrentPosition = vi.fn((onOk: PositionCallback, onErr?: PositionErrorCallback) => {
+    const step = script[Math.min(getCurrentPosition.mock.calls.length - 1, script.length - 1)];
+    if (step === 'hold') held.push({ ok: onOk, err: onErr });
+    else if (typeof step === 'number') onErr?.({ code: step } as GeolocationPositionError);
+    else onOk({ coords: step } as GeolocationPosition);
+  });
+  setNavigatorProp('geolocation', { getCurrentPosition });
+  return {
+    getCurrentPosition,
+    resolveHeld: (index: number, pos: typeof OPEN_POS) => held[index]?.ok({ coords: pos } as GeolocationPosition),
+    /** 13-75 review L1 — a held attempt that FAILS late, with a GeolocationPositionError code. */
+    rejectHeld: (index: number, code: number) => held[index]?.err?.({ code } as GeolocationPositionError),
+  };
+}
+
+/** Reach the amber block. */
+async function reachBlock() {
+  await renderPage();
+  await completeSurvey();
+  await waitFor(() => expect(screen.getByTestId('gps-required-block')).toBeInTheDocument(), T);
+}
+
+/** Back from the last question; waits for the 50 ms slide to actually land on Q1. */
+async function goBackToLocation() {
+  fireEvent.click(screen.getByTestId('back-btn'));
+  await waitFor(() => expect(screen.getByText('Where is this interview?')).toBeInTheDocument(), T);
+  expect(screen.queryByTestId('gps-required-block')).toBeNull();
+}
+
+describe('13-75 AC1/AC3/AC10 — the block carries a live capture, and success submits', () => {
+  it('⭐ a successful in-banner capture commits the WHOLE position and retries the submit — one tap', async () => {
+    // Open-time capture times out (the field case), so does AC11's silent retry at
+    // submit; the in-banner tap succeeds.
+    const { getCurrentPosition } = scriptGeolocation([3, 3, OPEN_POS]);
+    await reachBlock();
+    expect(mockCompleteDraft).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+
+    expect(await screen.findByTestId('completion-screen', {}, T)).toBeInTheDocument();
+    expect(getCurrentPosition).toHaveBeenCalledTimes(3);
+    expect(mockCompleteDraft).toHaveBeenCalledTimes(1);
+    const answers = submittedAnswers();
+    // AC10 — accuracy rides along exactly as from every other site.
+    expect(answers[GEO_NAME]).toEqual(OPEN_POS);
+    // AC2 — and no reason beside a real position.
+    expect(answers._gpsUnavailableReason).toBeUndefined();
+  });
+
+  it('⛔ AC3 — a failed retry reports through submit-error-block and NEVER shows completion', async () => {
+    scriptGeolocation([3, 3, OPEN_POS]);
+    mockCompleteDraft.mockRejectedValue(new Error('QuotaExceededError'));
+    await reachBlock();
+
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+
+    expect(await screen.findByTestId('submit-error-block', {}, T)).toBeInTheDocument();
+    expect(screen.queryByTestId('completion-screen')).toBeNull();
+    // GPS is no longer the blocker, so the amber panel is retired (U13) — the
+    // storage failure is what is reported, on its own panel (U5).
+    expect(screen.queryByTestId('gps-required-block')).toBeNull();
+  });
+
+  it('⛔ AC2 / Task 1.3 — the in-banner fix reaches the RENDERED field, not only the payload', async () => {
+    // A failed write leaves the enumerator on the form; going Back to the location
+    // question must show the position the banner just took. Without
+    // `commitGeopoint`'s `setValue` the field renders an untouched capture button
+    // over a survey that holds a position (13-71 Task 3.2's reasoning).
+    scriptGeolocation([3, 3, OPEN_POS]);
+    mockCompleteDraft.mockRejectedValue(new Error('QuotaExceededError'));
+    await reachBlock();
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await screen.findByTestId('submit-error-block', {}, T);
+
+    fireEvent.click(screen.getByTestId('back-btn'));
+
+    expect(await screen.findByTestId(`geopoint-display-${GEO_NAME}`, {}, T)).toHaveTextContent('7.3775° N');
+  });
+
+  it('the capture button shows it is working and stops accepting taps while in flight', async () => {
+    const { getCurrentPosition } = scriptGeolocation([3, 3, 'hold']);
+    await reachBlock();
+
+    const btn = screen.getByTestId('gps-block-capture-btn');
+    /*
+     * ⚠️ BOTH TAPS INSIDE ONE act(), and the mutation is why. With two bare
+     * `fireEvent.click`s, RTL flushes the `setGpsBlockCapturing(true)` re-render
+     * between them, the second lands on a DISABLED button, and deleting the
+     * `gpsBlockCaptureInFlightRef` guard left this test green — U8's hole again.
+     * One act() holds the re-render until both taps have landed, which is what a
+     * double-tap on a slow phone actually does.
+     */
+    act(() => {
+      btn.click();
+      btn.click();
+    });
+    await waitFor(() => expect(screen.getByTestId('gps-block-capture-btn')).toBeDisabled(), T);
+    expect(screen.getByTestId('gps-block-capture-btn')).toHaveTextContent('Capturing location');
+    // Open-time + AC11 silent retry + ONE in-banner attempt, however many taps.
+    expect(getCurrentPosition).toHaveBeenCalledTimes(3);
+  });
+
+  it('⛔ Back during an in-flight capture withdraws the submit — a late fix is kept, not submitted', async () => {
+    const { resolveHeld } = scriptGeolocation([3, 3, 'hold']);
+    await reachBlock();
+
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(screen.getByTestId('gps-block-capture-btn')).toBeDisabled(), T);
+
+    await goBackToLocation();
+
+    await act(async () => {
+      resolveHeld(0, OPEN_POS);
+    });
+
+    // U10's shape again if it submitted: the panel following the enumerator.
+    expect(mockCompleteDraft).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('completion-screen')).toBeNull();
+    // But a real position is a real position.
+    expect(await screen.findByTestId(`geopoint-display-${GEO_NAME}`, {}, T)).toBeInTheDocument();
+  });
+});
+
+describe('13-75 AC4/AC5 — guidance names what is actually wrong', () => {
+  it('position_unavailable → the phone’s Location toggle', async () => {
+    scriptGeolocation([2]);
+    await reachBlock();
+    expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/location may be switched off/);
+  });
+
+  it('⛔ AC5 — permission_denied names the site permission AND the OS Location toggle', async () => {
+    scriptGeolocation([1]);
+    await reachBlock();
+    const copy = screen.getByTestId('gps-block-remediation');
+    expect(copy).toHaveTextContent(/blocked for this site/);
+    expect(copy).toHaveTextContent(/Location Services/);
+  });
+
+  it('timeout → move, then capture again', async () => {
+    scriptGeolocation([3]);
+    await reachBlock();
+    expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/Step outside/);
+  });
+
+  it('⛔ the dead-end instruction is gone — nothing says "go back to the location question"', async () => {
+    scriptGeolocation([3]);
+    await reachBlock();
+    expect(screen.getByTestId('gps-required-block')).not.toHaveTextContent(/go back/i);
+  });
+});
+
+describe('13-75 AC6 — the waiver is demoted and gated by retryability', () => {
+  it.each([
+    ['timeout', 3],
+    ['position_unavailable', 2],
+  ])('⛔ %s (retryable) hides the waiver until an in-banner attempt has failed', async (_label, code) => {
+    scriptGeolocation([code]);
+    await reachBlock();
+
+    expect(screen.queryByTestId('gps-unavailable-btn')).toBeNull();
+    expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+
+    expect(await screen.findByTestId('gps-unavailable-btn', {}, T)).toBeInTheDocument();
+    expect(screen.queryByTestId('gps-waiver-pending')).toBeNull();
+  });
+
+  it('permission_denied (settled) offers the waiver at once — no forced attempts', async () => {
+    scriptGeolocation([1]);
+    await reachBlock();
+    expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument();
+  });
+
+  it('unsupported (settled) offers the waiver at once', async () => {
+    setNavigatorProp('geolocation', undefined);
+    await reachBlock();
+    expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument();
+  });
+
+  it('the waiver cannot be tapped while a capture is in flight', async () => {
+    scriptGeolocation([1, 'hold']);
+    await reachBlock();
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(screen.getByTestId('gps-unavailable-btn')).toBeDisabled(), T);
+  });
+});
+
+describe('13-75 AC9 — the waiver files the reason LAST observed', () => {
+  it('⛔ open-time timeout, in-banner permission_denied → files permission_denied, not timeout', async () => {
+    scriptGeolocation([3, 3, 1]);
+    await reachBlock();
+
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    // The guidance follows the new verdict too.
+    await waitFor(
+      () => expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/blocked for this site/),
+      T,
+    );
+
+    fireEvent.click(screen.getByTestId('gps-unavailable-btn'));
+    await waitFor(() => expect(mockCompleteDraft).toHaveBeenCalled(), T);
+    expect(submittedAnswers()._gpsUnavailableReason).toBe('permission_denied');
+  });
+});
+
+describe('13-75 AC7 — discovery moves earlier, without a standing banner', () => {
+  it('a failed open-time capture is explained ON the location question, before any submit', async () => {
+    scriptGeolocation([2]);
+    await renderPage();
+
+    expect(
+      await screen.findByTestId(`geopoint-remediation-${GEO_NAME}`, {}, T),
+    ).toHaveTextContent(/location may be switched off/);
+    // ⛔ And the end-of-form block is still submit-triggered (13-71's ruling).
+    expect(screen.queryByTestId('gps-required-block')).toBeNull();
+  });
+
+  it('a successful open-time capture shows no guidance at all', async () => {
+    scriptGeolocation([OPEN_POS]);
+    await renderPage();
+    await screen.findByTestId(`geopoint-display-${GEO_NAME}`, {}, T);
+    expect(screen.queryByTestId(`geopoint-remediation-${GEO_NAME}`)).toBeNull();
+  });
+});
+
+describe('13-75 AC8 — U10 must not regress, and the new state clears with it', () => {
+  it('⛔ Back clears the block AND the failed-attempt count, so the next refusal gates the waiver again', async () => {
+    scriptGeolocation([3]);
+    await reachBlock();
+
+    // One failed in-banner attempt releases the waiver…
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await screen.findByTestId('gps-unavailable-btn', {}, T);
+
+    // …Back retires the panel (U10)…
+    await goBackToLocation();
+
+    // …and the next refusal starts from zero attempts: nobody has tried yet.
+    await completeSurvey();
+    await screen.findByTestId('gps-required-block', {}, T);
+    expect(screen.queryByTestId('gps-unavailable-btn')).toBeNull();
+    expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument();
+  });
+
+  it('⛔ Back while a capture is in flight leaves the NEXT panel’s capture button live', async () => {
+    const { getCurrentPosition } = scriptGeolocation([3, 3, 'hold', 3, 'hold']);
+    await reachBlock();
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(screen.getByTestId('gps-block-capture-btn')).toBeDisabled(), T);
+
+    await goBackToLocation();
+    await completeSurvey();
+    await screen.findByTestId('gps-required-block', {}, T);
+
+    expect(screen.getByTestId('gps-block-capture-btn')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalledTimes(5), T);
+  });
+});
+
+// ── STORY 13-75 — ADVERSARIAL REVIEW FOLLOW-UPS ────────────────────────────
+/*
+ * Each of these was first a FAILING probe against the uncommitted code (review
+ * 2026-09-27), and each is RED-verified by deleting the fix it covers.
+ */
+describe('13-75 review H1 — a discarded interview is never queued by a capture still in flight', () => {
+  it('⛔ a fix arriving while the Discard confirm is open does NOT queue the declined interview', async () => {
+    const { resolveHeld } = scriptGeolocation([3, 3, 'hold']);
+    await reachBlock();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Declined Respondent' } });
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(screen.getByTestId('gps-block-capture-btn')).toBeDisabled(), T);
+
+    // The position lands while the operator is reading the confirm: in a browser
+    // the callback queues behind the dialog and runs inside `discardDraft`'s await,
+    // BEFORE the answers are reset. Before the fix this queued the whole interview
+    // (name, reference code, position) under a NEW draft id.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => {
+      resolveHeld(0, OPEN_POS);
+      return true;
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('discard-interview-btn'));
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    confirmSpy.mockRestore();
+
+    expect(mockCompleteDraft).not.toHaveBeenCalled();
+  });
+
+  it('⛔ a fix arriving after the discarded page has unmounted queues nothing either', async () => {
+    const { resolveHeld } = scriptGeolocation([3, 3, 'hold']);
+    await reachBlock();
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(screen.getByTestId('gps-block-capture-btn')).toBeDisabled(), T);
+
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('discard-interview-btn'));
+    });
+    await waitFor(() => expect(screen.queryByTestId('question-card')).toBeNull(), T);
+    confirmSpy.mockRestore();
+
+    await act(async () => {
+      resolveHeld(0, OPEN_POS);
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    // Before the fix: a queued `{ site_location }` with no interview behind it.
+    expect(mockCompleteDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe('13-75 review M1 — one interview is submitted once', () => {
+  it('⛔ an in-banner success landing AFTER the survey completed does not submit it again', async () => {
+    // Open-time still out at the refusal; the in-banner attempt is out too; the
+    // third call is the submit-time refresh.
+    const { resolveHeld } = scriptGeolocation(['hold', 'hold', SUBMIT_POS]);
+    await reachBlock();
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(screen.getByTestId('gps-block-capture-btn')).toBeDisabled(), T);
+
+    // The open-time fix lands — U13 retires the panel — and the enumerator does
+    // what the screen now invites: Complete Survey.
+    await act(async () => {
+      resolveHeld(0, OPEN_POS);
+    });
+    expect(screen.queryByTestId('gps-required-block')).toBeNull();
+    fireEvent.click(screen.getByTestId('continue-btn'));
+    await screen.findByTestId('completion-screen', {}, T);
+    expect(mockCompleteDraft).toHaveBeenCalledTimes(1);
+
+    // The in-banner attempt settles last. Before the fix: a SECOND completeDraft,
+    // from the completion screen, rewriting the queued row with another position.
+    await act(async () => {
+      resolveHeld(1, SUBMIT_POS);
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(mockCompleteDraft).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('13-75 review L1 — a late in-banner FAILURE after Back is the verdict the next panel reads', () => {
+  it('open-time timeout, Back, the withdrawn attempt fails permission_denied → the next panel says so, waiver at once', async () => {
+    const { rejectHeld } = scriptGeolocation([3, 3, 'hold']);
+    await reachBlock();
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(screen.getByTestId('gps-block-capture-btn')).toBeDisabled(), T);
+
+    await goBackToLocation();
+    await act(async () => {
+      rejectHeld(0, 1);
+    });
+
+    await completeSurvey();
+    await screen.findByTestId('gps-required-block', {}, T);
+    // Before the fix: the stale `timeout` copy, and the waiver withheld on it.
+    expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/blocked for this site/);
+    expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument();
+  });
+});
+
+/** A form whose geopoint is the LAST question, so the question and the block share a screen. */
+const geoLastForm: FlattenedForm = {
+  ...geoForm,
+  formId: 'geo-last-form',
+  questions: [
+    { ...geoForm.questions[1], sectionId: 's1', sectionTitle: 'General' },
+    { ...geoForm.questions[0], sectionId: 's2', sectionTitle: 'Location' },
+  ],
+};
+
+/** A form whose ONLY question is the geopoint. */
+const geoOnlyForm: FlattenedForm = { ...geoForm, formId: 'geo-only-form', questions: [geoForm.questions[0]] };
+
+describe('13-75 review L2/L5 — when the location question and the block share a screen', () => {
+  it('⛔ L5 — the question shows the SAME, newest reason as the block beside it', async () => {
+    mockHookReturn = { data: geoLastForm, isLoading: false, error: null };
+    // open-time: timeout · GeopointInput tap: timeout · AC11 silent retry: timeout · in-banner: permission_denied
+    scriptGeolocation([3, 3, 3, 1]);
+    await renderPage();
+    fireEvent.click(screen.getByTestId('continue-btn'));
+    await waitFor(() => expect(screen.getByText('Where is this interview?')).toBeInTheDocument(), T);
+
+    fireEvent.click(screen.getByTestId(`geopoint-capture-${GEO_NAME}`));
+    await waitFor(
+      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/Step outside/),
+      T,
+    );
+
+    fireEvent.click(screen.getByTestId('continue-btn')); // Complete Survey → refused
+    await screen.findByTestId('gps-required-block', {}, T);
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+
+    await waitFor(
+      () => expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/blocked for this site/),
+      T,
+    );
+    // Before the fix: the question kept its own older `timeout` copy.
+    expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/blocked for this site/);
+  });
+
+  it('⛔ L2 — a manual capture retires a stale "did not save" notice, not only the panel', async () => {
+    mockHookReturn = { data: geoOnlyForm, isLoading: false, error: null };
+    // open-time: permission_denied (waiver at once) · then the manual button succeeds.
+    scriptGeolocation([1, OPEN_POS]);
+    mockCompleteDraft.mockRejectedValueOnce(new Error('QuotaExceededError'));
+    await renderPage();
+
+    fireEvent.click(screen.getByTestId('continue-btn')); // Complete Survey → refused
+    await screen.findByTestId('gps-required-block', {}, T);
+    fireEvent.click(screen.getByTestId('gps-unavailable-btn')); // the waiver's write fails
+    await screen.findByTestId('gps-submit-error', {}, T);
+
+    fireEvent.click(screen.getByTestId(`geopoint-capture-${GEO_NAME}`)); // and now it works
+    await screen.findByTestId(`geopoint-display-${GEO_NAME}`, {}, T);
+
+    // The position answers the panel (U13), and the failure notice goes with it:
+    // nothing has been retried yet, so "That did not save" would describe an
+    // attempt that is no longer the state of the survey.
+    expect(screen.queryByTestId('gps-required-block')).toBeNull();
+    expect(screen.queryByTestId('submit-error-block')).toBeNull();
+  });
+});
+
+describe('13-75 review H1 — the guard is the page going away, not only the Discard button', () => {
+  it('⛔ ANY unmount mid-capture (router back, closed tab-view) queues nothing', async () => {
+    const { resolveHeld } = scriptGeolocation([3, 3, 'hold']);
+    const { unmount } = await renderPage();
+    await completeSurvey();
+    await screen.findByTestId('gps-required-block', {}, T);
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(screen.getByTestId('gps-block-capture-btn')).toBeDisabled(), T);
+
+    unmount();
+    await act(async () => {
+      resolveHeld(0, OPEN_POS);
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(mockCompleteDraft).not.toHaveBeenCalled();
+  });
+
+  it('⛔ and under StrictMode the flag does NOT latch — the in-banner fix still submits (U9’s shape)', async () => {
+    /*
+     * The flag is set true by an unmount cleanup. StrictMode runs mount → cleanup →
+     * mount and KEEPS the ref, so a flag that is only ever set true would be
+     * latched from the first render and the one-tap recovery would silently never
+     * submit in development — exactly how U9 hid auto-capture.
+     */
+    // Order-independent: every attempt times out until the phone gets a fix, which
+    // it does just before the in-banner tap — however many open-time attempts
+    // StrictMode's double mount started.
+    let hasFix = false;
+    setNavigatorProp('geolocation', {
+      getCurrentPosition: vi.fn((onOk: PositionCallback, onErr?: PositionErrorCallback) => {
+        if (hasFix) onOk({ coords: OPEN_POS } as GeolocationPosition);
+        else onErr?.({ code: 3 } as GeolocationPositionError);
+      }),
+    });
+    await act(async () => {
+      render(
+        <StrictMode>
+          <MemoryRouter initialEntries={['/survey/geo-form-id']}>
+            <Routes>
+              <Route path="/survey/:formId" element={<FormFillerPage mode="fill" />} />
+            </Routes>
+          </MemoryRouter>
+        </StrictMode>,
+      );
+    });
+    await completeSurvey();
+    await screen.findByTestId('gps-required-block', {}, T);
+
+    hasFix = true;
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+
+    expect(await screen.findByTestId('completion-screen', {}, T)).toBeInTheDocument();
+    expect(mockCompleteDraft).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── STORY 13-75 AC11 — a retryable miss gets ONE silent retry before any refusal ──
+/*
+ * Ruled by Awwal 2026-09-27 as a scope addition, to close R4: AC7's hint cannot
+ * reach a `timeout` on `oslsr_master_v3` (the location question is screen 1 and the
+ * miss lands after the enumerator has left it) — and a timeout is not something an
+ * enumerator can read their way out of. The phone needs another go.
+ */
+describe('13-75 AC11 — the silent retry at submit', () => {
+  it('⭐ the field case: open-time TIMEOUT, then Complete Survey → submitted with NO block and NO tap', async () => {
+    const { getCurrentPosition } = scriptGeolocation([3, OPEN_POS]);
+    await renderPage();
+    await completeSurvey();
+
+    expect(await screen.findByTestId('completion-screen', {}, T)).toBeInTheDocument();
+    expect(screen.queryByTestId('gps-required-block')).toBeNull();
+    // Open-time + exactly ONE silent retry. Not a loop.
+    expect(getCurrentPosition).toHaveBeenCalledTimes(2);
+    const answers = submittedAnswers();
+    expect(answers[GEO_NAME]).toEqual(OPEN_POS);
+    // AC2 — a position, and no reason beside it.
+    expect(answers._gpsUnavailableReason).toBeUndefined();
+  });
+
+  it('a failed silent retry refuses with the NEWEST reason, and the waiver still waits for a human attempt', async () => {
+    // Open-time timeout; the silent retry comes back position_unavailable.
+    const { getCurrentPosition } = scriptGeolocation([3, 2]);
+    await reachBlock();
+
+    expect(getCurrentPosition).toHaveBeenCalledTimes(2);
+    // AC9 — the block describes the retry's verdict, not the open-time one.
+    expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/location may be switched off/);
+    // AC6 — a silent attempt is not the enumerator's attempt; the waiver still waits.
+    expect(screen.queryByTestId('gps-unavailable-btn')).toBeNull();
+    expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument();
+  });
+
+  it('⛔ a SETTLED reason (permission_denied) gets no silent retry — asking again changes nothing', async () => {
+    const { getCurrentPosition } = scriptGeolocation([1]);
+    await reachBlock();
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it('⛔ no retry while the browser would have to PROMPT — never a dialog on top of Complete Survey', async () => {
+    setNavigatorProp('permissions', { query: async () => ({ state: 'prompt' }) });
+    const { getCurrentPosition } = scriptGeolocation([3]);
+    await reachBlock();
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it('⛔ no retry while the open-time capture is still running — never two captures at once', async () => {
+    const { getCurrentPosition } = scriptGeolocation(['hold']);
+    await reachBlock();
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it('⛔ a CLERK is never captured silently — office coordinates are not field captures (13-71 AC7)', async () => {
+    mockUserRole = 'data_entry_clerk';
+    // No open-time capture for a clerk; their own tap times out, which records a
+    // retryable reason — exactly what would arm the retry without the role fence.
+    const getCurrentPosition = stubGeolocation([null], 3);
+    await renderPage();
+    fireEvent.click(screen.getByTestId(`geopoint-capture-${GEO_NAME}`));
+    await waitFor(() => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toBeInTheDocument(), T);
+    await completeSurvey();
+
+    await screen.findByTestId('completion-screen', {}, T);
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    expect(submittedAnswers()[GEO_NAME]).toBeUndefined();
+  });
+
+  it('⛔ a REOPENED submission is never captured silently — a false coordinate is worse than none (13-71 R7)', async () => {
+    mockResumeData = { formData: {}, questionPosition: 0, restored: true };
+    const getCurrentPosition = stubGeolocation([null], 3);
+    await renderPage();
+    // No open-time capture on a restored draft; a manual tap times out and records
+    // a retryable reason.
+    fireEvent.click(screen.getByTestId(`geopoint-capture-${GEO_NAME}`));
+    await waitFor(() => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toBeInTheDocument(), T);
+    await completeSurvey();
+
+    await screen.findByTestId('completion-screen', {}, T);
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    expect(submittedAnswers()[GEO_NAME]).toBeUndefined();
+  });
+
+  it('the wait is VISIBLE and Back is off while the silent retry decides', async () => {
+    const { resolveHeld } = scriptGeolocation([3, 'hold']);
+    await renderPage();
+    await completeSurvey();
+
+    await waitFor(() => expect(screen.getByTestId('continue-btn')).toHaveTextContent('Getting location'), T);
+    expect(screen.getByTestId('continue-btn')).toBeDisabled();
+    expect(screen.getByTestId('back-btn')).toBeDisabled();
+
+    await act(async () => {
+      resolveHeld(0, OPEN_POS);
+    });
+    expect(await screen.findByTestId('completion-screen', {}, T)).toBeInTheDocument();
+  });
+
+  it('⛔ and the SAME holds for the 13-71 refresh over a held position — Back there used to submit anyway', async () => {
+    // Open-time succeeds; the submit-time refresh is held.
+    const { resolveHeld } = scriptGeolocation([OPEN_POS, 'hold']);
+    await renderPage();
+    await completeSurvey();
+
+    await waitFor(() => expect(screen.getByTestId('back-btn')).toBeDisabled(), T);
+    expect(screen.getByTestId('continue-btn')).toHaveTextContent('Getting location');
+
+    await act(async () => {
+      resolveHeld(0, SUBMIT_POS);
+    });
+    expect(await screen.findByTestId('completion-screen', {}, T)).toBeInTheDocument();
   });
 });
