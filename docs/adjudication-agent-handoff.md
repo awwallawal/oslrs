@@ -27,6 +27,8 @@ curl -s -o /dev/null -w '%{http_code}\n' https://oyoskills.com/api/v1/health   #
 
 Then read `MEMORY.md` (auto-loaded) + this doc. If `git status` shows uncommitted `apps/**` changes + a `_bmad-output/**/<story>.md` with `Status: done`, that IS the story to adjudicate. **A clean tree = no story in flight** → say so and ask what to pick up (don't invent work).
 
+⛔ **READ §3 BEFORE TRUSTING EITHER OF THOSE TWO RULES** — it names the story actually in flight, and both rules above have already been wrong: a dev pass leaves `Status: review`, not `done` (13-75 and 13-76 both did), and an unpushed-but-committed session can leave the tree clean with work still outstanding.
+
 ---
 
 ## 1. The workflow convention (non-negotiable)
