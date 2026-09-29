@@ -1203,7 +1203,181 @@ sit on opposite sides of a boundary — and the far side of a boundary is exactl
 
 ---
 
-## 3. Current state (2026-09-25) — READ THIS ONE
+### 2ao. ⛔⛔ A `✅` IN A RESIDUAL'S STATE CELL DISARMS THE ROW — AND THE GUARD WILL NOT TELL YOU
+
+`ROW_IS_CLOSED = /\bCLOSED\b|✅|\bRESOLVED\b|\bDISCHARGED\b/` is tested against **`parts[2]`**, the
+THIRD column. A tick decorating a sub-point inside an otherwise-open row closes the whole row.
+
+**Four instances, and the pattern is getting worse, not better:** 13-70 R8 (`CLOSED BY DECISION`
+quoted in the id cell), 13-73 R7 (`…discharged by the post-deploy read`), 13-71 **R15** — whose
+state cell began `✅ **FIXED` while the SAME CELL read *"⚠️ STILL OPEN AS DISCHARGE-ON-DEPLOY"*, so
+13-71 could have gone `done` without the retest that was its entire discharge condition — and a
+**fourth written on 2026-09-28 by the session that was adding the warning about it**, caught only
+because the row was probed afterwards.
+
+**Rules:**
+- An open row's state cell contains the literal `OPEN` and none of `✅`, `CLOSED`, `RESOLVED`,
+  `DISCHARGED`. `DISCHARGE-ON-DEPLOY` is safe (`\bDISCHARGED\b` needs the D-E-D).
+- Use bold **MET** / **NOT MET** for sub-points. Never a tick.
+- To propose a closure you may not sign: `OPEN — closure proposed, awaiting ruling` (§2al).
+- ⛔ **Read the row back after EVERY ledger edit.** Every one of the four was found by probing, none
+  by reading.
+
+**The guard's pass line proves almost nothing.** `story-residual-guard` only fires on stories
+already marked `done`; a green *"N stories scanned, no done-with-open-residuals"* says nothing about
+an open story's rows. Probe them yourself — and note there is **no `state` field** on `ResidualRow`:
+
+```ts
+import { residualRows, isOpenState } from 'apps/api/src/lib/story-residual-guard.ts';
+for (const r of residualRows(readFileSync(f, 'utf8'))) {
+  console.log(isOpenState(r.parts[2] ?? '') ? 'OPEN  ' : 'closed', r.id);
+}
+```
+
+### 2ap. ⛔ A CACHED GATE REPLAYS A STALE RESULT — A GREEN LINE ON A DOCS-ONLY COMMIT PROVES NOTHING
+
+Twice on 2026-09-28 the pre-commit hook printed `✅ story-residual guard: 330 stories scanned …
+today 2026-09-27` — on the 28th, with 331 stories on disk. And a docs-only push replayed the WHOLE
+pre-push suite from cache: 5 of 5 packages `cache hit, replaying logs`, `>>> FULL TURBO`, 3.1
+seconds, **no test executed**.
+
+That is turbo behaving correctly — the hash did not change — but the consequence is sharp:
+
+- A green gate on a docs-only commit proves **the cache key held**, not that anything was verified.
+- ⚠️ **A DATED residual expiring that day would NOT have been caught**, because the guard never ran
+  and the date it printed was the date it was cached.
+- Quote a cached total only while saying it is cached. To assert a gate, run it **directly**
+  (`npx tsx scripts/lint-story-residuals.ts`), which is also §2ae.
+
+### 2aq. ⭐ MEASURE A "SMALL FIX" BEFORE YOU AGREE IT IS SMALL
+
+Two findings on 2026-09-29 both looked like one-line patches; a read-only query changed the verdict
+on each, and one of them was destined for the night before a field launch.
+
+- `lessThanField` "cannot exceed household size" is declared by the XLSForm converter and
+  implemented **nowhere** — `checkRule` has no case and **no `default`**, so it fails OPEN. Looked
+  trivial. The data: **22 prod rows violate it**, and **43 rows have dependents exactly EQUAL to
+  household size** — so a strict `<` (the rule's NAME) would reject 43 legitimate rows while `≤`
+  (the rule's MESSAGE) would not. The fix needed a semantics ruling the code could not supply.
+- "Declining consent should end the survey" looked like adding a `showWhen`. The data: **12 live
+  citizens** already registered with `consent_basic = 'no'`, 10 with marketplace profiles — which
+  made it a Ministry-level decision about real people, not a patch.
+
+**The rule:** before agreeing a hole is small, ask *"how many rows are already through it?"* It is
+one read-only query, it is free, and it has twice changed both the severity and the owner.
+
+---
+
+## 3. Current state (2026-09-29) — READ THIS ONE
+
+⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds — §0. As of 2026-09-29 prod and
+origin read `f75b268`, health 200, and local is **1 ahead** (`0603c96`, the field guide, deliberately
+unpushed) — but verify, do not read.
+
+📄 **Full evidence for this state: `docs/adjudication-session-2026-09-26-to-29.md`.** Row ids, SHAs,
+measurements and the proofs behind every claim below. This section is the summary; that file is the
+receipt. If they disagree, THIS file is wrong and that one is stale — re-measure, do not pick one.
+
+### ⛔ THE ONE THING TO READ IF YOU READ NOTHING ELSE
+
+**A `✅` anywhere in a residual row's THIRD column silently CLOSES that row**, because
+`ROW_IS_CLOSED` matches a bare tick against `parts[2]`. Four instances now — 13-70 R8, 13-73 R7,
+13-71 **R15** (whose cell literally read "STILL OPEN AS DISCHARGE-ON-DEPLOY" while beginning
+`✅ **FIXED`, so the story could have gone `done` without the retest that was its entire discharge
+condition), and a **fourth written by the session that was adding the warning about it.**
+
+And the guard will not save you: `story-residual-guard`'s pass line only fires on stories already
+marked `done`. **Probe every row yourself** — `residualRows(content)` + `isOpenState(r.parts[2])`.
+There is no `state` field on `ResidualRow`; the state IS `parts[2]`. Use bold **MET** / **NOT MET**
+for sub-points inside an open row, never a tick.
+
+### ⚠️ THE TREE IS NOT CLEAN — 13-76 is in flight
+
+Story **13-76** (`a-dismissed-prompt-is-not-a-blocked-site`) is **implemented and uncommitted**;
+dev and adversarial code review both ran in the other CLI, status `review`, **6 open residuals**,
+**not yet adjudicated**. That is the story in flight. Do not start anything else first.
+
+### The GPS problem is closed, and it closed on hardware
+
+Three stories deployed in sequence — 13-71's field fix, then **13-75** (`cfbe307`, CI 36329354441,
+10/10) — and the headline claim is proven on a real Android, not in jsdom:
+
+- **13-71 R15** — `01a0dd27`: auto-capture with no tap, `gps_accuracy` 58.8 m.
+- **13-75 R3** — `01a0e802`: recovery FROM the amber panel, 22.6 m, no reason, and **the survey
+  submitted itself** (AC3). `_gpsOpenCapture` absent proves a manual capture; exactly one row proves
+  review-finding M1 does not recur.
+- **13-73 R7** — discharged BOTH halves; the public half by three real public registrations
+  carrying `oslsr_public_core_v1` / `1.0.1`.
+
+⭐ The arc, measured at both ends: the first human ever to reach the amber panel waived a `timeout`
+— the retryable class — because the panel's only instruction was the one action that dismissed it.
+The same panel now recovers in one tap.
+
+### Story board
+
+| Story | Status | Open | Note |
+|---|---|---|---|
+| 13-70 | review | 3/10 | R2 post-deploy read still outstanding |
+| 13-71 | review | 10/11 | R15 discharged; **R5 closure PROPOSED, awaiting ruling** |
+| 13-73 | review | 2/14 | R1 + R8 are the **prod restore, not yet run** |
+| 13-74 | ready-for-dev | 0 | AC1+AC2 shipped `c07357a`; AC3–AC8 remain |
+| 13-75 | review | 5/7 | R2 needs an iPhone; R5/R6/R7 carried by 13-76 |
+| 13-76 | review | 6/6 | **uncommitted, adjudicate first** |
+
+### ⛔ Two live findings that are NOT stories yet
+
+**1. `lessThanField` is declared and implemented nowhere, and fails OPEN.** The XLSForm converter
+writes it; `formSchema.ts`'s `checkRule` has no case for it and **no `default`**, so it silently
+passes. `dependents_count`'s "Cannot exceed household size" has never fired — **22 prod rows violate
+it**. ⚠️ Implement as `≤`, not `<`: **43 prod rows have dependents exactly equal to household size**
+and a strict rule would reject all of them. The rule NAME and its MESSAGE disagree; the data backs
+the message.
+
+**2. Declining consent does not end the survey, on BOTH published forms.** `consent_basic = yes`
+gates Identity; the age fork then hides Labour Force and Guardian Consent; but **Household &
+Welfare, Skills & Business and Marketplace carry no gate** and stay visible. **12 prod submissions
+carry `consent_basic = 'no'`** — all public, all with names, NINs, respondents and issued OSLRS
+numbers, 2026-05-20 → 09-19. Mechanism: the public wizard collects identity BEFORE the survey, and
+hiding a section does not retract answers already given.
+
+Marketplace exposure checked: 10 have profiles, 9 are `consent_enriched`. ⚠️ **Not an open PII
+leak** — `searchProfiles` returns anonymous fields only; name/phone come only from `revealContact`,
+behind `authenticate` + CAPTCHA + step-up + 50/24h, fail-closing to `not_found`. And all nine
+explicitly answered **Yes** to the marketplace question. So it is **contradictory consent on
+record**, resolved silently in favour of publication — a consent-integrity problem, standing since
+May, needing a Ministry-level decision about those nine as well as a code fix.
+
+### The enumerator field guide is now the in-app download
+
+`docs/runbooks/enumerator-field-briefing.md` rewritten from the **live published form**
+(`oslsr_master_v3 / 2026072301`: 8 sections, 47 questions, 11 choice lists). That file already IS
+`/users/field-briefing`, rendered to PDF at request time — one source, nothing to drift.
+
+⛔ **Write to the renderer's limits:** `field-briefing.service.ts` parses only h1–h3, blockquote,
+bullets and body. **A Markdown table renders as literal pipes and `**bold**` is STRIPPED** — the
+blockquote is the only way to shout. Verify an edit by rendering: `parseBriefingMarkdown` +
+`renderBriefingPdf`, assert zero lines containing `|`. Current: 6 pages, ~2,900 words.
+
+### ⏭️ NEXT, in the agreed order
+
+1. **Adjudicate 13-76** (uncommitted).
+2. **13-73 R1/R8 prod restore** — `019f8ed3` only, atomic commit, push to a clean tree.
+   ⛔ Writes to production: **explicit go-ahead required every time.**
+3. **Re-provision the 8 enumerators**, then the field start.
+4. 13-72 pass 1 → pass 2 → R-A8.
+
+⚠️ **The teardown plan, as agreed** — practice captures get the **ZZSMOKE** marker so teardown keys
+on submitter id ∧ time window ∧ marker, never a clock boundary (trial and real work share the same
+live accounts); **read F2 BEFORE deleting anything**, since those captures are the only proof the
+new enumerators can capture GPS; and **do not tear down under deadline pressure** — tagged rows are
+identifiable, which is all registry cleanliness needs before field work.
+⛔ The gate runbook still tells a reader an auditor can see these deletions. The teardown is raw
+psql and writes **no audit row**. 13-73 R3's secondary finding, Awwal owns it, and it is about to be
+exercised across 8 live accounts.
+
+---
+
+## 3-old11. Current state (2026-09-25) — superseded by §3 above
 
 ⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds. As of 2026-09-25 prod, origin and
 local all read `1248be3`, health 200, tree clean — but verify, do not read.
@@ -2278,6 +2452,40 @@ adds an `adopted_from_draft` bucket. No schema change (13-49 writes real rows; t
     not the e2e harness written for this exact behaviour. Budget for dry runs accordingly.
 
 ---
+
+## 7w. Session 2026-09-26 → 09-29 — the GPS problem closed on hardware, and the field guide learned the form
+
+📄 **Full record: `docs/adjudication-session-2026-09-26-to-29.md`** — row ids, SHAs, measurements,
+and the proofs. Summarised here only so the arc is legible without opening it.
+
+**Shipped and deployed:** 13-71's field fix (`1554a37`/`1e67166`), **13-75** (`cfbe307`, CI 10/10),
+13-74 AC1+AC2's production-storage guard (`c07357a`). The enumerator field guide was rewritten from
+the live form (`0603c96`, committed, unpushed at session end).
+
+**The arc worth remembering.** A field report — *"I had to click the gps after allowing"* — turned
+out to be the **intersection of two individually-correct ultra fixes**: U3's watchdog clock started
+when the survey opened (including time the permission dialog sat unanswered, because
+`PositionOptions.timeout` does not run during a prompt), and U9's once-guard then latched on that
+timeout. Neither was wrong alone.
+
+Then the deeper one. The first human ever to reach the amber "no location" panel waived a `timeout`
+— the *retryable* class — because the panel's only instruction, *"go back to the location
+question"*, was the one action that **dismissed the panel** (U10 had made Back clear it). 13-75 gave
+that refusal a way out; 13-75 R3 was then discharged on a real Android, and the operator's own words
+are the evidence: *"once I clicked the GPS button after toggling the Location Icon, it submitted."*
+
+**Three things this session got wrong and caught:**
+- Declared a push "green" from a **cached** gate — twice (§2ap).
+- **Disarmed a residual row with a `✅` inside the very edit that added the warning about doing
+  that** (§2ao). Fourth instance of the class.
+- Started to report the contradictory-consent finding as a live PII leak; reading `revealContact`
+  showed it is behind `authenticate` + CAPTCHA + step-up, and that all nine had explicitly consented
+  to the marketplace. **The corrected framing is narrower and truer** — contradictory consent
+  resolved silently in favour of publication, not an open leak.
+
+**Two findings left open for a ruling, both measured, neither a story yet:** `lessThanField` is
+inert and fails open (22 rows through it; 43 rows make `≤` the only safe semantics), and declining
+consent does not end the survey on either published form (12 live citizens). See §3.
 
 ## 7v. Session 2026-09-20 — 13-70 adjudicated, and three records that signed a name they had not earned
 
