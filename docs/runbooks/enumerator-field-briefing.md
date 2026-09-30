@@ -2,7 +2,7 @@
 
 Read this once before your first day. Keep it on your phone.
 
-Version 2026-09-29 · Oyo State Labour & Skills Registry
+Version 2026-09-30 · Oyo State Labour & Skills Registry
 
 You can download this guide, and your ID card, from your dashboard after you log in.
 
@@ -18,9 +18,21 @@ phone you will actually work with. The link is personal to you — do not forwar
 If it has not arrived, check your spam folder first, then tell your supervisor. Do not create an
 account yourself; enumerator accounts are issued by the office.
 
-### 1.2 Activation — five steps, once
+The link works for 48 hours. If it has expired, tell your supervisor and a new one will be sent.
 
-The link opens a short wizard. You cannot skip steps, and you only do this once.
+> ### SIGN IN WITH THE ADDRESS WRITTEN IN THE EMAIL
+>
+> The invitation shows a line that reads "Your login:" followed by an email address. That address,
+> exactly as written, is your username. It may not be the address the email arrived at — it can
+> have extra characters such as +test before the @. Copy it into your phone's notes now. Typing
+> your normal email address instead is the most common reason enumerators cannot sign in.
+
+If the office sends you a new invitation later, go through the steps again. The surveys you have
+already submitted stay on your account.
+
+### 1.2 Activation — five steps
+
+The link opens a short wizard. Do all five steps, in one sitting, on the phone you will work with.
 
 - Set your password
 - Your personal information
@@ -33,7 +45,11 @@ The link opens a short wizard. You cannot skip steps, and you only do this once.
 > The photo you take at activation is printed on your OSLRS identity card. Take it in good light,
 > facing the camera, with your face clear and unobstructed. If there is no photo on your account,
 > no ID card can be produced for you — and the card is what tells a stranger at their door who you
-> are.
+> are. The selfie screen has a skip option. Do not use it.
+
+After you sign in, open My Profile from the menu and check that your photo is there. The round
+badge at the top of the screen shows your initials, not your photo — that is normal. My Profile
+and your ID card are where your photo appears.
 
 ### 1.3 Your ID card and this guide
 
@@ -46,14 +62,38 @@ Download both before you go out. Save the card to your phone's gallery and keep 
 you can open it without signal. Both are generated fresh each time you download them, so if
 anything changes you simply download again.
 
-### 1.4 Practise before you meet anyone
+### 1.4 Two practice surveys before you meet anyone
 
-Do one complete practice survey before your first real interview, and use an obviously fake name
-for it. Never practise on a real person's details.
+Complete two practice surveys, end to end, before your first real interview. They are how you and
+the office both know you can do the whole job: open the survey, get a location, answer every
+section, submit, and find the registration number afterwards.
 
-> A practice entry made with a real person's NIN will block that person from registering later,
-> because the register refuses a NIN that is already used. Tell your supervisor about every
-> practice entry so it can be removed.
+> ### EVERY PRACTICE SURVEY USES THE SURNAME ZZSMOKE
+>
+> Enter ZZSMOKE as the surname — for example, first name Tunde, surname ZZSMOKE. That word is how
+> the office finds practice entries and removes them. A practice entry without it cannot be told
+> apart from a real citizen, and has to be checked by hand.
+
+Rules for practice entries:
+
+- Surname ZZSMOKE, every time
+- No NIN: use the "I don't have my NIN now" link. Never type a real person's NIN, including your
+  own — a NIN can only be registered once, so a practice entry would block that person
+- Leave the email box empty, so no message is sent to anyone
+- Use your own phone number
+- Open the survey outside or near a window, so the location works as it will in the field
+- Do it in daylight, not late at night
+
+Make the two practice surveys different people, so you see different parts of the form:
+
+- Practice 1 — an adult of about 30 who works for pay, owns a small unregistered business, and
+  says Yes to the Skills Marketplace and Yes to sharing contact details
+- Practice 2 — an adult of about 22 who is not working but has looked for work in the last four
+  weeks, has no business, and says No to the Skills Marketplace
+
+Answer each question properly, at the pace of a real interview: read it out as if someone were in
+front of you, and choose a sensible answer. After each one, open Sync Status and find the OSLRS
+number. Then tell your supervisor that both are done.
 
 ---
 
@@ -75,6 +115,18 @@ The eight sections, in order:
 
 One question is shown per screen. Answer it, press Continue, and the form works out what to ask
 next. Use Back if you need to change an earlier answer.
+
+### Ask every question, and wait for the answer
+
+Read each question to the person in your own words, wait for their answer, and enter what they
+actually say. Do not answer for them, do not guess, and do not pick the first option to move on.
+
+> ### EVERY SURVEY IS CHECKED AUTOMATICALLY
+>
+> The system checks each survey as it arrives: how long it took compared with your usual pace, the
+> location, the time of day, whether the same answer was picked down a whole list, and whether the
+> same person appears twice. Surveys that look rushed or copied are flagged for review by the
+> office. A real interview takes time. Take the time.
 
 ---
 
@@ -360,9 +412,12 @@ the register reports on youth employment.
 ## Part 10 — Before you go out
 
 - Phone charged, and a way to charge it in the field
+- Your login address saved in your phone's notes, exactly as the invitation wrote it
 - Logged in, and the app opens without asking you to log in again
+- Your photo showing under My Profile
 - Location permission set to Allow, and your phone's own Location switch on
-- One practice survey completed, with a fake name, and you have seen where the number appears
+- Two practice surveys completed with the surname ZZSMOKE, and you have found both numbers in
+  Sync Status
 - Your ID card downloaded and on your phone
 - This guide downloaded
 - Slips or a notebook for writing numbers onto
@@ -372,8 +427,8 @@ the register reports on youth employment.
 
 ## For supervisors
 
-Never use real people's details to test. Use obviously fake names and phone numbers, and tell the
-office so the rows can be removed. Test entries left in the register become real-looking records
+Never use real people's details to test. Every practice entry carries the surname ZZSMOKE and no
+NIN (Part 1.4), and the office should be told when practice is done so the rows can be removed. Test entries left in the register become real-looking records
 that nobody can tell apart from citizens.
 
 Watch for: enumerators reading out numbers before they exist (Part 6); surveys arriving with no
