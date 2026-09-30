@@ -11,9 +11,13 @@
 #     or PR-to-`main`. A backup push of a feature branch triggers nothing.
 #
 # Therefore this hook is asymmetric:
-#   - Pushing to `main`  → run the FULL suite (`pnpm test`). This is the
-#     belt-and-suspenders gate for a local rebase-merge → push-main, so the
-#     single "coherent push" can never be a surprise CI failure.
+#   - Pushing to `main`  → build everything, then test the packages this push
+#     CHANGES (2026-09-30; was the full suite, which cost ~40 min of the
+#     developer's own machine per push and duplicated CI's parallel jobs — see
+#     the block at the test invocation below for the measurements and the
+#     fail-safes). A root-level change (lockfile, root package.json,
+#     vitest.base.ts, test/setup.ts, turbo.json, workspace, root tsconfig)
+#     still runs EVERYTHING, because the scoped filter cannot see root files.
 #   - Pushing anything else (feature-branch backups, WIP) → skip the suite so
 #     off-site backups stay instant. The PR's CI is the authority for those.
 #
@@ -92,7 +96,79 @@ if [ "$push_to_main" -eq 1 ] || [ "${PREPUSH_FULL:-0}" = "1" ]; then
   export DATABASE_URL="$TEST_DATABASE_URL"
   echo "[pre-push] tests → $DATABASE_URL (NODE_ENV=test; db-guard enforced)"
 
-  pnpm exec turbo run test --concurrency=1
+  # ===========================================================================
+  # 2026-09-30 — SCOPE THE SUITE TO WHAT THIS PUSH ACTUALLY CHANGES.
+  #
+  # WHY. This gate had grown to ~40 MINUTES of a developer's own machine per
+  # push to main (web ~25min + api ~16min, serialised by design above), during
+  # which nothing else on the laptop is usable. Measured 2026-09-30.
+  #
+  # AND IT DUPLICATES A GATE WE ALREADY HAVE. ci-cd.yml runs test-web, test-api
+  # and test-unit as SEPARATE PARALLEL JOBS on dedicated runners, `dashboard`
+  # needs all three, and `deploy` needs `[dashboard, auth-smoke, smoke-e2e]`.
+  # So a failing suite in CI CANNOT DEPLOY — verified the same day, when the OSV
+  # gate failed `lint-and-build` and `deploy` was skipped with prod untouched.
+  # The local full suite therefore bought ~10 minutes of earlier feedback at the
+  # cost of 40 minutes of the machine. A red main is briefly red; nothing ships.
+  #
+  # WHAT CHANGED. `--filter=...[origin/main]` runs only the packages this push
+  # changes AND their dependents. Pushing to main, `origin/main` is the remote
+  # state being replaced, so the scope is exactly what the push introduces:
+  #   docs-only commit ....... nothing to test (seconds)
+  #   web-only story ......... web only, api's 16 minutes skipped
+  #   lockfile / root change . everything, because everything depends on it
+  #
+  # ⛔ FAIL-SAFE, NOT FAIL-QUIET. If `origin/main` is not a known ref the filter
+  # cannot be evaluated, and a filter that resolves to nothing looks identical to
+  # a filter that matched nothing — so we FETCH it first and fall back to the
+  # FULL suite if it is still missing. Testing nothing must never be the silent
+  # outcome of a broken filter. (The same class as the cached-gate lesson of
+  # 2026-09-30: a green line that proves the key held, not that anything ran.)
+  #
+  # Full suite on demand, unchanged:  PREPUSH_FULL=1 git push
+  # ===========================================================================
+  # ⛔ AND A ROOT-LEVEL CHANGE MUST STILL RUN EVERYTHING — MEASURED, NOT ASSUMED.
+  #
+  # `--filter=...[origin/main]` detects changes PER PACKAGE DIRECTORY. Root files
+  # belong to no package, so a `pnpm-lock.yaml`-only change selects **NOTHING** —
+  # verified by dry-run on 2026-09-30. turbo does treat the lockfile as a global
+  # dependency for HASHING (every package cache-missed on that day's CVE-bump
+  # commit), but hashing and `[ref]` filtering are different mechanisms.
+  #
+  # That would have been the worst possible hole: the CVE bump of 2026-09-30
+  # swapped multer and engine.io UNDER the whole API, and is precisely the change
+  # that needed all 333 API files — yet it would have tested nothing. So any touch
+  # of a file every package depends on forces the FULL suite.
+  prepush_scope_reason=""
+  if [ "${PREPUSH_FULL:-0}" = "1" ]; then
+    prepush_scope_reason="PREPUSH_FULL=1"
+  else
+    git fetch origin main -q 2>/dev/null || true
+    if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+      # Cannot evaluate the filter at all. Testing nothing must never be the
+      # silent outcome of an unresolvable ref.
+      prepush_scope_reason="origin/main not resolvable"
+    else
+      # Root files whose change invalidates every package's meaning. Keep this
+      # list in step with turbo.json's globalDependencies.
+      for f in $(git diff --name-only origin/main...HEAD 2>/dev/null); do
+        case "$f" in
+          pnpm-lock.yaml|package.json|pnpm-workspace.yaml|turbo.json|vitest.base.ts|test/setup.ts|tsconfig.json|tsconfig.*.json)
+            prepush_scope_reason="root dependency changed ($f)"
+            break
+            ;;
+        esac
+      done
+    fi
+  fi
+
+  if [ -n "$prepush_scope_reason" ]; then
+    echo "[pre-push] FULL suite, every package — $prepush_scope_reason"
+    pnpm exec turbo run test --concurrency=1
+  else
+    echo "[pre-push] scoping to packages changed vs origin/main (force all: PREPUSH_FULL=1 git push)"
+    pnpm exec turbo run test --concurrency=1 --filter='...[origin/main]'
+  fi
 else
   echo "[pre-push] Feature-branch/backup push → skipping full suite."
   echo "[pre-push] pre-commit already gated tsc+lint; the PR's CI is the full gate."

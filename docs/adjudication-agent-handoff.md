@@ -22,6 +22,9 @@ git fetch origin -q && git status -sb | head -1   # local vs origin (ahead/behin
 # prod truth (both — SHA alone doesn't prove the app is up):
 ssh -o ConnectTimeout=25 root@100.93.100.28 'cd /root/oslrs && git rev-parse --short HEAD'
 curl -s -o /dev/null -w '%{http_code}\n' https://oyoskills.com/api/v1/health   # want 200
+# LOCAL services — a dead container is invisible until a suite blames YOUR code (§2as):
+docker ps --format '{{.Names}} {{.Status}}'   # want oslsr_postgres + oslsr_redis "(healthy)"
+# if either is missing/exited:  pnpm services:up
 ```
 ⚠️ **git ≥ 2.52:** `git rev-parse --short A B` now dies with `fatal: Needed a single revision` — `--short` takes exactly ONE rev. Use `git status -sb` (above) or two separate calls.
 
@@ -1268,13 +1271,67 @@ on each, and one of them was destined for the night before a field launch.
 **The rule:** before agreeing a hole is small, ask *"how many rows are already through it?"* It is
 one read-only query, it is free, and it has twice changed both the severity and the owner.
 
+### 2ar. ⭐⭐ THE PRE-PUSH GATE IS NOW SCOPED — AND A SCOPED GATE CAN TEST NOTHING
+
+**Changed 2026-09-30.** `.husky/pre-push` on main used to run the FULL suite: ~**40 minutes** of the
+developer's own machine per push (web ~25min + api ~16min, serialised by the 9-54 fix), during which
+nothing else on the laptop is usable. It now runs `--filter='...[origin/main]'` — the packages this
+push changes and their graph. Force the old behaviour with `PREPUSH_FULL=1 git push`.
+
+**Why that is safe.** `ci-cd.yml` runs `test-web`, `test-api` and `test-unit` as SEPARATE PARALLEL
+JOBS on dedicated runners; `dashboard` needs all three and `deploy` needs
+`[dashboard, auth-smoke, smoke-e2e]`. **A failing suite in CI cannot deploy** — demonstrated the same
+day, when the OSV gate failed `lint-and-build` and `deploy` was skipped with prod untouched. The
+local full suite bought ~10 minutes of earlier feedback for 40 minutes of the machine. A red main is
+briefly red; nothing ships.
+
+⛔ **AND THE OBVIOUS IMPLEMENTATION HAD A FAIL-QUIET HOLE, FOUND BY DRY-RUN.** `[ref]` filtering
+detects changes **per package directory**, so root files belong to no package:
+
+```
+apps/web/src/**  ->  web + testing + types + utils   (api's 16 min skipped)
+apps/api/src/**  ->  api + testing + types + utils   (web's 25 min skipped)
+pnpm-lock.yaml   ->  NOTHING                          ⛔
+```
+
+turbo treats the lockfile as a global dependency for **hashing** (every package cache-missed on that
+day's CVE-bump commit) but hashing and `[ref]` filtering are different mechanisms. So the 2026-09-30
+CVE bump — which swapped `multer` and `engine.io` UNDER the whole API and is exactly the change that
+needed all 333 API files — would have tested **nothing**. The hook now forces the full suite when any
+of these is touched: `pnpm-lock.yaml`, root `package.json`, `pnpm-workspace.yaml`, `turbo.json`,
+`vitest.base.ts`, `test/setup.ts`, root `tsconfig*.json`. Keep that list in step with turbo.json's
+`globalDependencies`.
+
+**The generalisable rule:** when you narrow a gate, enumerate the change shapes and DRY-RUN each one.
+A filter that matches nothing is indistinguishable from a filter that found nothing wrong.
+
+### 2as. ⛔ A CACHED GATE CAN HOLD THE LAST HONEST ANSWER WHILE THE ENVIRONMENT DIES
+
+Third cached-gate lesson of 2026-09-30 and the sharpest (§2ap has the other two). After bumping four
+dependencies, the API suite showed **98 failures** and looked exactly like `multer` or `engine.io`
+breaking uploads or sockets. It was neither: `oslsr_postgres` and `oslsr_redis` had **EXITED 13 HOURS
+EARLIER** (status 255, host/Docker restart). Signature: `redis.connection_error`, `AggregateError` at
+`net.internalConnectMultiple` (connection refused), every real-DB test dying in `beforeAll` and
+cascading into skips.
+
+⭐ **The part that matters.** Checking whether the *push* had been gated against a dead database, the
+pre-push API total was **byte-identical to the previous push** (`331 passed | 2 skipped`,
+`4749 passed | 9 skipped`). That was a turbo **cache replay**, and correctly so — the story was
+web-only, the API hash never changed. The gate did not run API tests against a dead DB; **it did not
+run them at all.** The protection expired the moment a commit touched the lockfile.
+
+**So:** an identical total across two pushes is the tell that nothing ran. And **add
+`docker ps` / `pnpm services:up` to the cold-start ritual** — §0 checks git state and prod health but
+never checks whether the local database is alive, and a 13-hour-dead container is invisible until a
+suite blames your code for it.
+
 ---
 
-## 3. Current state (2026-09-29) — READ THIS ONE
+## 3. Current state (2026-09-30) — READ THIS ONE
 
-⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds — §0. As of 2026-09-29 prod and
-origin read `f75b268`, health 200, and local is **1 ahead** (`0603c96`, the field guide, deliberately
-unpushed) — but verify, do not read.
+⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds — §0. As of 2026-09-30 prod,
+origin and local all read `4b721bf`, health 200, **tree clean, nothing in flight** — but verify, do
+not read.
 
 📄 **Full evidence for this state: `docs/adjudication-session-2026-09-26-to-29.md`.** Row ids, SHAs,
 measurements and the proofs behind every claim below. This section is the summary; that file is the
@@ -1293,11 +1350,29 @@ marked `done`. **Probe every row yourself** — `residualRows(content)` + `isOpe
 There is no `state` field on `ResidualRow`; the state IS `parts[2]`. Use bold **MET** / **NOT MET**
 for sub-points inside an open row, never a tick.
 
-### ⚠️ THE TREE IS NOT CLEAN — 13-76 is in flight
+### ✅ 13-76 ADJUDICATED AND DEPLOYED — and the deploy was blocked by something else entirely
 
-Story **13-76** (`a-dismissed-prompt-is-not-a-blocked-site`) is **implemented and uncommitted**;
-dev and adversarial code review both ran in the other CLI, status `review`, **6 open residuals**,
-**not yet adjudicated**. That is the story in flight. Do not start anything else first.
+**13-76** is deployed (`35fa859`, then `4b721bf`). Adjudication gates: full web suite **284/284 files
+RAN, 0 unrun**; api **333 files / 4749 passed / 9 skipped**; tsc 0; eslint 0; test delta **+60**
+reconciled per-file. **AC8/R-a verified from SOURCE** — `isRetryableCaptureFailure` still governs the
+open-time latch and AC11's fence; only the waiver gate reads the new `classifyBlockFailure`, so
+13-71 U9 stays closed. AC5's negative is structural, double-fenced. The new copy is confirmed **in
+the served bundle** (`formSchema-*.js`: the dismissed lead, the toggle-first timeout line, the
+platform labels).
+
+⛔ **THE DEPLOY FAILED FIRST, AND NOT BECAUSE OF 13-76.** CI 36667038893 failed `lint-and-build` with
+`deploy` skipped: the OSV prod-scope gate fired on advisories newly published against dependencies
+nobody had touched (the `audit-gate-osv-scanner` pattern). Fixed in `4b721bf` with four bounded
+same-major bumps — `brace-expansion >=5.0.12`, `engine.io >=6.6.11`, `ip-address >=10.7.2`, and
+`multer ^2.4.0` as a DIRECT-dep bump rather than an override. Every path confirmed in the gate's own
+input (`pnpm ls -r --prod --depth Infinity`) before and after.
+
+⚠️ **`vitest@4.1.8` was printed in that blocking list and was deliberately NOT suppressed.** It is
+absent from the prod closure, and the gate reported "4 PRODUCTION finding(s)" while printing FIVE
+packages (and "3 dev-tree" while printing two) — `vitest` and `@vitest/mocker` share one advisory,
+counted once and printed twice. CI then passed on the four bumps ALONE, proving it was a reporting
+artifact. **An `osv-scanner.toml` ignore would have suppressed a phantom and left a real reporting
+bug in a security gate.** The gate's OUTPUT still needs that fix; its policy does not.
 
 ### The GPS problem is closed, and it closed on hardware
 
@@ -1324,7 +1399,7 @@ The same panel now recovers in one tap.
 | 13-73 | review | 2/14 | R1 + R8 are the **prod restore, not yet run** |
 | 13-74 | ready-for-dev | 0 | AC1+AC2 shipped `c07357a`; AC3–AC8 remain |
 | 13-75 | review | 5/7 | R2 needs an iPhone; R5/R6/R7 carried by 13-76 |
-| 13-76 | review | 6/6 | **uncommitted, adjudicate first** |
+| 13-76 | review | 6/6 | **DEPLOYED** `4b721bf`; R2 (the premise) needs one Android read |
 
 ### ⛔ Two live findings that are NOT stories yet
 
