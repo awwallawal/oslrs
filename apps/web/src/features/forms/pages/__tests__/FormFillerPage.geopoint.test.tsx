@@ -17,12 +17,13 @@
 
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act, within } from '@testing-library/react';
 
 expect.extend(matchers);
 
 import { StrictMode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { isPromptStateUnreliable } from '../../lib/geo-capture';
 import FormFillerPage from '../FormFillerPage';
 import type { FlattenedForm } from '../../api/form.api';
 
@@ -198,6 +199,9 @@ beforeEach(() => {
   mockHookReturn = { data: geoForm, isLoading: false, error: null };
   setNavigatorProp('permissions', { query: async () => ({ state: 'granted' }) });
   stubGeolocation([OPEN_POS]);
+  // 13-76 review L3 — the dismissal count now lives for the TAB; one test's
+  // dismissals must not settle the next test's first one.
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -1134,7 +1138,7 @@ describe('13-75 AC4/AC5 — guidance names what is actually wrong', () => {
   it('timeout → move, then capture again', async () => {
     scriptGeolocation([3]);
     await reachBlock();
-    expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/Step outside/);
+    expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/step outside/i);
   });
 
   it('⛔ the dead-end instruction is gone — nothing says "go back to the location question"', async () => {
@@ -1382,7 +1386,7 @@ describe('13-75 review L2/L5 — when the location question and the block share 
 
     fireEvent.click(screen.getByTestId(`geopoint-capture-${GEO_NAME}`));
     await waitFor(
-      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/Step outside/),
+      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/step outside/i),
       T,
     );
 
@@ -1591,5 +1595,393 @@ describe('13-75 AC11 — the silent retry at submit', () => {
       resolveHeld(0, SUBMIT_POS);
     });
     expect(await screen.findByTestId('completion-screen', {}, T)).toBeInTheDocument();
+  });
+});
+
+// ── STORY 13-76 — a dismissed prompt is not a blocked site ──────────────────
+/*
+ * Code 1 is `permission_denied` whether the enumerator tapped Block or tapped past
+ * the dialog. The page tells them apart ONLY through `navigator.permissions`, and
+ * this file's default (`beforeEach`) reports `granted` — which is why every 13-75
+ * `permission_denied` test above still takes the SETTLED path and is left as the
+ * regression fence it was. Each test here sets the state it is about explicitly.
+ */
+function setPermissionState(state: 'granted' | 'denied' | 'prompt') {
+  setNavigatorProp('permissions', { query: async () => ({ state }) });
+}
+
+/** Force the open-time auto-capture effect to re-run (a new question identity — U9's refetch). */
+async function rerunAutoCaptureEffect() {
+  mockHookReturn = {
+    data: { ...geoForm, questions: [{ ...geoForm.questions[0] }, geoForm.questions[1]] },
+    isLoading: false,
+    error: null,
+  };
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('continue-btn'));
+  });
+  await waitFor(() => expect(screen.getByText('What is your full name?')).toBeInTheDocument(), T);
+}
+
+describe('13-76 AC1/AC2/AC3 — a dismissed prompt gets a retry, not the way out', () => {
+  it('⭐ Awwal’s read: prompt ignored → the block asks for Allow, and the waiver waits', async () => {
+    setPermissionState('prompt');
+    scriptGeolocation([1]);
+    await reachBlock();
+
+    await waitFor(
+      () => expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/choose Allow/),
+      T,
+    );
+    // AC2 — the cheap fix, not settings surgery.
+    expect(screen.getByTestId('gps-block-remediation')).not.toHaveTextContent(/Website Settings/);
+    // AC3 — gated behind one human attempt, and the pending line says so.
+    expect(screen.queryByTestId('gps-unavailable-btn')).toBeNull();
+    expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument();
+  });
+
+  it('4.3 — one tap re-raises the prompt; Allow commits the position and retries the submit', async () => {
+    setPermissionState('prompt');
+    const { getCurrentPosition } = scriptGeolocation([1, OPEN_POS]);
+    await reachBlock();
+    await waitFor(() => expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument(), T);
+
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+
+    expect(await screen.findByTestId('completion-screen', {}, T)).toBeInTheDocument();
+    // Open-time + the ONE human tap. No silent capture at submit in between (AC5).
+    expect(getCurrentPosition).toHaveBeenCalledTimes(2);
+    const answers = submittedAnswers();
+    expect(answers[GEO_NAME]).toEqual(OPEN_POS);
+    expect(answers._gpsUnavailableReason).toBeUndefined();
+  });
+
+  it('the location question says the same thing mid-interview (13-75 AC7 surface)', async () => {
+    setPermissionState('prompt');
+    scriptGeolocation([1]);
+    await renderPage();
+
+    await waitFor(
+      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/choose Allow/),
+      T,
+    );
+  });
+
+  it('⛔ the stored vocabulary does not change — a waived dismissal still files permission_denied', async () => {
+    setPermissionState('prompt');
+    scriptGeolocation([1, 1]);
+    await reachBlock();
+    await waitFor(() => expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument(), T);
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    fireEvent.click(await screen.findByTestId('gps-unavailable-btn', {}, T));
+
+    await waitFor(() => expect(mockCompleteDraft).toHaveBeenCalled(), T);
+    expect(submittedAnswers()._gpsUnavailableReason).toBe('permission_denied');
+  });
+});
+
+describe('13-76 AC4 — ONE attempt, and a second dismissal settles', () => {
+  it('⛔ a second dismissal reveals the waiver, switches to settings guidance, and asks no further', async () => {
+    setPermissionState('prompt');
+    const { getCurrentPosition } = scriptGeolocation([1, 1]);
+    await reachBlock();
+    await waitFor(() => expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument(), T);
+
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+
+    expect(await screen.findByTestId('gps-unavailable-btn', {}, T)).toBeInTheDocument();
+    expect(screen.queryByTestId('gps-waiver-pending')).toBeNull();
+    // Settled: the prompt route has failed once, so the only route left is settings.
+    await waitFor(
+      () => expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/Website Settings/),
+      T,
+    );
+    expect(screen.getByTestId('gps-block-remediation')).not.toHaveTextContent(/choose Allow/);
+
+    // No timer, no loop: nothing asks again on its own.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 300));
+    });
+    expect(getCurrentPosition).toHaveBeenCalledTimes(2);
+  });
+
+  it('a second dismissal on the LOCATION QUESTION’s own button settles the block before it appears', async () => {
+    setPermissionState('prompt');
+    scriptGeolocation([1, 1]);
+    await renderPage();
+    await waitFor(
+      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/choose Allow/),
+      T,
+    );
+
+    fireEvent.click(screen.getByTestId(`geopoint-capture-${GEO_NAME}`));
+    await waitFor(
+      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/Website Settings/),
+      T,
+    );
+
+    await completeSurvey();
+    await waitFor(() => expect(screen.getByTestId('gps-required-block')).toBeInTheDocument(), T);
+    // Dismissed twice already — no forced third ask before the way out.
+    expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument();
+  });
+});
+
+describe('13-76 AC5 — the silent retry at submit never fires on a dismissed prompt', () => {
+  it('⛔ a dismissed prompt causes NO silent capture at submit — the retry is the human tap', async () => {
+    setPermissionState('prompt');
+    // If a silent capture ran at submit it would SUCCEED and the survey would
+    // complete with no block — a permission dialog over "Complete Survey".
+    const { getCurrentPosition } = scriptGeolocation([1, OPEN_POS]);
+    await reachBlock();
+
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    expect(mockCompleteDraft).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('completion-screen')).toBeNull();
+  });
+});
+
+describe('13-76 AC8 — a genuinely denied site keeps 13-75’s behaviour, and the latch holds', () => {
+  it('state denied → waiver at once, settings guidance, no pending line', async () => {
+    setPermissionState('denied');
+    scriptGeolocation([1]);
+    await reachBlock();
+
+    expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument();
+    expect(screen.queryByTestId('gps-waiver-pending')).toBeNull();
+    await waitFor(
+      () => expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/Website Settings/),
+      T,
+    );
+  });
+
+  it('⛔ iOS Safari (no Permissions API) → settled, today’s behaviour: waiver at once', async () => {
+    setNavigatorProp('permissions', undefined);
+    scriptGeolocation([1]);
+    await reachBlock();
+    expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/Website Settings/);
+  });
+
+  it.each(['denied', 'prompt'] as const)(
+    '⛔ R-a — code 1 with state %s still LATCHES open-time auto-capture (13-71 U9 not re-opened)',
+    async (state) => {
+      setPermissionState(state);
+      const { getCurrentPosition } = scriptGeolocation([1, OPEN_POS]);
+      await renderPage();
+      await waitFor(() => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toBeInTheDocument(), T);
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+
+      await rerunAutoCaptureEffect();
+
+      // A re-run of the effect must not ask again — the second script step would
+      // have succeeded, so a widened latch shows up here as a second call.
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    },
+  );
+});
+
+// ── 13-76 CODE REVIEW (2026-09-29) — M1, M2, L2, L3, L6 ─────────────────────
+
+/** A Permissions API whose every `query()` waits until the test answers it. */
+function heldPermissions() {
+  const answers: Array<(value: { state: string }) => void> = [];
+  setNavigatorProp('permissions', {
+    query: () => new Promise<{ state: string }>((resolve) => answers.push(resolve)),
+  });
+  return {
+    calls: () => answers.length,
+    answer: async (index: number, state: 'granted' | 'denied' | 'prompt') => {
+      await act(async () => {
+        answers[index]({ state });
+      });
+    },
+  };
+}
+
+describe('13-76 review M1 — the platform LABEL reaches both surfaces, not just the data', () => {
+  function expectLabelledSteps(container: HTMLElement) {
+    // The label is the whole of AC7: an Android reader finds "Android:" without
+    // reading the iPhone line. `allText()` in the unit test builds this itself, so
+    // only a rendered surface can prove the renderer still prints it.
+    expect(within(container).getByTestId('gps-remediation-step-Android').textContent).toMatch(/^Android:\s/);
+    expect(within(container).getByTestId('gps-remediation-step-iPhone').textContent).toMatch(/^iPhone:\s/);
+  }
+
+  it('the location question and the amber block both print "Android:" and "iPhone:"', async () => {
+    setPermissionState('denied');
+    scriptGeolocation([1]);
+    await renderPage();
+    await waitFor(() => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toBeInTheDocument(), T);
+    expectLabelledSteps(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`));
+
+    await completeSurvey();
+    await waitFor(() => expect(screen.getByTestId('gps-required-block')).toBeInTheDocument(), T);
+    expectLabelledSteps(screen.getByTestId('gps-block-remediation'));
+  });
+});
+
+describe('13-76 review M2 — the origin device: prompt dismissed AND the Location toggle off', () => {
+  it('Allow opens the site gate, the toggle fails it as code 2 → the toggle is named and the waiver appears', async () => {
+    setPermissionState('prompt');
+    const { getCurrentPosition } = scriptGeolocation([1, 2]);
+    await reachBlock();
+    await waitFor(() => expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument(), T);
+
+    // The enumerator taps Allow this time; the phone's own toggle is still off.
+    setPermissionState('granted');
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+
+    expect(await screen.findByTestId('gps-unavailable-btn', {}, T)).toBeInTheDocument();
+    const copy = screen.getByTestId('gps-block-remediation');
+    expect(copy).toHaveTextContent(/Location icon/);
+    expect(copy).not.toHaveTextContent(/choose Allow/);
+    expect(getCurrentPosition).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByTestId('gps-unavailable-btn'));
+    await waitFor(() => expect(mockCompleteDraft).toHaveBeenCalled(), T);
+    // The freshest verdict is what is filed (13-75 AC9) — the toggle, not the prompt.
+    expect(submittedAnswers()._gpsUnavailableReason).toBe('position_unavailable');
+  });
+});
+
+describe('13-76 review L2 — no guidance until the probe says which code 1 it is', () => {
+  it('⛔ the location question shows NOTHING while the probe is out — never the settings surgery first', async () => {
+    const permissions = heldPermissions();
+    scriptGeolocation([1]);
+    await renderPage();
+    await waitFor(() => expect(permissions.calls()).toBe(1), T);
+
+    expect(screen.queryByTestId(`geopoint-remediation-${GEO_NAME}`)).toBeNull();
+    expect(screen.queryByText(/Website Settings/)).toBeNull();
+
+    await permissions.answer(0, 'prompt');
+    await waitFor(
+      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/choose Allow/),
+      T,
+    );
+  });
+
+  it('⛔ the block withholds its copy but NOT the waiver while the probe is out', async () => {
+    const permissions = heldPermissions();
+    scriptGeolocation([1, 1]);
+    await renderPage();
+    await waitFor(() => expect(permissions.calls()).toBe(1), T);
+    await permissions.answer(0, 'prompt'); // first dismissal
+    await completeSurvey();
+    await waitFor(() => expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument(), T);
+
+    fireEvent.click(screen.getByTestId('gps-block-capture-btn'));
+    await waitFor(() => expect(permissions.calls()).toBe(2), T);
+    // One failed attempt released the waiver; the copy waits for the probe.
+    expect(await screen.findByTestId('gps-unavailable-btn', {}, T)).toBeInTheDocument();
+    expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/^$/);
+
+    await permissions.answer(1, 'prompt'); // second dismissal → settled
+    await waitFor(
+      () => expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/Website Settings/),
+      T,
+    );
+  });
+});
+
+describe('13-76 review L3 — a second dismissal settles across surveys, not just within one', () => {
+  it('⛔ a dismissal in the previous survey makes this survey’s first one the SECOND', async () => {
+    setPermissionState('prompt');
+    scriptGeolocation([1]);
+    await renderPage();
+    await waitFor(
+      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/choose Allow/),
+      T,
+    );
+    cleanup();
+
+    // The next survey in the same tab: Chrome has now seen two dismissals.
+    scriptGeolocation([1]);
+    await renderPage();
+    await waitFor(
+      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/Website Settings/),
+      T,
+    );
+    expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).not.toHaveTextContent(/choose Allow/);
+  });
+});
+
+describe('13-76 review L6 — the pending line speaks to the case in front of it', () => {
+  it('a dismissed prompt: "If Allow does not work…"', async () => {
+    setPermissionState('prompt');
+    scriptGeolocation([1]);
+    await reachBlock();
+    await waitFor(
+      () => expect(screen.getByTestId('gps-waiver-pending')).toHaveTextContent(/If Allow does not work/),
+      T,
+    );
+  });
+
+  it('a timeout keeps "If it fails again…"', async () => {
+    scriptGeolocation([3, 3]);
+    await reachBlock();
+    expect(screen.getByTestId('gps-waiver-pending')).toHaveTextContent(/If it fails again/);
+  });
+});
+
+// ── 13-76 R5 — ruled (a) by Awwal 2026-09-29: distrust `prompt` once it has lied ──
+/*
+ * Safari 16+ HAS the Permissions API and is reported to answer `prompt` whatever
+ * the user chose. These tests model that browser with a `query()` pinned to
+ * `prompt`: the tell is a SUCCESS while it still says `prompt`, after which a code
+ * 1 is settled, not a dismissal. Chrome answers `granted` after a success and must
+ * keep the dismissed path.
+ */
+describe('13-76 R5(a) — a browser caught reporting `prompt` after a success is not believed again', () => {
+  it('⭐ iPhone shape across surveys: success under `prompt`, then the next survey’s refusal is SETTLED', async () => {
+    setPermissionState('prompt');
+    scriptGeolocation([OPEN_POS]);
+    await renderPage();
+    await waitFor(() => expect(isPromptStateUnreliable()).toBe(true), T);
+    cleanup();
+
+    // Next survey, same tab: Location Services switched off → code 1, still `prompt`.
+    scriptGeolocation([1]);
+    await reachBlock();
+    await waitFor(
+      () => expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/Website Settings/),
+      T,
+    );
+    expect(screen.getByTestId('gps-block-remediation')).not.toHaveTextContent(/choose Allow/);
+    // Settled: no forced attempt at a prompt that will never come.
+    expect(screen.getByTestId('gps-unavailable-btn')).toBeInTheDocument();
+    expect(screen.queryByTestId('gps-waiver-pending')).toBeNull();
+  });
+
+  it('iPhone shape within one survey: a refused Recapture after a `prompt`-state success is settled', async () => {
+    setPermissionState('prompt');
+    scriptGeolocation([OPEN_POS, 1]);
+    await renderPage();
+    await waitFor(() => expect(isPromptStateUnreliable()).toBe(true), T);
+
+    fireEvent.click(screen.getByText('Recapture'));
+    await waitFor(
+      () => expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).toHaveTextContent(/Website Settings/),
+      T,
+    );
+    expect(screen.getByTestId(`geopoint-remediation-${GEO_NAME}`)).not.toHaveTextContent(/choose Allow/);
+  });
+
+  it('⛔ Chrome shape: a success reading `granted` marks nothing — the next survey’s dismissal still gets "choose Allow"', async () => {
+    setPermissionState('granted');
+    scriptGeolocation([OPEN_POS]);
+    await renderPage();
+    await waitFor(() => expect(screen.getByText('Recapture')).toBeInTheDocument(), T);
+    cleanup();
+    expect(isPromptStateUnreliable()).toBe(false);
+
+    setPermissionState('prompt');
+    scriptGeolocation([1]);
+    await reachBlock();
+    await waitFor(
+      () => expect(screen.getByTestId('gps-block-remediation')).toHaveTextContent(/choose Allow/),
+      T,
+    );
+    expect(screen.getByTestId('gps-waiver-pending')).toBeInTheDocument();
   });
 });

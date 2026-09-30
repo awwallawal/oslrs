@@ -45,6 +45,17 @@ export interface QuestionRendererProps {
    * fixing it is free, instead of the enumerator first hearing at submit.
    */
   captureFailureReason?: GpsUnavailableReason | null;
+  /**
+   * Story 13-76 AC2 — the page judged that `permission_denied` a DISMISSED prompt
+   * (permission still `prompt`, first dismissal), so the question leads with "tap
+   * Capture and choose Allow" rather than settings. Copy only; nothing branches on it.
+   */
+  captureFailurePromptDismissed?: boolean;
+  /**
+   * 13-76 review L2 — the page is still asking the browser which kind of
+   * `permission_denied` this is; the question shows no guidance until it knows.
+   */
+  captureFailureCopyPending?: boolean;
 }
 
 export function QuestionRenderer({
@@ -55,8 +66,13 @@ export function QuestionRenderer({
   disabled,
   onCaptureError,
   captureFailureReason,
+  captureFailurePromptDismissed,
+  captureFailureCopyPending,
 }: QuestionRendererProps) {
-  const props = { question, value, onChange, error, disabled, onCaptureError, captureFailureReason };
+  const props = {
+    question, value, onChange, error, disabled, onCaptureError, captureFailureReason, captureFailurePromptDismissed,
+    captureFailureCopyPending,
+  };
 
   // Story 13-51 (AC3.1) — an email carrier question gets the typo suggestion the public wizard
   // has had since 9-12. Detected BY NAME because the published form schemas have no `email`

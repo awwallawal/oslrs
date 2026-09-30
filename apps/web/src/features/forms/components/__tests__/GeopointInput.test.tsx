@@ -136,7 +136,7 @@ describe('GeopointInput', () => {
     });
     render(<GeopointInput question={baseQuestion} value={null} onChange={vi.fn()} />);
     fireEvent.click(screen.getByTestId('geopoint-capture-location'));
-    expect(screen.getByTestId('geopoint-remediation-location')).toHaveTextContent(/Step outside/);
+    expect(screen.getByTestId('geopoint-remediation-location')).toHaveTextContent(/step outside/i);
   });
 
   it('13-75 review L5 — when the page tracks a reason, the page’s (newer) verdict wins over an older local one', () => {
@@ -171,7 +171,58 @@ describe('GeopointInput', () => {
       />
     );
     fireEvent.click(screen.getByText('Recapture'));
-    expect(screen.getByTestId('geopoint-remediation-location')).toHaveTextContent(/Step outside/);
+    expect(screen.getByTestId('geopoint-remediation-location')).toHaveTextContent(/step outside/i);
+  });
+
+  it('13-76 review L1 — without page tracking, a local code 1 reads SETTLED even if told "dismissed"', () => {
+    // The dismissed verdict is the page's; with no page reason this component cannot
+    // tell a dismissal from a block, and unknown is never the hopeful case.
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition: vi.fn((_success, error) => error({ code: 1 })),
+      },
+    });
+    render(<GeopointInput question={baseQuestion} value={null} onChange={vi.fn()} captureFailurePromptDismissed />);
+    fireEvent.click(screen.getByTestId('geopoint-capture-location'));
+    const copy = screen.getByTestId('geopoint-remediation-location');
+    expect(copy).toHaveTextContent(/blocked for this site/);
+    expect(copy).not.toHaveTextContent(/choose Allow/);
+  });
+
+  it('13-76 review L1 — WITH page tracking, the page’s dismissed verdict is shown', () => {
+    render(
+      <GeopointInput
+        question={baseQuestion}
+        value={null}
+        onChange={vi.fn()}
+        captureFailureReason="permission_denied"
+        captureFailurePromptDismissed
+      />
+    );
+    expect(screen.getByTestId('geopoint-remediation-location')).toHaveTextContent(/choose Allow/);
+  });
+
+  it('13-76 review L2 — while the page’s probe is out, no guidance at all (not the wrong one first)', () => {
+    const { rerender } = render(
+      <GeopointInput
+        question={baseQuestion}
+        value={null}
+        onChange={vi.fn()}
+        captureFailureReason="permission_denied"
+        captureFailureCopyPending
+      />
+    );
+    expect(screen.queryByTestId('geopoint-remediation-location')).toBeNull();
+    rerender(
+      <GeopointInput
+        question={baseQuestion}
+        value={null}
+        onChange={vi.fn()}
+        captureFailureReason="permission_denied"
+        captureFailurePromptDismissed
+      />
+    );
+    expect(screen.getByTestId('geopoint-remediation-location')).toHaveTextContent(/choose Allow/);
   });
 
   it('disables capture button when disabled', () => {

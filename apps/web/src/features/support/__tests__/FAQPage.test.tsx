@@ -16,7 +16,16 @@ function renderWithRouter(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
 }
 
-describe('FAQPage', () => {
+/*
+ * ⚠️ AN HONEST BUDGET FOR A HEAVY PAGE (2026-09-29). FAQPage renders every FAQ at
+ * once, so each test pays for a large jsdom render — measured ALONE on the dev
+ * machine at 2–11 s per test, and the All-tab test hit vitest's default 10 s under a
+ * full-suite run. Rewriting the role queries was tried and did not measurably help:
+ * the cost is the render, not the queries. So the budget is what changes, with the
+ * same precedent as `a3-eslint-policy.test.ts`. A real regression still fails — this
+ * only decides how long a slow machine may take to say so.
+ */
+describe('FAQPage', { timeout: 30_000 }, () => {
   it('renders hero section with correct H1', () => {
     renderWithRouter(<FAQPage />);
     const h1 = screen.getByRole('heading', { level: 1 });

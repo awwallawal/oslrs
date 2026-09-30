@@ -224,16 +224,45 @@ describe('[integration] App.tsx route registration', () => {
     // reports as a FAILED ASSERTION naming the skeleton, never as an opaque
     // "Test timed out in 10000ms" — which is how this first presented on
     // 2026-08-11 and cost a push before anyone knew what it was.
-    40_000,
+    //
+    // ⏱️ 40s -> 75s (2026-09-30). The `/login` row blew 40s at 46,991ms in a full
+    // suite run and reported exactly the opaque "Test timed out in 40000ms" this
+    // budget exists to prevent — the 30s waitFor never got to fire its named
+    // message, because a starved render made the callback itself slow. The whole
+    // file passes ALONE in 13.4s (58 tests), so this is the environment, not a
+    // routing defect: the same run starved a hardcoded one-line ESLint check by
+    // 11.5x. 75s is 2.5x the inner waitFor, which restores the property this
+    // comment is about — a slow chunk must fail by NAME, not by stopwatch.
+    75_000,
   );
 
-  it('resolves an unknown path to the NotFound component (404 fallback works)', async () => {
-    renderApp({ initialEntry: '/some-nonexistent-path-9-21' });
+  it(
+    'resolves an unknown path to the NotFound component (404 fallback works)',
+    async () => {
+      renderApp({ initialEntry: '/some-nonexistent-path-9-21' });
 
-    await waitFor(() => {
-      expect(screen.getByText(/page not found/i)).toBeInTheDocument();
-    });
-  });
+      /*
+       * ⚠️ THE SAME COLD LAZY CHUNK AS THE ROUTES ABOVE — so the same honest budget.
+       * This one waitFor was left on testing-library's default 1,000 ms
+       * `asyncUtilTimeout`, which vitest's `testTimeout` does NOT govern. Under a
+       * full-suite load it failed three runs in a row (2026-09-28, and twice on
+       * 2026-09-29) with the DOM still on `<PageSkeleton aria-label="Loading page">`
+       * — the NotFound chunk not yet resolved, not a routing defect — and passed
+       * 58/58 alone every time. A genuinely broken fallback still fails: it never
+       * renders "page not found", and the budget only decides how long we wait to
+       * say so.
+       */
+      await waitFor(
+        () => {
+          expect(screen.getByText(/page not found/i)).toBeInTheDocument();
+        },
+        { timeout: 30000 },
+      );
+    },
+    // Above the waitFor budget, as for the routes above: a slow chunk reports as a
+    // failed assertion, never as an opaque "Test timed out in 10000ms".
+    40_000,
+  );
 });
 
 describe('[integration] navigate-target drift guard (AC#4)', () => {

@@ -22,14 +22,37 @@
 import type { GpsUnavailableReason } from '@oslsr/types';
 
 export interface GpsRemediation {
-  /** The one thing to do next. */
+  /** The one thing to do next. Names no platform, so every reader starts here. */
   action: string;
-  /**
-   * A second cause worth naming. Only `permission_denied` carries one (AC5): that
-   * code is NOT cleanly separable from "phone Location is off" across platforms.
-   */
+  /** A second cause worth naming, when one reason has two real-world causes. */
   secondary?: string;
+  /**
+   * ⛔ Story 13-76 AC7 (13-75 R6) — settings steps LABELLED by platform, one line
+   * each. The old `permission_denied` lead embedded "(on iPhone: aA → Website
+   * Settings)" while the Android step sat in the next line, so an Android enumerator
+   * read past iOS guidance to reach their own. Labelled lines, not UA sniffing:
+   * each reader finds their own label, and no behaviour — and not even the ORDER —
+   * depends on a user-agent guess that is wrong often enough to matter (R-c).
+   */
+  platformSteps?: ReadonlyArray<{ platform: 'Android' | 'iPhone'; step: string }>;
 }
+
+/*
+ * ⭐ Story 13-76 AC2 — A DISMISSED PROMPT IS NOT A BLOCKED SITE.
+ *
+ * Code 1 arrives identically for "tapped Block" and "tapped past the dialog", and the
+ * stored reason stays `permission_denied` either way (AC1 — a UI decision, not a new
+ * vocabulary value). When the Permissions API says the prompt is still unanswered,
+ * the fix is the cheap one: ask again and tap Allow. Awwal's Android read went the
+ * wrong way round — he dismissed a prompt and was sent to Website Settings.
+ *
+ * No settings steps here on purpose. If the prompt does not come back, the attempt
+ * fails again, the page counts a second dismissal, and the settled copy below takes
+ * over (AC4).
+ */
+const PROMPT_DISMISSED: GpsRemediation = {
+  action: 'Location was not allowed. Tap Capture and choose Allow when your phone asks.',
+};
 
 const COPY: Record<GpsUnavailableReason, GpsRemediation> = {
   /*
@@ -60,17 +83,37 @@ const COPY: Record<GpsUnavailableReason, GpsRemediation> = {
    * Websites = Never` returns code 1 with Location Services ON, and Android has
    * Chrome's own app permission. iOS's per-site control is also a level deeper
    * than "the icon": `aA → Website Settings`. Still written from platform
-   * knowledge, not read on a device — residual R2 owns that read.
+   * knowledge, not read on a device — 13-75 residual R2 owns that read.
+   *
+   * 13-76 AC7 — the same steps, regrouped per platform (see `platformSteps`); no
+   * gate named above was dropped. Each line is the site gate first, then the
+   * app/phone gates "if it is already allowed".
    */
   permission_denied: {
-    action:
-      'Location is blocked for this site. Tap the icon next to the web address (on iPhone: aA → Website Settings), set Location to Allow, then tap Capture.',
-    secondary:
-      'If it is already allowed, the phone may be blocking it. iPhone: Settings → Privacy & Security → Location Services → On, and Safari Websites → While Using the App. Android: swipe down and tap the Location icon, and in Settings → Apps → Chrome → Permissions, set Location to Allow.',
+    action: 'Location is blocked for this site. Allow it using the steps for your phone, then tap Capture.',
+    platformSteps: [
+      {
+        platform: 'Android',
+        step: 'Tap the icon next to the web address, then Permissions, and set Location to Allow. If it is already allowed: swipe down and tap the Location icon, and in Settings → Apps → Chrome → Permissions, set Location to Allow.',
+      },
+      {
+        platform: 'iPhone',
+        step: 'Tap aA → Website Settings and set Location to Allow. If it is already allowed: Settings → Privacy & Security → Location Services → On, and Safari Websites → While Using the App.',
+      },
+    ],
   },
-  // Both gates open, no fix yet — the retryable class the field observation hit.
+  /*
+   * ⛔ 13-76 AC6 (13-75 R5) — TWO CAUSES, THE TOGGLE FIRST.
+   *
+   * This said only "step outside or near a window", and it was shown to Awwal's
+   * Android with Location OFF, where a window changes nothing. A timeout with the
+   * toggle off is indistinguishable from a timeout with a poor sky view, so it gets
+   * the same treatment `position_unavailable` got in 13-75 L4: the cheap check
+   * first, the move second.
+   */
   timeout: {
-    action: 'Step outside or near a window, then tap Capture again.',
+    action: 'No location yet. Check your phone’s location is on: swipe down and tap the Location icon, then tap Capture again.',
+    secondary: 'If it is already on, step outside or near a window and tap Capture again.',
   },
   unsupported: {
     action: 'This browser cannot give a location, so there is nothing to fix on this phone.',
@@ -80,7 +123,16 @@ const COPY: Record<GpsUnavailableReason, GpsRemediation> = {
   },
 };
 
-/** `null` is "no attempt on record" and reads as `other`, as the escape hatch files it. */
-export function gpsRemediation(reason: GpsUnavailableReason | null | undefined): GpsRemediation {
+/**
+ * `null` is "no attempt on record" and reads as `other`, as the escape hatch files it.
+ *
+ * `promptDismissed` is the page's call (`classifyBlockFailure` → `dismissed`); it
+ * only ever changes the `permission_denied` entry.
+ */
+export function gpsRemediation(
+  reason: GpsUnavailableReason | null | undefined,
+  { promptDismissed = false }: { promptDismissed?: boolean } = {},
+): GpsRemediation {
+  if (reason === 'permission_denied' && promptDismissed) return PROMPT_DISMISSED;
   return COPY[reason ?? 'other'] ?? COPY.other;
 }

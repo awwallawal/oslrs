@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { geolocationErrorCodeToReason, type GpsUnavailableReason } from '@oslsr/types';
 import { gpsRemediation } from '../lib/gps-remediation';
+import { GpsRemediationCopy } from './GpsRemediationCopy';
 import type { QuestionRendererProps } from './QuestionRenderer';
 
 interface GeopointValue {
@@ -17,6 +18,8 @@ export function GeopointInput({
   disabled,
   onCaptureError,
   captureFailureReason,
+  captureFailurePromptDismissed,
+  captureFailureCopyPending,
 }: QuestionRendererProps) {
   const [capturing, setCapturing] = useState(false);
   /**
@@ -46,7 +49,17 @@ export function GeopointInput({
    */
   const latestFailure = captureFailureReason !== undefined ? captureFailureReason : localFailure;
   const shownFailure = geoValue && !localFailure ? null : latestFailure;
-  const remediation = shownFailure ? gpsRemediation(shownFailure) : null;
+  /*
+   * Story 13-76 AC2 — "dismissed" is the PAGE's verdict (it probes the permission
+   * state and counts dismissals), so it applies only when the page's reason is the
+   * one shown. With no page tracking, a local code 1 reads as settled: this
+   * component cannot tell a dismissal from a block, and unknown is never hopeful.
+   */
+  const pageTracked = captureFailureReason !== undefined;
+  const promptDismissed = pageTracked && captureFailurePromptDismissed === true;
+  // 13-76 review L2 — the page's probe is out: say nothing rather than the wrong thing.
+  const copyWithheld = pageTracked && captureFailureCopyPending === true;
+  const remediation = shownFailure && !copyWithheld ? gpsRemediation(shownFailure, { promptDismissed }) : null;
 
   const captureLocation = () => {
     if (!navigator.geolocation) {
@@ -153,10 +166,7 @@ export function GeopointInput({
 
       {remediation && (
         <div className="space-y-1" role="alert" data-testid={`geopoint-remediation-${question.name}`}>
-          <p className="text-sm text-amber-700">{remediation.action}</p>
-          {remediation.secondary && (
-            <p className="text-sm text-amber-700">{remediation.secondary}</p>
-          )}
+          <GpsRemediationCopy remediation={remediation} className="text-sm text-amber-700" />
         </div>
       )}
       {error && (

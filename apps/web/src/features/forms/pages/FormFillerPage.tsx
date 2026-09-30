@@ -31,6 +31,11 @@ import { NIN_QUESTION_NAMES } from '../../registration/lib/wizard-provided-field
 import type { GpsUnavailableReason } from '@oslsr/types';
 import {
   capturePosition,
+  classifyBlockFailure,
+  geolocationPermissionState,
+  notePermissionStateAfterSuccess,
+  readPromptDismissals,
+  recordPromptDismissal,
   isCapturedPosition,
   isRetryableCaptureFailure,
   permissionAllowsSilentRefresh,
@@ -38,8 +43,10 @@ import {
   OPEN_CAPTURE_WATCHDOG_MS,
   SUBMIT_REFRESH_OPTIONS,
   type CapturedPosition,
+  type GeolocationPermissionProbe,
 } from '../lib/geo-capture';
 import { gpsRemediation } from '../lib/gps-remediation';
+import { GpsRemediationCopy } from '../components/GpsRemediationCopy';
 
 /**
  * Story 13-71 AC2 — where the OPEN-TIME position is kept once the submit-time
@@ -167,6 +174,29 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
   /** The authoritative half of that guard — state lags a same-tick double tap (U8). */
   const gpsBlockCaptureInFlightRef = useRef(false);
   /**
+   * Story 13-76 AC1 — the site permission as the browser reported it just after the
+   * LAST failure, probed only for code 1. `null` until the probe answers, which
+   * `classifyBlockFailure` reads as settled: unknown is never the hopeful case.
+   */
+  const [gpsPermissionState, setGpsPermissionState] = useState<GeolocationPermissionProbe | null>(null);
+  /**
+   * Story 13-76 AC4 — code-1 failures seen while the permission still read `prompt`,
+   * i.e. dismissals. NOT cleared by Back: Chrome's hardening of repeated dismissals
+   * is a fact about the browser, not about a panel — and, since review L3, not
+   * about this survey either: seeded from the tab's count (`readPromptDismissals`).
+   */
+  const [gpsPromptDismissals, setGpsPromptDismissals] = useState(readPromptDismissals);
+  /**
+   * 13-76 review L2 — a code-1 failure whose permission probe has not answered. Its
+   * copy is WITHHELD meanwhile: showing the settled reading first put settings
+   * surgery in front of a dismissal and made a `role="alert"` announce twice. The
+   * waiver is not withheld — the settled reading still governs it (unknown is
+   * never the hopeful case), and the probe is bounded, so the copy always arrives.
+   */
+  const [gpsPermissionProbing, setGpsPermissionProbing] = useState(false);
+  /** Disowns a permission probe that a newer failure or a fix has overtaken. */
+  const gpsPermissionProbeRef = useRef(0);
+  /**
    * Bumped by `handleBack`. An in-banner capture that resolves after the
    * enumerator has navigated away belongs to a submit they WITHDREW, so it may
    * commit its position but must not auto-retry the submit (AC3) from under them.
@@ -232,6 +262,19 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
        */
       setValue(geopointQuestion.name, position, { shouldValidate: false });
       setGpsUnavailableReason(null);
+      // 13-76 — a probe still out describes a failure this fix just replaced.
+      gpsPermissionProbeRef.current += 1;
+      setGpsPermissionState(null);
+      setGpsPermissionProbing(false);
+      /*
+       * ⛔ 13-76 R5(a) — every success is also EVIDENCE about the browser. A site that
+       * just gave a position cannot honestly read `prompt`; if it does (Safari, as
+       * reported), its `prompt` is marked unreliable for the tab, and a later code 1
+       * is read as settled instead of as a dismissal it cannot be. This is the one
+       * success write, so every success path — open-time, silent refresh, in-banner,
+       * the question's own button — gathers it. Fire-and-forget: never a gate.
+       */
+      void notePermissionStateAfterSuccess();
       /*
        * ⛔ ULTRA REVIEW U13 — AND RETIRE THE PANEL THE FIX JUST ANSWERED.
        *
@@ -245,6 +288,41 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     },
     [geopointQuestion, setValue],
   );
+
+  /**
+   * ⛔ STORY 13-76 AC1 — ONE WAY TO RECORD A FAILED CAPTURE, and for code 1 it asks
+   * the browser which KIND of `permission_denied` it was.
+   *
+   * A dismissed prompt reports code 1 identically to a deliberate block, and only
+   * `navigator.permissions` can tell them apart. So every failure site calls this
+   * (open-time, silent retry, in-banner, a late in-banner after Back, and the
+   * location question's own button) — five sites, the count at which 13-75 AC2
+   * collapsed the SUCCESS writes into `commitGeopoint` for the same reason.
+   *
+   * ⛔ The REASON is still what gets filed: this adds nothing to the vocabulary.
+   * What it adds is a UI fact — the permission state — that the amber block alone
+   * reads (`classifyBlockFailure`). The latch and AC11's silent retry keep reading
+   * `isRetryableCaptureFailure(reason)`, for which code 1 is still settled.
+   *
+   * The state is cleared synchronously, so between a failure and its probe the
+   * page is in the SETTLED reading — a stale `prompt` from an earlier failure can
+   * never make a newer block look dismissed. Its COPY is withheld until the probe
+   * answers (review L2), so that settled reading governs the waiver only.
+   */
+  const recordCaptureFailure = useCallback((reason: GpsUnavailableReason) => {
+    setGpsUnavailableReason(reason);
+    setGpsPermissionState(null);
+    const probe = ++gpsPermissionProbeRef.current;
+    setGpsPermissionProbing(reason === 'permission_denied');
+    if (reason !== 'permission_denied') return;
+    void geolocationPermissionState().then((state) => {
+      if (probe !== gpsPermissionProbeRef.current || interviewEndedRef.current) return;
+      // Review L3 — counted for the tab, so a new survey inherits it.
+      if (state === 'prompt') setGpsPromptDismissals(recordPromptDismissal());
+      setGpsPermissionState(state);
+      setGpsPermissionProbing(false);
+    });
+  }, []);
 
   // Draft persistence (disabled in preview mode)
   const draft = useDraftPersistence({
@@ -463,7 +541,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
         // ⭐ A REFUSAL IS NOW A RECORDED FACT. Before this, "did not tap" and
         // "tapped and was refused" were the same absent value — which is the
         // difference between a field problem and a phone problem (AC4).
-        setGpsUnavailableReason(result.reason);
+        recordCaptureFailure(result.reason);
       }
     });
 
@@ -485,7 +563,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
        */
       autoCaptureInFlightRef.current = false;
     };
-  }, [isPreview, draftLoaded, geopointQuestion, isEnumerator, commitGeopoint]);
+  }, [isPreview, draftLoaded, geopointQuestion, isEnumerator, commitGeopoint, recordCaptureFailure]);
 
   /**
    * Story 13-71 AC2 — refresh the position at submit WHEN IT IS FREE TO DO SO.
@@ -554,6 +632,10 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
        *     absent one (13-71 R7);
        *   • only on a SETTLED retryable reason — `null` includes "the open-time
        *     capture is still running", and two captures at once is a race.
+       *   • ⛔ 13-76 AC5 — NOT on a dismissed prompt, although the block treats one as
+       *     retryable. This reads `isRetryableCaptureFailure`, never
+       *     `classifyBlockFailure`: re-asking a dismissed prompt here would put the
+       *     OS dialog on top of "Complete Survey". Its retry is the in-banner TAP.
        * ONE attempt, no timers: a loop is how U9/U13 happened here.
        */
       const reason = gpsUnavailableReason;
@@ -575,7 +657,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
         // A success is the fix; a failure is the newest verdict (AC9) and the
         // amber block that follows describes IT.
         if (retry.ok) commitGeopoint(retry.position);
-        else setGpsUnavailableReason(retry.reason);
+        else recordCaptureFailure(retry.reason);
         return snapshotAnswers();
       } finally {
         setLocating(false);
@@ -605,7 +687,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     // set) — see `commitGeopoint`.
     commitGeopoint(result.position);
     return snapshotAnswers();
-  }, [geopointQuestion, commitGeopoint, snapshotAnswers, gpsUnavailableReason, isPreview, isEnumerator]);
+  }, [geopointQuestion, commitGeopoint, recordCaptureFailure, snapshotAnswers, gpsUnavailableReason, isPreview, isEnumerator]);
 
   /**
    * ⛔ ULTRA REVIEW U4 + U5 + U8 — ONE WAY TO FINISH A SURVEY.
@@ -968,7 +1050,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
        * belongs to the panel they left.
        */
       if (result.ok) commitGeopoint(result.position);
-      else setGpsUnavailableReason(result.reason);
+      else recordCaptureFailure(result.reason);
       return;
     }
     gpsBlockCaptureInFlightRef.current = false;
@@ -976,7 +1058,8 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
 
     if (!result.ok) {
       // AC9 — the freshest verdict is the one the waiver files and the copy reads.
-      setGpsUnavailableReason(result.reason);
+      // 13-76 — and for code 1 the probe says whether this was a second dismissal.
+      recordCaptureFailure(result.reason);
       // AC6 — one failed attempt is what releases the waiver on a retryable reason.
       setGpsBlockFailedAttempts((n) => n + 1);
       return;
@@ -985,7 +1068,7 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     // AC10 — the whole position, accuracy included, through the one write (AC2).
     commitGeopoint(result.position);
     await finishSubmission(snapshotAnswers());
-  }, [commitGeopoint, finishSubmission, snapshotAnswers]);
+  }, [commitGeopoint, recordCaptureFailure, finishSubmission, snapshotAnswers]);
 
   const handleBack = useCallback(() => {
     if (!form) return;
@@ -1044,13 +1127,27 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
     );
   }, [form, currentIndex, formData, isPreview]);
 
+  /*
+   * ⛔ STORY 13-76 AC8 — WHICH CONSUMERS OF RETRYABILITY CHANGED, AND WHICH MUST NOT.
+   *
+   *   • open-time LATCH (`autoCaptureDoneRef`)      — UNCHANGED: `isRetryableCaptureFailure`.
+   *     Code 1 still latches; un-latching it re-runs capture for a blocked site (U9).
+   *   • AC11 SILENT retry (`refreshPositionForSubmit`) — UNCHANGED: `isRetryableCaptureFailure`,
+   *     then `permissionAllowsSilentRefresh`, which is false for `prompt`. A dismissed
+   *     prompt gets NO silent capture — its retry is the human tap (AC5).
+   *   • this WAIVER GATE and the COPY (block + location question) — CHANGED:
+   *     `classifyBlockFailure`, which alone reads the permission state.
+   */
+  // `null` is "no attempt on record": unknown, so the waiver is not withheld.
+  const blockFailureKind =
+    gpsUnavailableReason === null
+      ? null
+      : classifyBlockFailure(gpsUnavailableReason, gpsPermissionState, gpsPromptDismissals);
+  const blockPromptDismissed = blockFailureKind === 'dismissed';
   // Story 13-75 AC4 — the block's guidance, keyed on the CURRENT reason (AC9).
-  const blockRemediation = gpsRemediation(gpsUnavailableReason);
-  // Story 13-75 AC6 — the deployed predicate, reused (not re-derived). `null` is
-  // "no attempt on record": unknown, so the waiver is not withheld.
-  const blockReasonRetryable =
-    gpsUnavailableReason !== null &&
-    isRetryableCaptureFailure({ ok: false, reason: gpsUnavailableReason });
+  const blockRemediation = gpsRemediation(gpsUnavailableReason, { promptDismissed: blockPromptDismissed });
+  // Story 13-75 AC6, widened by 13-76 AC3 — a dismissed prompt is retryable HERE.
+  const blockReasonRetryable = blockFailureKind === 'retryable' || blockFailureKind === 'dismissed';
   const waiverAvailable = !blockReasonRetryable || gpsBlockFailedAttempts > 0;
 
   // Loading state
@@ -1261,13 +1358,17 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
                  * escape hatch files this value, so filing the stale one mislabels
                  * the enumerator's problem.
                  */
-                onCaptureError={(reason) => setGpsUnavailableReason(reason)}
+                onCaptureError={recordCaptureFailure}
                 /*
                  * 13-75 AC7 — a failed open-time capture is explained ON the
                  * location question, mid-interview, where fixing it is free. Help
                  * text on the question it concerns, not a standing banner.
                  */
                 captureFailureReason={gpsUnavailableReason}
+                /* 13-76 AC2 — the same dismissed/settled reading the block uses. */
+                captureFailurePromptDismissed={blockPromptDismissed}
+                /* 13-76 review L2 — and the same withholding while the probe is out. */
+                captureFailureCopyPending={gpsPermissionProbing}
               />
             )}
           />
@@ -1385,9 +1486,9 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
               gone: it was the one action that dismissed this panel (U10).
             */}
             <div data-testid="gps-block-remediation" className="space-y-1">
-              <p className="text-sm text-amber-800">{blockRemediation.action}</p>
-              {blockRemediation.secondary && (
-                <p className="text-sm text-amber-800">{blockRemediation.secondary}</p>
+              {/* 13-76 review L2 — no copy until the probe says which code 1 this is. */}
+              {!gpsPermissionProbing && (
+                <GpsRemediationCopy remediation={blockRemediation} className="text-sm text-amber-800" />
               )}
             </div>
             {/* AC1 — the fix, in place, as the primary action. */}
@@ -1418,11 +1519,13 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
 
               Understated on the discard-interview precedent below: it files the
               interview without a location, so it must never read as a peer of the
-              capture button. On a retryable reason (`isRetryableCaptureFailure`) it
-              appears only once an in-banner attempt has failed — the field case
-              waived a `timeout` without a retry ever being offered. On a settled or
-              unknown reason it is there at once: forcing attempts that cannot
-              succeed is cruelty, not rigour.
+              capture button. On a retryable reason (`classifyBlockFailure`: a
+              `timeout`/`position_unavailable`, or since 13-76 a FIRST dismissed
+              prompt) it appears only once an in-banner attempt has failed — the
+              field case waived a `timeout` without a retry ever being offered, and
+              Awwal's read waived a dismissal the same way. On a settled or unknown
+              reason it is there at once: forcing attempts that cannot succeed is
+              cruelty, not rigour.
 
               R-b: no reason hides it forever. Every attempt settles (the watchdog
               bounds it) and a failed one reveals it.
@@ -1444,7 +1547,13 @@ export default function FormFillerPage({ mode = 'fill' }: FormFillerPageProps) {
               </div>
             ) : (
               <p className="text-xs text-amber-800 text-center" data-testid="gps-waiver-pending">
-                If it fails again, an option to submit without a location will appear here.
+                {/*
+                  13-76 review L6 — a dismissal never FELT like a failure (they tapped
+                  past a dialog), so "if it fails again" explains nothing to them.
+                */}
+                {blockPromptDismissed
+                  ? 'If Allow does not work, an option to submit without a location will appear here.'
+                  : 'If it fails again, an option to submit without a location will appear here.'}
               </p>
             )}
           </div>

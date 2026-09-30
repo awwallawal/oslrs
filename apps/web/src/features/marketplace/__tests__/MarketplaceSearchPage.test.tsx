@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import * as matchers from '@testing-library/jest-dom/matchers';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -97,6 +97,19 @@ function renderPage() {
 // Lazy import to allow mocks to be set up first
 let MarketplaceSearchPage: any;
 
+/*
+ * ⚠️ ONCE, WITH ITS OWN BUDGET (2026-09-29). This import used to sit in `beforeEach`,
+ * so the FIRST test's hook paid the cold transform of the page's whole module graph
+ * (incl. the `vi.importActual('lucide-react')` mock above): 8.2 s ALONE for the first
+ * test, and `Hook timed out in 15000ms` in a loaded full-suite run. Every later test
+ * got the cached module anyway, so importing once is behaviour-identical — no
+ * `vi.resetModules` here, and every mock factory reads its `mock*Return` lazily.
+ */
+beforeAll(async () => {
+  const mod = await import('../pages/MarketplaceSearchPage');
+  MarketplaceSearchPage = mod.default;
+}, 60_000);
+
 beforeEach(async () => {
   vi.clearAllMocks();
   mockSearchReturn = {
@@ -113,8 +126,6 @@ beforeEach(async () => {
       { id: '2', name: 'Ogbomoso North', code: 'ogbomoso-north' },
     ],
   };
-  const mod = await import('../pages/MarketplaceSearchPage');
-  MarketplaceSearchPage = mod.default;
 });
 
 afterEach(() => {

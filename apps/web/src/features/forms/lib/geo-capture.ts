@@ -95,6 +95,10 @@ export const OPEN_CAPTURE_WATCHDOG_MS = 120_000;
  * ⚠️ Lives here, beside the vocabulary, rather than inline in the page — a two-line
  * conditional buried in an effect is a decision nothing can test, and this one was
  * wrong once already.
+ *
+ * ⛔ Story 13-76 — DO NOT WIDEN THIS FOR A DISMISSED PROMPT. It drives the open-time
+ * latch and AC11's silent retry; the amber block's own decision is
+ * `classifyBlockFailure`, below.
  */
 export function isRetryableCaptureFailure(result: CaptureResult): boolean {
   if (result.ok) return false;
@@ -276,4 +280,173 @@ export async function permissionAllowsSilentRefresh(): Promise<boolean> {
     // 'geolocation' name). Same reasoning as its absence: attempt, do not skip.
     return true;
   }
+}
+
+/**
+ * Story 13-76 — what the browser says about the site permission, as a fact rather
+ * than a decision. `unknown` whenever it cannot say: no Permissions API (iOS
+ * Safari), no usable `query()`, a rejected descriptor, or a state outside the spec.
+ *
+ * ⚠️ Same absent-API shape as `permissionAllowsSilentRefresh`, opposite conclusion,
+ * and deliberately so. There, absence means "attempt" because the attempt is bounded
+ * and cheap. Here, absence must mean "we cannot tell a dismissal from a block", and
+ * the only safe reading of that is the SETTLED one — iOS keeps 13-75's behaviour.
+ * Never throws: a probe that rejects would take the amber panel's copy down with it.
+ *
+ * ⛔ 13-76 review L2 — and never HANGS. The page withholds code-1 copy until this
+ * answers (so a dismissal is not first shown the settings surgery it does not
+ * need), which makes a `query()` that never settles a panel with no guidance at
+ * all. `PERMISSION_PROBE_TIMEOUT_MS` bounds it; running out reads `unknown`.
+ */
+export type GeolocationPermissionProbe = 'granted' | 'denied' | 'prompt' | 'unknown';
+
+export const PERMISSION_PROBE_TIMEOUT_MS = 1_000;
+
+export async function geolocationPermissionState(): Promise<GeolocationPermissionProbe> {
+  const state = await rawGeolocationPermissionState();
+  // ⛔ 13-76 R5(a) — a `prompt` this browser has been caught misreporting means nothing.
+  return state === 'prompt' && isPromptStateUnreliable() ? 'unknown' : state;
+}
+
+/**
+ * ⛔ STORY 13-76 R5 — RULED (a) BY AWWAL, 2026-09-29: DISTRUST `prompt` ONCE IT HAS LIED.
+ *
+ * AC1 assumed iOS Safari has no Permissions API. It has had one since Safari 16
+ * (MDN browser-compat-data), and Safari is REPORTED to answer `prompt` for
+ * geolocation whatever the user chose (mdn/browser-compat-data#25032 — reported,
+ * not verified here). Taken at its word, every iOS code 1 — a deliberate deny,
+ * Location Services off — would read as a dismissed prompt and be told "choose
+ * Allow when your phone asks" when the phone never will.
+ *
+ * ⭐ THE TELL NEEDS NO USER-AGENT. A site that has just handed over a position
+ * cannot honestly be in the `prompt` state. So after every SUCCESSFUL capture the
+ * page asks once more, and a `prompt` answer marks this browser's `prompt` as
+ * unreliable for the tab; `geolocationPermissionState` then reads it as `unknown`,
+ * i.e. SETTLED. Chrome reports `granted` after a success, so it is never marked and
+ * keeps the dismissed path it was built for (AC7 / R-c: no behaviour on a UA guess).
+ *
+ * ⚠️ Narrows R5, does not close it: a phone whose FIRST capture in a tab fails has
+ * produced no tell yet, and still gets the dismissed reading once.
+ * ⚠️ Deliberately NOT applied to `permissionAllowsSilentRefresh` — that is 13-71 /
+ * 13-75 code and residual R6, which Awwal has not yet routed.
+ */
+const PROMPT_UNRELIABLE_KEY = 'oslsr.gps.promptStateUnreliable';
+let promptUnreliableFallback = false;
+
+export function isPromptStateUnreliable(): boolean {
+  try {
+    return sessionStorage.getItem(PROMPT_UNRELIABLE_KEY) === '1';
+  } catch {
+    return promptUnreliableFallback;
+  }
+}
+
+/**
+ * Called after every successful capture. Never throws and never blocks the caller:
+ * it is evidence-gathering, not a gate. Resolves `true` when it marked the browser.
+ */
+export async function notePermissionStateAfterSuccess(): Promise<boolean> {
+  if ((await rawGeolocationPermissionState()) !== 'prompt') return false;
+  try {
+    sessionStorage.setItem(PROMPT_UNRELIABLE_KEY, '1');
+  } catch {
+    promptUnreliableFallback = true;
+  }
+  return true;
+}
+
+async function rawGeolocationPermissionState(): Promise<GeolocationPermissionProbe> {
+  const permissions =
+    typeof navigator === 'undefined'
+      ? undefined
+      : (navigator as Navigator & { permissions?: Permissions }).permissions;
+  if (!permissions || typeof permissions.query !== 'function') return 'unknown';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const answer = permissions
+      .query({ name: 'geolocation' as PermissionName })
+      .then(({ state }): GeolocationPermissionProbe =>
+        state === 'granted' || state === 'denied' || state === 'prompt' ? state : 'unknown',
+      );
+    const deadline = new Promise<GeolocationPermissionProbe>((resolve) => {
+      timer = setTimeout(() => resolve('unknown'), PERMISSION_PROBE_TIMEOUT_MS);
+    });
+    return await Promise.race([answer, deadline]);
+  } catch {
+    return 'unknown';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * ⛔ 13-76 review L3 — THE DISMISSAL COUNT OUTLIVES THE SURVEY.
+ *
+ * AC4's "a second dismissal settles" exists because Chrome hardens repeated
+ * dismissals — and Chrome counts per ORIGIN, across every survey in the tab. Kept
+ * as page state, the count reset on every new survey and every reload, so each one
+ * bought another "choose Allow" for a prompt that may no longer be able to appear.
+ * `sessionStorage` scopes it to the tab, which is the shortest scope that is not
+ * wrong. Storage can be missing or throw (private mode, blocked site data), so a
+ * module-level count stands in and the answer is never an exception.
+ */
+const PROMPT_DISMISSALS_KEY = 'oslsr.gps.promptDismissals';
+let promptDismissalsFallback = 0;
+
+export function readPromptDismissals(): number {
+  try {
+    const stored = Number(sessionStorage.getItem(PROMPT_DISMISSALS_KEY));
+    return Number.isFinite(stored) && stored > 0 ? Math.floor(stored) : 0;
+  } catch {
+    return promptDismissalsFallback;
+  }
+}
+
+/** Counts one more dismissal and returns the new total. */
+export function recordPromptDismissal(): number {
+  try {
+    const next = readPromptDismissals() + 1;
+    sessionStorage.setItem(PROMPT_DISMISSALS_KEY, String(next));
+    return next;
+  } catch {
+    promptDismissalsFallback += 1;
+    return promptDismissalsFallback;
+  }
+}
+
+/**
+ * Story 13-76 — how the AMBER BLOCK should treat a failure: its copy and whether the
+ * waiver waits for a human attempt.
+ *
+ * ⛔ WHY THIS IS NOT A WIDER `isRetryableCaptureFailure`. That predicate has two
+ * other consumers, and neither may see a dismissed prompt as retryable:
+ *   • the open-time LATCH — un-latching on code 1 would re-run auto-capture for a
+ *     genuinely blocked site on every re-render, which is 13-71 U9's territory;
+ *   • 13-75 AC11's SILENT retry at submit — a dismissed prompt re-raised there puts
+ *     an OS dialog on top of a "Complete Survey" tap (13-76 AC5).
+ * So retryability for code 1 is decided HERE, for the one call site that wants it,
+ * and the stored vocabulary is untouched: `permission_denied` is still what is filed.
+ *
+ * ⭐ `dismissed` — code 1 while the permission still reads `prompt`: the dialog was
+ * never answered, so a human tap can raise it again and one tap of Allow fixes it.
+ *
+ * ⛔ AC4 — ONLY THE FIRST DISMISSAL. Chrome hardens repeated dismissals into a
+ * block, and some builds stop showing the prompt for the rest of the session while
+ * still reporting `prompt`. So a second dismissal settles: the waiver appears and
+ * nothing invites the enumerator to tap a button that may no longer be able to ask.
+ * `promptDismissals` counts dismissals observed on this page, the current one
+ * included.
+ */
+export type BlockFailureKind = 'retryable' | 'dismissed' | 'settled';
+
+export function classifyBlockFailure(
+  reason: GpsUnavailableReason,
+  permissionState: GeolocationPermissionProbe | null,
+  promptDismissals: number,
+): BlockFailureKind {
+  if (isRetryableCaptureFailure({ ok: false, reason })) return 'retryable';
+  if (reason === 'permission_denied' && permissionState === 'prompt' && promptDismissals <= 1) {
+    return 'dismissed';
+  }
+  return 'settled';
 }
