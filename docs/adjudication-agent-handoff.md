@@ -1304,6 +1304,23 @@ of these is touched: `pnpm-lock.yaml`, root `package.json`, `pnpm-workspace.yaml
 
 **The generalisable rule:** when you narrow a gate, enumerate the change shapes and DRY-RUN each one.
 A filter that matches nothing is indistinguishable from a filter that found nothing wrong.
+⚠️ **AND ITS OWN BANNER LIED FOR ONE COMMIT.** The outer `if` still printed
+"running full suite (serial)" three lines before the hook correctly announced it was
+scoping — fixed immediately, but worth recording as the shape: **a gate that
+misreports what it is about to do is the same defect class as a record that
+disagrees with the work** ([[pattern-a-record-about-the-work-is-not-the-work]]). The
+banner no longer claims to know the scope; the scope is decided and announced at the
+point it is chosen.
+
+📦 **PORTABLE-PLAYBOOK DEBT, recorded 2026-09-30.** `docs/portable-playbook.md`
+exists (1,503 lines) and is **dated 2026-04-26** — five months stale. It covers stack
+choices, infra setup, CI/CD and testing strategy well, but predates ALL 46 of this
+section's `§2*` subsections and the 64 `pattern|feedback|pitfall` memory files. The
+missing material is also the most transferable: the April doc is largely "how to
+build a project like this one", whereas the May→September lessons are "how not to
+fool yourself", which is stack-agnostic. ⛔ Do not cite the April content as current
+without checking it against §2.
+
 
 ### 2as. ⛔ A CACHED GATE CAN HOLD THE LAST HONEST ANSWER WHILE THE ENVIRONMENT DIES
 

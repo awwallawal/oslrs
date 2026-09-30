@@ -40,7 +40,12 @@ done
 
 if [ "$push_to_main" -eq 1 ] || [ "${PREPUSH_FULL:-0}" = "1" ]; then
   echo ""
-  echo "[pre-push] Push targets main (or PREPUSH_FULL=1) → running full suite (serial)"
+  # ⚠️ This banner used to promise "running full suite" and kept saying it after the
+  # 2026-09-30 scoping change, three lines before the hook correctly announced that
+  # it was scoping instead. A gate that misreports what it is about to do is the
+  # same class of defect as a record that disagrees with the work — the scope is
+  # decided below and ANNOUNCED there, so this line no longer claims to know it.
+  echo "[pre-push] Push targets main (or PREPUSH_FULL=1) → build + tests (scope announced below)"
   echo "[pre-push] (bypass for emergencies only: git push --no-verify)"
   echo ""
   # Story 9-54 (2026-06-14): run package suites SEQUENTIALLY (turbo --concurrency=1).
