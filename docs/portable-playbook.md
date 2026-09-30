@@ -1,5 +1,17 @@
 # Portable Development Playbook
 
+> ⚠️ **DATED 2026-04-26 — CHECK BEFORE CITING (noted 2026-09-30).** Five months of production
+> operation happened after this was written, and none of it is here: 46 further playbook sections
+> and 64 recorded patterns, including most of what this project learned about *verifying* its own
+> work. The stack, infrastructure and CI material below is still broadly sound; the process and
+> testing guidance is incomplete rather than wrong.
+>
+> 📄 **The missing half is `docs/portable-verification-laws.md`** — 37 laws on how not to fool
+> yourself (gates that pass without running, tests that assert nothing, records that disagree with
+> the work). That file is the more transferable of the two, because it does not care what stack you
+> chose. **Read it first when handing either document to another team**, and prefer it wherever the
+> two disagree.
+
 > **Purpose:** Transferable process patterns, architecture decisions, implementation rules, infrastructure recipes, and operational lessons from 6 epics (23+ weeks) of TypeScript/Node.js/React development.
 >
 > **Audience:** Developer or team starting a new full-stack TypeScript project on VPS infrastructure.
