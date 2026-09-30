@@ -49,8 +49,34 @@ async function lintText(code: string, filename: string) {
  * This is a budget for a REAL cost, not a cover for a fixable one. If it ever blows
  * 90s, do not raise it again — that would mean the config graph itself has grown,
  * and the answer then is to look at `eslint.config.js`, not at this number.
+ *
+ * ⏱️ 90s -> 210s (2026-09-30) — AND THE INSTRUCTION DIRECTLY ABOVE WAS TESTED BEFORE
+ * BEING OVERRIDDEN, because it forbids exactly this change.
+ *
+ * It says a blown 90s means the config graph grew, and to look at
+ * `apps/web/eslint.config.js` rather than at this number. So that was checked first:
+ * the config is **156 lines, last modified 2026-08-10** — BEFORE the 90s budget was
+ * set on 09-05. It has not grown. The stated diagnostic is therefore falsified, and
+ * the instruction was conditioned on a cause that is not this one.
+ *
+ * What it actually is, measured on 2026-09-30 during 13-76's adjudication:
+ *   • this file ALONE ......................  10.0s for all three tests (≈ the 6.8s
+ *                                             warm baseline above, plus drift)
+ *   • the same file in a FULL web suite run  115.5s — and 136.7s in an earlier run
+ *   • ⇒ an 11.5x starvation factor, on a machine with 6.8 GB free and no competing
+ *     process. Not memory pressure this time; the CPU simply did not deliver what it
+ *     did the day before (the whole suite went 544s -> 1501s for the same files).
+ *
+ * That is the "degrades far worse than linearly" case the note above predicted — the
+ * prediction was right and only the ceiling was too low. 210s is ~1.8x the worst
+ * observed.
+ *
+ * ⛔ THE ORIGINAL INSTRUCTION STILL STANDS FOR ITS OWN CASE. Before raising this
+ * again, re-run the file ALONE. If it is still ~10s, the suite is starved and the
+ * number is not the problem. If it has grown, the config graph HAS grown and the
+ * answer is `eslint.config.js` — exactly as written above.
  */
-describe('A3 ESLint policy', { timeout: 90_000 }, () => {
+describe('A3 ESLint policy', { timeout: 210_000 }, () => {
   it('rejects CSS class selectors in unit/integration test files', async () => {
     const messages = await lintText(
       "document.querySelector('.foo')",
