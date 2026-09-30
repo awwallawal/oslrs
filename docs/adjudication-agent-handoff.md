@@ -1346,11 +1346,22 @@ suite blames your code for it.
 
 ## 3. Current state (2026-09-30) — READ THIS ONE
 
-⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds — §0. As of 2026-09-30 prod,
-origin and local all read `4b721bf`, health 200, **tree clean, nothing in flight** — but verify, do
-not read.
+⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds — §0. As of 2026-09-30 prod and
+origin read `4b721bf`, health 200, and local was **2 ahead** (`8b82e39` pre-push banner fix,
+`fa58f1e` the portable verification laws — docs/hook only, so the scoped gate pushes them in seconds).
+**If `git status -sb` still shows `ahead 2`, push first.** Verify all of this; do not read it.
 
-📄 **Full evidence for this state: `docs/adjudication-session-2026-09-26-to-29.md`.** Row ids, SHAs,
+📘 **KNOWLEDGE ARTIFACTS, so a cold start can find them:**
+- `docs/portable-verification-laws.md` — **37 stack-agnostic laws** distilled from this §2 and the
+  memory patterns, for other projects. Each survives its `_Provenance:_` line being stripped
+  (`grep -v '^_Provenance:'`) so it can be handed to a team with no repo access.
+- `docs/portable-playbook.md` — stack/infra/CI, **dated 2026-04-26 and five months stale**; it
+  predates all 46 `§2*` sections. Check against §2 before citing.
+- ⛔ Both exist because **a document nobody loads drifts into fiction** — the April playbook sat
+  untouched while the same lessons were re-learned here. Paste laws into a new repo's AGENT
+  INSTRUCTIONS, not its `docs/`.
+
+📄 **Full evidence for this state: `docs/adjudication-session-2026-09-26-to-30.md`.** Row ids, SHAs,
 measurements and the proofs behind every claim below. This section is the summary; that file is the
 receipt. If they disagree, THIS file is wrong and that one is stale — re-measure, do not pick one.
 
@@ -2549,7 +2560,7 @@ adds an `adopted_from_draft` bucket. No schema change (13-49 writes real rows; t
 
 ## 7w. Session 2026-09-26 → 09-29 — the GPS problem closed on hardware, and the field guide learned the form
 
-📄 **Full record: `docs/adjudication-session-2026-09-26-to-29.md`** — row ids, SHAs, measurements,
+📄 **Full record: `docs/adjudication-session-2026-09-26-to-30.md`** — row ids, SHAs, measurements,
 and the proofs. Summarised here only so the arc is legible without opening it.
 
 **Shipped and deployed:** 13-71's field fix (`1554a37`/`1e67166`), **13-75** (`cfbe307`, CI 10/10),
