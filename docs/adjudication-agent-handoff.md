@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-09-25 · ⛔ **READ §3's FIRST BOX: a different-model review found FIFTEEN defects in 13-71 that the dev, a same-model review AND adjudication had all approved. Adjudication's "the work is sound" was WRONG. Read the diff for LOGIC before reading the story's account of it; green gates are a precondition, never evidence.** · ✅ **13-70 + 13-71 + 13-73 all on prod (`1248be3`), all still `review` — none can close** · ⛔ **The enumerator trial is STOPPED deliberately, so 13-71 is deployed and unprovable** · 🆕 **PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-10-08 · ⛔ **ENUMERATOR TRIAL 2 IS RUNNING AND THE CONSENT HOLE IS LIVE IN THE FIELD — 28 declined-consent submissions in 8 days (§3).** · 📄 Evidence: `docs/adjudication-session-2026-09-30-to-10-08.md` · 🆕 Playbook §2at–§2ax · ✅ F2 (GPS) green for the first time, 98.1 %. · *(Older header, kept for history:)* **Last updated:** 2026-09-25 · ⛔ **READ §3's FIRST BOX: a different-model review found FIFTEEN defects in 13-71 that the dev, a same-model review AND adjudication had all approved. Adjudication's "the work is sound" was WRONG. Read the diff for LOGIC before reading the story's account of it; green gates are a precondition, never evidence.** · ✅ **13-70 + 13-71 + 13-73 all on prod (`1248be3`), all still `review` — none can close** · ⛔ **The enumerator trial is STOPPED deliberately, so 13-71 is deployed and unprovable** · 🆕 **PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1342,9 +1342,123 @@ run them at all.** The protection expired the moment a commit touched the lockfi
 never checks whether the local database is alive, and a 13-hour-dead container is invisible until a
 suite blames your code for it.
 
+### 2at. ⛔ TWO ACTORS ON ONE COHORT NEED AN EXCLUSION LIST — or the second undoes the first
+*Added 2026-10-08, enumerator trial 2.*
+
+Adjudication resent six invitations; an hour later Awwal re-onboarded "the 13 active". Three of the
+six had activated from the resend in that hour, so they were active, so they were in "the 13", and
+the re-onboard **cleared the passwords they had just set**. Every step was audited and correct; the
+plan was not. **When two people act on the same set of accounts, the hand-off names the rows each
+may touch, by id, and states the rows to skip** — a status-based selector ("the active ones") is
+re-evaluated at click time and moves under you, exactly as [[pattern-batch-job-races-live-users]].
+After any batch, read back each row's audit sequence (`string_agg(action ORDER BY created_at)`):
+`invitation.resend, user.activated, auth.login_success, user.deactivate, user.reactivate` is the
+signature of this collision.
+
+### 2au. ⛔ `NOT LIKE` DROPS THE NULL ROWS — and they were the rows that mattered
+*Added 2026-10-08.*
+
+`upper(last_name) NOT LIKE '%ZZSMOKE%'` is NULL for a NULL surname, so the row silently leaves the
+count. It reported zjbadmus at **44** respondents when she had **49** — and the five that vanished
+were the **declined-consent** submissions, the most important rows in the table. Caught only because
+two counts of the same thing disagreed (respondents 44 vs GPS submissions 48) and the disagreement
+was chased instead of explained away (§2af, §2ah). **Wrap every negated text predicate in
+`coalesce(col,'')`, and reconcile any per-row count against a second, independently-joined count
+before quoting it.** Same family as §2x: a wrong filter fails *permissively*, and here it failed
+in the direction that hid a defect.
+
+### 2av. ⭐ A "MEASURED, NOT A STORY" FINDING KEEPS WRITING ROWS — date it or it becomes an incident
+*Added 2026-10-08.*
+
+On 2026-09-29 "declining consent does not end the survey" was measured (12 old public rows), ruled
+to need a Ministry decision, and left as "not a story yet". Six days after enumerators reached the
+field it had produced **28 new declined-consent records** from two people, 5 → 18 → 28 across three
+readings. **A finding about a code path that live traffic runs is not parked by being written down;
+it accrues.** When a finding is left unstoried, record its **current rate** and a **date by which it
+is re-measured** (a `DATED` residual, so the guard fires) — the rate, not the backlog, decides
+whether it can wait.
+
+### 2aw. ⚠️ A SELF-REFERENTIAL SPEED CHECK CANNOT SEE A UNIFORMLY FAST WORKER
+*Added 2026-10-08.*
+
+`speed-run.heuristic.ts` compares each survey to **that enumerator's own median** once they pass
+`speed_bootstrap_n` (30). Two enumerators crossed 30 within two days at medians of 3.4–5.3 minutes
+for 25–35 questions; past that point, rushing *consistently* is indistinguishable from normal. A
+36-second survey was scored only `low`. **A "clean" fraud score answers "is this unusual for this
+person", not "is this plausible".** Judge cohort pace by a human or a cohort-median rule, and never
+publish the thresholds to the people being measured (it teaches them to pad the clock).
+
+### 2ax. Running a service method on prod from this session (no Super Admin login here)
+*Recorded 2026-10-08 — used for 7 audited invitation resends.*
+
+Call the real service so its guards, audit row and email queue all run; never hand-write the SQL.
+Script in **`/tmp/*.mts`** (a `/tmp/*.ts` compiles as CJS → top-level await fails), **no bare
+package imports** (they cannot resolve from `/tmp`; import by absolute path into
+`/root/oslrs/apps/api/src/…`), env via `set -a; . /root/oslrs/.env; set +a`, run with
+`/root/oslrs/apps/api/node_modules/.bin/tsx`, pass Awwal's super_admin id as `actorId` so the audit
+row attributes to the human who authorised it, `rm` the script after. **The script only enqueues** —
+prove delivery from `email_events` (`delivered`/`bounced`) and `email_suppressions`, never from the
+exit code. pm2 logs rotate daily (`~/.pm2/logs/oslsr-api-out__<date>.log`); an empty grep of the
+live log proves nothing.
+
 ---
 
-## 3. Current state (2026-09-30) — READ THIS ONE
+## 3. Current state (2026-10-08) — READ THIS ONE
+
+⛔ **PROD SHA IS NOT RECORDED HERE (D6).** At 2026-10-08 21:42 WAT prod = origin = `fb2e4b1`, health
+200, and no code shipped this session. Verify; do not read. 📄 **Evidence for everything below:
+`docs/adjudication-session-2026-09-30-to-10-08.md`** (its Part E holds the re-runnable queries).
+
+### ⛔ THE ONE THING: the consent hole is live on the enumerator form
+
+**28 enumerator submissions since T0 have `consent_basic = 'no'`** (zjbadmus 19, badmusalia2 9),
+growing 5 → 18 → 28 over three readings. The form hides Identity after a No but allows Submit; each
+becomes a registry row. No NIN or marketplace profile on any — consent integrity, not a PII leak.
+One row carries a name because consent was changed after identity was answered. **Needs: a story
+(end the survey on No, both forms, and retract given answers) + a ruling on deleting the 28.**
+
+### Enumerator trial 2 — T0 = 2026-09-30 14:36:10 UTC
+
+- **Re-provisioned in place, never recreated** (runbook §0.9b). Active → Deactivate + Reactivate
+  with re-onboard; invited → Resend. 7 resends were run by adjudication (§2ax), 13 re-onboards by Awwal.
+- **Onboarding has stalled:** 9 of 19 active; **10 invited with EXPIRED links**, untouched since
+  2026-10-02 (resend awaits Awwal's go-ahead). Three of those had activated and were reset by the
+  re-onboard (§2at). `callmezainab3000+test` bounced and is **suppressed** — clear before resending.
+- **Practice:** only 2 of 19 did ZZSMOKE practice; two practised untagged (4 rows to tear down).
+- **F2 (GPS) is GREEN: 153 of 156 (98.1 %), 8 enumerators** — first time ever (baseline 11.4 %).
+  ⚠️ 147 of the 156 come from two people.
+- **Quality concerns** (two active enumerators): medians 3.4–5.3 min; 12 surveys under a minute;
+  duplicates (Bashit Saka across accounts, Qoyum/Azeez reversed, Emmanuel Fakorede submitted twice —
+  **cause not yet determined**: re-take, or 13-75 review M1 recurring); the speed check is
+  self-referential past 30 (§2aw).
+- **Field guide** rewritten and deployed (`fb2e4b1`): login-address box, selfie skip warning,
+  two ZZSMOKE practice surveys with no NIN, "every survey is checked" (thresholds unpublished).
+
+### New defects found (not yet stories)
+
+1. **Staff sign-in creates public accounts.** An enumerator typing their plain address gets
+   `user_not_found`, takes the "one-time sign-in link", and a `public_user` is created. Victoria
+   (2026-09-30) and Uthman (2026-09-17) now hold public accounts at their plain addresses.
+2. **Header avatar never shows the selfie** — `ProfileDropdown.tsx` renders initials only since
+   Story 2.5-1. Photos are saved and appear on My Profile and the ID card.
+3. **Duplicate heuristic's 7-day lookback** missed a person registered 16 days apart by two enumerators.
+
+### Story board — unchanged this session
+13-70 review (R2 read) · 13-71 review (R5 ruling) · 13-73 review (**R1+R8 prod restore not run**) ·
+13-74 ready-for-dev (AC3–AC8) · 13-75 review (R2 needs an iPhone) · 13-76 review (R2 Android read).
+
+### ⏭️ NEXT, in priority order
+1. **Consent-gate story** + ruling on the 28 rows (and the 9 older contradictory-consent citizens).
+2. **Resend the 10 expired** (go-ahead) · Zainab's address → clear suppression → resend.
+3. **Talk to the two active enumerators** — Discard on No; the sub-minute surveys; duplicates.
+4. Rule whether field work is officially open.
+5. Teardown (session record Part D) — after go-ahead, child-first, id list, dry-run counts.
+   ⛔ The pre-T0 captures of other enumerators are NOT practice (14/15 carry NINs) — ask per row.
+6. Then the carried queue: 13-73 R1/R8 (prod write, go-ahead), 13-76 R2, 13-70 R2, 13-72.
+
+---
+
+## 3-old12. Current state (2026-09-30) — superseded by §3 above
 
 ⛔ **PROD SHA IS NOT RECORDED HERE (D6).** Two commands, three seconds — §0. As of 2026-09-30 prod and
 origin read `4b721bf`, health 200, and local was **2 ahead** (`8b82e39` pre-push banner fix,
@@ -2557,6 +2671,26 @@ adds an `adopted_from_draft` bucket. No schema change (13-49 writes real rows; t
     not the e2e harness written for this exact behaviour. Budget for dry runs accordingly.
 
 ---
+
+## 7x. Session 2026-09-30 → 10-08 — trial 2 re-provisioned, GPS green in the field, and the consent hole went live
+
+📄 **Full record: `docs/adjudication-session-2026-09-30-to-10-08.md`.**
+
+No code shipped; one docs deploy (`fb2e4b1`, the field guide). The work was operational: re-onboard
+19 enumerators in place, rewrite the guide's onboarding and practice rules, and measure the first
+real field week. **F2 went green (98.1 %) — the GPS arc closed in the field, not just on hardware.**
+
+**What this session got wrong and caught:**
+- Did not tell Awwal to exclude the six just-resent accounts from his re-onboard batch; three fresh
+  activations were wiped (§2at).
+- Quoted a per-enumerator count (44) produced by a `NOT LIKE` that dropped NULL surnames — and the
+  dropped rows were the declined-consent ones (§2au). Caught by reconciling two counts.
+- Watched the first resend's CI watcher report the PREVIOUS run's green (the new run had not
+  registered yet); caught by reading the SHA in the output, not the verdict.
+
+**The arc worth remembering:** a finding parked on 2026-09-29 as "measured, needs a Ministry
+decision, not a story" was producing rows daily within a week of enumerators reaching the field
+(§2av). Parking a finding about a path live traffic runs does not stop it; only dating it does.
 
 ## 7w. Session 2026-09-26 → 09-29 — the GPS problem closed on hardware, and the field guide learned the form
 
