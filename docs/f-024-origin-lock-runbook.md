@@ -6,6 +6,10 @@
 
 > **What this fixes:** `oyotradeministry.com.ng` resolves **grey/direct** to the origin `159.89.146.93`, so anyone can hit the origin around Cloudflare. This runbook de-points that domain, then locks the origin to Cloudflare-only, then rotates the (now-public) IP.
 
+> ⛔ **STATUS 2026-10-14: `oyotradeministry.com.ng` is RELEASED from OSLRS** (to the DBPRS project). §1's
+> "302 redirect to oyoskills.com" was found NOT in place: the domain had NS at WhoGoHost and no A record, so it
+> resolved nowhere. Do not re-run §1; the domain is no longer ours to point.
+
 ---
 
 ## §0 — Pre-flight (read fully before touching anything)

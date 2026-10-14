@@ -25,7 +25,7 @@ Read these files in order for full project awareness:
 
 - **Monorepo:** `apps/api` (Express/Drizzle), `apps/web` (React/Vite/TanStack), `packages/types` (shared)
 - **Package manager:** pnpm (never use npx)
-- **Production:** oyotradeministry.com.ng (DigitalOcean VPS 2GB, PM2 + NGINX, Docker for PostgreSQL + Redis)
+- **Production:** oyoskills.com, Cloudflare-proxied (`oyotradeministry.com.ng` was released from OSLRS 2026-10-14 to the DBPRS project) (DigitalOcean VPS 2GB, PM2 + NGINX, Docker for PostgreSQL + Redis)
 - **Current state:** Epic 6 complete, security hardening done, Epic 7 (Public Skills Marketplace) next
 - **Tests:** 3,123 total (1,184 API + 1,939 web), zero regressions policy
 - **Process:** spike-first → prep tasks → stories → adversarial code review → retrospective
@@ -47,7 +47,7 @@ Read these files in order for full project awareness:
 - **Admin seeding:** `pnpm --filter @oslsr/api db:seed --admin-from-env` (single-line inline env vars)
 - **Env var safety:** Any code adding required env vars MUST coordinate with production `.env` before deploy (SEC-3 crash loop lesson)
 - **CSP is two-layer (Helmet + nginx)**: Helmet enforces on `/api/*`, nginx covers static HTML. Both MUST stay in sync — the `csp-parity.test.ts` test enforces this in CI. To add a third-party domain: edit `cspDirectives` in `app.ts` + both nginx CSP `add_header` values in `infra/nginx/oslsr.conf`, run parity test. See [Part 5.1 of the playbook](../docs/infrastructure-cicd-playbook.md#part-51-content-security-policy-csp) for the full CSP maintenance guide including 2-minute rollback recipe.
-- **Production nginx config lives in the repo** at [`infra/nginx/oslsr.conf`](../infra/nginx/oslsr.conf), deployed automatically via CI to `/etc/nginx/sites-available/oslsr`. Any nginx change MUST touch that file — grep for `infra/nginx/oslsr.conf` before editing anything nginx-related. The old `docker/nginx.conf` was orphan code (renamed to `docker/nginx.dev.conf` for dev-container use only in Story 9-7, 2026-04-11) — the file looked like production config but was never read by the VPS. Lesson: verify live headers via `curl -sI https://oyotradeministry.com.ng/` rather than assuming a committed file is deployed.
+- **Production nginx config lives in the repo** at [`infra/nginx/oslsr.conf`](../infra/nginx/oslsr.conf), deployed automatically via CI to `/etc/nginx/sites-available/oslsr`. Any nginx change MUST touch that file — grep for `infra/nginx/oslsr.conf` before editing anything nginx-related. The old `docker/nginx.conf` was orphan code (renamed to `docker/nginx.dev.conf` for dev-container use only in Story 9-7, 2026-04-11) — the file looked like production config but was never read by the VPS. Lesson: verify live headers via `curl -sI https://oyoskills.com/` rather than assuming a committed file is deployed.
 
 ## Epic 7 Readiness
 

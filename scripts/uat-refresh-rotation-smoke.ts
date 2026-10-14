@@ -28,7 +28,7 @@
  *   Log in twice in the browser (or one private window each), copy the `refreshToken`
  *   cookie value from DevTools → Application → Cookies after EACH login:
  *     tsx scripts/uat-refresh-rotation-smoke.ts \
- *       --base-url=https://oyotradeministry.com.ng \
+ *       --base-url=https://oyoskills.com \
  *       --refresh-cookie=<value-from-session-1> \
  *       --refresh-cookie=<value-from-session-2>
  *

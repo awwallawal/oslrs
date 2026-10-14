@@ -2,6 +2,8 @@
 
 Status: done — ✅ 2026-06-23. AC#1 nginx CSP `wss://oyotradeministry.com.ng` removed from BOTH connect-src blocks (now byte-identical, `wss://oyoskills.com` only); AC#2 csp-parity `PROD_WS_URLS` updated (test 6/6 green); AC#3 stale comments retired in app.ts + real-ip.ts; AC#5 cf-analytics.ts ministry-zone loop entry + `zoneMinistry`/`CLOUDFLARE_ZONE_TAG_MINISTRY` plumbing dropped; AC#6 index.html beacon comment single-domain. Verified: api tsc 0, gate-lint 0, csp-parity 6/6; grep shows only deliberate "retired/redirect" historical notes remain (AC#7). **AC#4 — OPERATOR follow-up (no code change):** confirm the prod `/root/oslrs/.env` `CORS_ORIGIN` no longer lists `oyotradeministry.com.ng` (the redirect makes no same-origin XHR; harmless if present, but removing it keeps the Helmet connect-src in true parity with nginx). Drop it on the next env touch.
 
+> **POST-CLOSE NOTE 2026-10-14 (adjudication):** the domain is now RELEASED from OSLRS to the DBPRS project (ruled by Awwal); this story's "KEEP the domain registered + 302-redirecting" no longer applies. Measured that day: no A record, so the 302 was not in place. AC#4 confirmed: prod `CORS_ORIGIN` no longer lists it. See `docs/adjudication-session-2026-10-13-to-14.md`.
+
 <!--
 Authored 2026-06-10 by Bob (SM) via canonical *create-story (--yolo). EMERGENT
 hygiene follow-up surfaced during the 2026-06-10 drift sweep. Story 9-9's F-024

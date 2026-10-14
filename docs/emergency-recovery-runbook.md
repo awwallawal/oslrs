@@ -426,7 +426,7 @@ pm2 list                              # Check all processes online
 pm2 logs oslsr-api --lines 200        # Recent logs
 docker stats --no-stream              # Redis + Postgres healthy?
 systemctl status nginx                # nginx up?
-curl -sI https://oyotradeministry.com.ng/api/v1/health   # Health endpoint
+curl -sI https://oyoskills.com/api/v1/health             # Health endpoint (oyotradeministry.com.ng released from OSLRS 2026-10-14 to the DBPRS project)
 ```
 
 Restart app if needed: `pm2 restart oslsr-api`.

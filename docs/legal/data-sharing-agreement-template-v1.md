@@ -386,7 +386,7 @@ All other amendments to this Agreement, including any change to Schedule 1 beyon
 ## §1 API Base URL
 
 ```
-https://oyotradeministry.com.ng/api/v1/partner
+https://oyoskills.com/api/v1/partner
 ```
 
 ## §2 Authentication

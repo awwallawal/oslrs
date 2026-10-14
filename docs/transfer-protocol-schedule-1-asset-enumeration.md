@@ -40,7 +40,7 @@ Assets are grouped by category. Each category corresponds to a Transfer Protocol
 
 | Asset ID | Asset Description | Owner Before | Owner After | Transfer Mechanism | Verification | Status |
 |---|---|---|---|---|---|---|
-| B.1 | DigitalOcean Account (root account `lawalkolade@gmail.com`) | Lawal Awwal Akolade | Ministry-owned DO account (target email `oslsr@oyotradeministry.com.ng` or equivalent) | **Path A (preferred):** Ministry account joins as Owner via DO Teams; Builder leaves Team. **Path B (fallback):** snapshot+recreate. | Ministry can manage all OSLRS resources without Builder involvement | _Pending Ministry account creation_ |
+| B.1 | DigitalOcean Account (root account `lawalkolade@gmail.com`) | Lawal Awwal Akolade | Ministry-owned DO account (target email: a Ministry-designated address; NOT on `oyotradeministry.com.ng`, which was released from OSLRS 2026-10-14 to the DBPRS project) | **Path A (preferred):** Ministry account joins as Owner via DO Teams; Builder leaves Team. **Path B (fallback):** snapshot+recreate. | Ministry can manage all OSLRS resources without Builder involvement | _Pending Ministry account creation_ |
 | B.2 | Droplet `oslsr-home-app` (IP `159.89.146.93`, region [populate], 2GB / 2vCPU / 47GB SSD, Ubuntu 24.04.4, kernel 6.8.0-110) | _(within DO account — inherits B.1)_ | _(within DO account — inherits B.1)_ | Inherits B.1 | Droplet visible in Ministry's DO dashboard | _Pending B.1_ |
 | B.3 | DO Cloud Firewall "OSLRS" — SSH inbound dual-source `0.0.0.0/0` + `100.64.0.0/10`; HTTPS 443; HTTP 80 redirect; other ports per app needs (see runbook §1.4) | _(within DO account)_ | _(within DO account)_ | Inherits B.1 | Firewall rules visible in Ministry's DO dashboard | _Pending B.1_ |
 | B.4 | DO Spaces bucket `oslsr-media` — application media + backups (`backups/daily/`, `backups/monthly/`) | _(within DO account)_ | _(within DO account)_ | Inherits B.1 | Bucket visible in Ministry's DO dashboard; backup worker continues writing | _Pending B.1_ |
@@ -64,10 +64,15 @@ Assets are grouped by category. Each category corresponds to a Transfer Protocol
 
 | Asset ID | Asset Description | Owner Before | Owner After | Transfer Mechanism | Verification | Status |
 |---|---|---|---|---|---|---|
-| D.1 | `oyotradeministry.com.ng` (current production domain) | _Verify_ — likely Ministry-owned given `.com.ng` registrar conventions | Confirmed Ministry-owned | If Ministry already owns: confirm credentials are in Ministry IT possession. If Builder is current registrar contact: transfer via registrar UI. | Ministry IT can update DNS records without Builder | _Pending verification_ |
 | D.2 | `oyoskills.com` — **TURNKEY DELIVERABLE** | Builder-purchased + registered on Builder's Namecheap/Porkbun account (~₦15K/year) | Ministry-owned via registrar push-transfer at Transfer Day | Initiator-side (Builder) initiates registrar transfer 1–2 weeks BEFORE Transfer Day; Ministry registrar receives + accepts; domain remains active throughout | Ministry can renew domain via their registrar account | _Pending Builder purchase (within 1–2 weeks)_ |
 | D.3 | DNS records on Cloudflare Free tier (A, AAAA, CNAME, TXT for SPF/DKIM/DMARC, MX for Email Routing) | Within Builder's Cloudflare account | Within Ministry's Cloudflare account (post-Cloudflare account ownership transfer) | Cloudflare account ownership transfer (see E.7) — DNS records inherit | DNS lookups continue to resolve correctly across the transfer | _Pending Cloudflare setup_ |
 | D.4 | Project phone SIM (`+234 XXX XXX XXXX` — assigned by carrier) | Builder-purchased (~₦500 SIM); Builder name on carrier registration | Physically transferred at Transfer Day; Ministry re-registers with carrier | Builder hands SIM to Ministry; Ministry visits carrier office for ownership change paperwork | Ministry receives SMS/calls on the number; carrier confirms re-registration | _Pending Builder SIM purchase + activation_ |
+
+> **D.1 WITHDRAWN 2026-10-14 (ruled by Awwal).** `oyotradeministry.com.ng` is no longer an OSLRS asset and is
+> not part of this handover. It has served no OSLRS traffic since the F-024 de-point (no A record, measured
+> 2026-10-14) and is released to the DBPRS premises-registration project for the same Ministry (MTIC). OSLRS
+> has ONE domain: D.2 `oyoskills.com`. Evidence and the clean-up record: `docs/adjudication-session-2026-10-13-to-14.md`.
+> Asset ids are not renumbered, so D.2 to D.4 keep their references.
 
 ---
 

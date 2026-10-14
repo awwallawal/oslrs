@@ -1,7 +1,8 @@
 # Domain Migration Checklist
 
-> **Current domain:** `oyotradeministry.com.ng`
-> **Status:** Active, working. Migration is optional — triggered when a new domain is purchased.
+> **Current domain:** `oyoskills.com` (Cloudflare-proxied). `oyotradeministry.com.ng` was released from OSLRS 2026-10-14 to the DBPRS project;
+> it is not an OSLRS domain and must not be re-added. The checklist below is the generic migration recipe;
+> where it names `oyotradeministry.com.ng` as the source, read `oyoskills.com`.
 >
 > After Story 9-5, all application code reads domain from env vars.
 > Migration requires **zero code changes** — only config, static files, and ops.
