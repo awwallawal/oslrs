@@ -38,6 +38,10 @@ changed afterwards, and hiding a section does not retract what was entered (sess
 Finding 9, now observed in the field). **No NIN, no marketplace profile on any of them** — not a
 PII exposure. It is consent integrity, and it is growing: 5 → 18 → 28 across three readings.
 
+> ⚠️ **CORRECTION 2026-10-14:** "no marketplace profile on any of them" was false when written. Row `01a11c2f`
+> (badmusalia2, 2026-10-08 16:44 WAT, `consent_marketplace = yes`) has a marketplace profile, created six hours
+> before this reading. See `docs/adjudication-session-2026-10-13-to-14.md` §B.3 and handoff §2az.
+
 This turned the 2026-09-29 measured finding ("declining consent does not end the survey") from a
 question about 9 old public records into **a live hole on the enumerator form**. See §A.2 item 1.
 

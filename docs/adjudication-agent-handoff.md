@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-10-08 · ⛔ **ENUMERATOR TRIAL 2 IS RUNNING AND THE CONSENT HOLE IS LIVE IN THE FIELD — 28 declined-consent submissions in 8 days (§3).** · 📄 Evidence: `docs/adjudication-session-2026-09-30-to-10-08.md` · 🆕 Playbook §2at–§2ax · ✅ F2 (GPS) green for the first time, 98.1 %. · *(Older header, kept for history:)* **Last updated:** 2026-09-25 · ⛔ **READ §3's FIRST BOX: a different-model review found FIFTEEN defects in 13-71 that the dev, a same-model review AND adjudication had all approved. Adjudication's "the work is sound" was WRONG. Read the diff for LOGIC before reading the story's account of it; green gates are a precondition, never evidence.** · ✅ **13-70 + 13-71 + 13-73 all on prod (`1248be3`), all still `review` — none can close** · ⛔ **The enumerator trial is STOPPED deliberately, so 13-71 is deployed and unprovable** · 🆕 **PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-10-14 · ⛔ **`oyotradeministry.com.ng` IS RELEASED FROM OSLRS (to DBPRS) — never re-add it; prod clean-up DONE 2026-10-14 (backups in `/root/backups/domain-release-20261014/`).** · ⛔ **Consent hole: 41 declined-consent enumerator rows at 2026-10-14, and one DOES carry a marketplace profile (the 10-08 record said none).** · 📄 Evidence: `docs/adjudication-session-2026-10-13-to-14.md` · 🆕 `scripts/field-reading.sql` = the field in one command · 🆕 §2ay–§2az. · *(Previous header:)* **Last updated:** 2026-10-08 · ⛔ **ENUMERATOR TRIAL 2 IS RUNNING AND THE CONSENT HOLE IS LIVE IN THE FIELD — 28 declined-consent submissions in 8 days (§3).** · 📄 Evidence: `docs/adjudication-session-2026-09-30-to-10-08.md` · 🆕 Playbook §2at–§2ax · ✅ F2 (GPS) green for the first time, 98.1 %. · *(Older header, kept for history:)* **Last updated:** 2026-09-25 · ⛔ **READ §3's FIRST BOX: a different-model review found FIFTEEN defects in 13-71 that the dev, a same-model review AND adjudication had all approved. Adjudication's "the work is sound" was WRONG. Read the diff for LOGIC before reading the story's account of it; green gates are a precondition, never evidence.** · ✅ **13-70 + 13-71 + 13-73 all on prod (`1248be3`), all still `review` — none can close** · ⛔ **The enumerator trial is STOPPED deliberately, so 13-71 is deployed and unprovable** · 🆕 **PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1401,9 +1401,79 @@ prove delivery from `email_events` (`delivered`/`bounced`) and `email_suppressio
 exit code. pm2 logs rotate daily (`~/.pm2/logs/oslsr-api-out__<date>.log`); an empty grep of the
 live log proves nothing.
 
+### 2ay. ⛔ AN EXTERNAL STATE WRITTEN DOWN AS DONE IS A CLAIM — the "302 redirect" never existed on the ground
+*Added 2026-10-14.*
+
+F-024 §1, Story 9-53, MEMORY and this handoff all said `oyotradeministry.com.ng` "302-redirects to
+oyoskills.com". Measured on the day it was released: NS at WhoGoHost, **no A record**, "Could not
+resolve host". Whether it was never set up or lapsed is unknowable now; four documents repeated it for
+four months because each copied the last. **State that lives outside the repo (DNS, registrar, a SaaS
+setting, a firewall) is re-measured, not re-read, before it is relied on or repeated** — same family as
+§2w, but the artefact is someone else's server. Cheapest test: the runbook's own Verify block
+(`dig`/`curl`), run again, with its output pasted next to the claim.
+
+### 2az. ⭐ "NONE OF THEM HAS X" NEEDS THE QUERY THAT PROVED IT, IN THE RECORD
+*Added 2026-10-14.*
+
+The 10-08 record said the declined-consent rows had "no NIN, no marketplace profile on any of them".
+One row (`01a11c2f`, created 6 hours BEFORE that reading) had a marketplace profile. A universal
+negative is the easiest claim to write and the hardest to notice is wrong, because nothing ever
+contradicts it until someone joins the right table. **Write a "none" claim only with the query beside
+it** (and its join — the profile hung off `consent_marketplace`, a column the claim never looked at).
+Corollary from the same session, an instance of §2t: "0 ID cards downloaded before April" came from an
+audit action first written on **2026-08-17** — a zero from a counter that did not exist yet. Ask
+"since when could this count be non-zero?" before quoting it.
+
 ---
 
-## 3. Current state (2026-10-08) — READ THIS ONE
+## 3. Current state (2026-10-14) — READ THIS ONE
+
+⛔ **PROD SHA IS NOT RECORDED HERE (D6).** At 2026-10-14 prod = `fb2e4b1`, origin one docs commit ahead
+(plus this session's commit), health 200. No code shipped. 📄 **Evidence:
+`docs/adjudication-session-2026-10-13-to-14.md`.** 🆕 **The field in one command:** `scripts/field-reading.sql`
+(read-only, `-v t0=… -v since=…`, header has the ssh line; output is PII — terminal only).
+
+### ⛔ The domain: `oyotradeministry.com.ng` is RELEASED from OSLRS (ruled by Awwal 2026-10-14)
+- It goes to the **DBPRS** project (same Ministry, MTIC). Brief for that project's agent:
+  `Desktop/Ultimate_Content_AI_OS/projects/dbprs-premises-registration/DOMAIN-HANDOVER-oyotradeministry.md`.
+- **D.1 withdrawn** from the transfer schedule; records corrected (legal DSA template, team brief, runbooks,
+  `.env.example`). **Never re-add the domain anywhere in OSLRS.** OSLRS has one domain: `oyoskills.com`.
+- ✅ **Prod clean-up DONE 2026-10-14 17:01 WAT (16:01 UTC)** (denied once by the classifier, then run on Awwal's instruction):
+  two dead nginx files, the expired LE cert and three dead `ODK_*` vars removed; backups in
+  `/root/backups/domain-release-20261014/`; `nginx -t` OK, health 200. Session record §C.4.
+- The "302 redirect" the records described **did not exist** (§2ay).
+
+### ⛔ Consent hole — still writing rows, and wider than recorded
+- **41 declined-consent enumerator surveys at 2026-10-14 16:55 WAT** (zjbadmus 28, badmusalia2 13): 28 → 34 → 39 → 41.
+- A declined survey still collects ~17 answers in a median 80 s; **10 of the 17 sub-minute surveys are declined ones**.
+- **One declined enumerator row has a marketplace profile** (`01a11c2f`) — the 10-08 "none" was wrong (§2az).
+- **Public form:** 13 declined, **11 with a NIN and a marketplace profile**, newest 2026-10-09.
+- The story now needs THREE behaviours on BOTH forms: end on No · no marketplace profile without basic consent ·
+  drop answers already given. Plus a ruling on the 41 + 13 rows.
+
+### Enumerator trial 2 — T0 = 2026-09-30 14:36:10 UTC
+- **191 surveys since T0, GPS 98.4 %, but still two people** (Oluyole has 174 of 183 at R2). A 3-day gap
+  (10-10 → 10-12) then resumed 10-13.
+- **Onboarding unchanged since 10-02:** 9 active (2 working, 7 idle; kemiquad1202 never signed in), **10 expired**.
+  No staff action in the audit log since 10-08. Per-account sequences in the session record §C.1.
+- Roster report (PII, Desktop only): `OSLRS-Enumerator-Status-2026-10-13.{xlsx,pdf}`.
+- Quality: enumerator-captured emails bounce ~10× public (19 % vs 1.8 %); duplicates include an enumerator
+  registered twice on his own phone; 4 minors with guardian consent; **0 of 183 fraud flags reviewed**;
+  `health-alert-digest` sends ~10/day to each of 2 inboxes (alert fatigue).
+
+### ⏭️ NEXT, in priority order
+1. **Consent-gate story** (three behaviours, both forms) + ruling on the 41 + 13 rows.
+2. **Resend the 10 expired** — ids named, the 9 active excluded by id (§2at) · Zainab: address → clear suppression.
+3. **Talk to the two working enumerators** — the No path, duplicates, family/minor registrations.
+4. Name an owner for fraud-flag review · rule whether field work is officially open.
+5. Teardown (10-08 record Part D) · carried queue: 13-73 R1/R8, 13-76 R2, 13-70 R2, 13-72.
+
+---
+
+## 3-old13. Current state (2026-10-08) — superseded by §3 above
+
+⚠️ **Corrected 2026-10-14:** "No NIN or marketplace profile on any" below is false — one row (`01a11c2f`) has a
+marketplace profile (§2az). The domain is no longer "302-redirecting" (§2ay).
 
 ⛔ **PROD SHA IS NOT RECORDED HERE (D6).** At 2026-10-08 21:42 WAT prod = origin = `fb2e4b1`, health
 200, and no code shipped this session. Verify; do not read. 📄 **Evidence for everything below:
@@ -2671,6 +2741,24 @@ adds an `adopted_from_draft` bucket. No schema change (13-49 writes real rows; t
     not the e2e harness written for this exact behaviour. Budget for dry runs accordingly.
 
 ---
+
+## 7y. Session 2026-10-13 → 10-14 — a field reading, the roster, and the old domain let go
+
+📄 **Full record: `docs/adjudication-session-2026-10-13-to-14.md`.**
+
+No code shipped; one prod write (the domain clean-up, on instruction, backed up). The work was measurement and records: a full read-only field
+reading (now `scripts/field-reading.sql`), a per-enumerator roster report for Awwal (PII, Desktop), and
+releasing `oyotradeministry.com.ng` to the DBPRS project — D.1 withdrawn, eight records corrected, and a
+brief written into the DBPRS folder so its agent settles the old-link overlap with a 410 rule.
+
+**What this session got wrong and caught:** "0 ID cards before April" from an audit action that did not
+exist until August (§2az / §2t); a reading time estimated instead of read from the DB clock; a public
+completion range quoted from memory ("4–30 min") when the minimum was 93 s.
+
+**The arc worth remembering:** asked to *free* a domain, the measurement found it had already been
+free for months — the redirect four documents described was never there (§2ay). The real work was not
+DNS; it was the records (a legal template still sending partners to it) and the ownership line in the
+handover.
 
 ## 7x. Session 2026-09-30 → 10-08 — trial 2 re-provisioned, GPS green in the field, and the consent hole went live
 
