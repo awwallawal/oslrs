@@ -23,6 +23,9 @@ import {
   findExpiredDatedResiduals,
   formatResidualHits,
   formatExpiredResiduals,
+  findDatedResidualsDueSoon,
+  formatDueSoonResiduals,
+  DATED_WARNING_DAYS,
   type StoryFile,
 } from '../src/lib/story-residual-guard.js';
 
@@ -53,6 +56,23 @@ const now = new Date();
 
 const hits = findDoneStoriesWithOpenResiduals(stories);
 const expired = findExpiredDatedResiduals(stories, now);
+const dueSoon = findDatedResidualsDueSoon(stories, now);
+
+// WARNS, never fails (added 2026-10-15): five DATED rows surfaced only on the day they fell due.
+// On GitHub Actions each one is also an annotation, so it shows on the run page, not only in the log.
+if (dueSoon.length > 0) {
+  console.warn('');
+  console.warn(`⚠️  story-residual guard: ${dueSoon.length} DATED residual(s) fall due within ${DATED_WARNING_DAYS} days.`);
+  console.warn('   Not failing yet — the build fails the day AFTER the date. Do the work now, or re-date it with a reason.');
+  console.warn('');
+  console.warn(formatDueSoonResiduals(dueSoon, now));
+  console.warn('');
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    for (const h of dueSoon) {
+      console.log(`::warning file=${h.storyFile},title=DATED residual due ${h.dueOn}::${h.residualId} falls due ${h.dueOn} (UTC)`);
+    }
+  }
+}
 
 if (hits.length === 0 && expired.length === 0) {
   console.log(

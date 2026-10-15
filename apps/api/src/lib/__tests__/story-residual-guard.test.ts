@@ -6,6 +6,9 @@ import {
   formatResidualHits,
   formatExpiredResiduals,
   toUtcDateKey,
+  findDatedResidualsDueSoon,
+  formatDueSoonResiduals,
+  DATED_WARNING_DAYS,
 } from '../story-residual-guard.js';
 
 /**
@@ -583,5 +586,41 @@ describe('13-70 review — only the cell that committed to a date may excuse it'
       '| A9 | the monitor | needs production traffic | OPEN — DATED 2026-10-15 |\n';
     expect(findExpiredDatedResiduals([{ path: 'a.md', content }], TODAY).map((h) => h.residualId))
       .toEqual(['A9']);
+  });
+});
+
+describe('2026-10-15 — a DATED deadline WARNS for 7 days before it fails', () => {
+  const ledger = (rows: string) =>
+    `# Story X\n\nStatus: review\n\n## Residuals\n\n| ID | Sev | State | Evidence | Owner |\n|---|---|---|---|---|\n${rows}`;
+  const file = (state: string) => [{ path: 'a.md', content: ledger(`| **R5** — flood ceiling | Medium | ${state} | … | Awwal |\n`) }];
+  const ids = (now: string, state = 'OPEN — DATED 2026-10-15') =>
+    findDatedResidualsDueSoon(file(state), new Date(now)).map((h) => h.residualId);
+
+  it('the window is 7 days', () => {
+    expect(DATED_WARNING_DAYS).toBe(7);
+  });
+
+  it('warns from 7 days ahead through the due day itself, and not one day earlier', () => {
+    expect(ids('2026-10-07T23:59:59.000Z')).toEqual([]); // 8 days ahead
+    expect(ids('2026-10-08T00:00:00.000Z')).toEqual(['R5']); // the five rows of 2026-10-15 would have shown here
+    expect(ids('2026-10-15T23:59:59.000Z')).toEqual(['R5']);
+  });
+
+  it('hands over to the failure the day after: never both, never neither', () => {
+    const now = new Date('2026-10-16T00:00:01.000Z');
+    expect(findDatedResidualsDueSoon(file('OPEN — DATED 2026-10-15'), now)).toEqual([]);
+    expect(findExpiredDatedResiduals(file('OPEN — DATED 2026-10-15'), now)).toHaveLength(1);
+  });
+
+  it('a closed row and a review-proposed closure obey the same rules as the failure', () => {
+    expect(ids('2026-10-10T00:00:00.000Z', '✅ CLOSED 2026-10-12 — was: OPEN — DATED 2026-10-15')).toEqual([]);
+    expect(ids('2026-10-10T00:00:00.000Z', 'PROPOSED-CLOSED by review — DATED 2026-10-15')).toEqual(['R5']);
+  });
+
+  it('says how many days are left, and that the due day is the last one', () => {
+    const at = (now: string) => formatDueSoonResiduals(findDatedResidualsDueSoon(file('OPEN — DATED 2026-10-15'), new Date(now)), new Date(now));
+    expect(at('2026-10-08T12:00:00.000Z')).toContain('due in 7 days');
+    expect(at('2026-10-14T12:00:00.000Z')).toContain('due in 1 day:');
+    expect(at('2026-10-15T12:00:00.000Z')).toContain('TODAY — the build fails from tomorrow');
   });
 });

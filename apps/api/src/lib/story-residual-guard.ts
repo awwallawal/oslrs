@@ -447,6 +447,29 @@ export function toUtcDateKey(now: Date): string {
  */
 export function findExpiredDatedResiduals(files: StoryFile[], now: Date): ExpiredResidualHit[] {
   const today = toUtcDateKey(now);
+  return findOpenDatedResiduals(files).filter((h) => today > h.dueOn);
+}
+
+/** How far ahead the guard WARNS about a DATED deadline. A warning never fails the build. */
+export const DATED_WARNING_DAYS = 7;
+
+/**
+ * Every open DATED row falling due within `days` days (today inclusive). Added 2026-10-15 after five
+ * rows due that day surfaced only when they were hours from failing every push: the fail-on-expiry
+ * gives no notice, so the work arrives the day after it was due. This is the notice.
+ */
+export function findDatedResidualsDueSoon(
+  files: StoryFile[],
+  now: Date,
+  days: number = DATED_WARNING_DAYS,
+): ExpiredResidualHit[] {
+  const today = toUtcDateKey(now);
+  const horizon = toUtcDateKey(new Date(Date.parse(`${today}T00:00:00.000Z`) + days * 86_400_000));
+  return findOpenDatedResiduals(files).filter((h) => h.dueOn >= today && h.dueOn <= horizon);
+}
+
+/** Every DATED row that is not closed, whatever its date. The one scan both verdicts share. */
+function findOpenDatedResiduals(files: StoryFile[]): ExpiredResidualHit[] {
   const hits: ExpiredResidualHit[] = [];
 
   for (const file of files) {
@@ -461,7 +484,6 @@ export function findExpiredDatedResiduals(files: StoryFile[], now: Date): Expire
 
       const dated = DATED_MARKER.exec(datedCell)!;
       const dueOn = dated[1]!;
-      if (today <= dueOn) continue; // not yet due — an undated or future row must never fail
 
       hits.push({
         storyFile: file.path,
@@ -483,6 +505,18 @@ export function formatExpiredResiduals(hits: ExpiredResidualHit[], now: Date): s
   const lines: string[] = [];
   for (const h of hits) {
     lines.push(`  ${h.storyFile}  — residual ${h.residualId} was DATED ${h.dueOn}, and today is ${toUtcDateKey(now)} (UTC):`);
+    lines.push(`      ${h.rowText}`);
+  }
+  return lines.join('\n');
+}
+
+export function formatDueSoonResiduals(hits: ExpiredResidualHit[], now: Date): string {
+  const lines: string[] = [];
+  const today = Date.parse(`${toUtcDateKey(now)}T00:00:00.000Z`);
+  for (const h of hits) {
+    const left = Math.round((Date.parse(`${h.dueOn}T00:00:00.000Z`) - today) / 86_400_000);
+    const when = left === 0 ? 'TODAY — the build fails from tomorrow' : `in ${left} day${left === 1 ? '' : 's'}`;
+    lines.push(`  ${h.storyFile}  — residual ${h.residualId} is DATED ${h.dueOn}, due ${when}:`);
     lines.push(`      ${h.rowText}`);
   }
   return lines.join('\n');
