@@ -179,3 +179,29 @@ describe('validateMinorGuardianConsent (Story 9-55)', () => {
     expect(() => validateMinorGuardianConsent({}, 8)).toThrow(AppError);
   });
 });
+
+/**
+ * ⛔ Story 13-71 R9 (closed 2026-10-15) — A WRONG FENCE DATE CANNOT BE QUIET.
+ *
+ * The fence shipped in deploy 7b13ec3 at 2026-09-23 17:48 UTC, six hours before it took effect, so on
+ * prod it is now CORRECTLY in the past and R9's original idea (fail at boot when the date is past)
+ * would crash every restart. The live hazard is a CHANGE: whoever moves the fence must move it
+ * FORWARD of the push, never back (a past fence refuses genuine offline field work). So the shipped
+ * value is pinned, and any other value must be in the future at the moment the suite runs, which
+ * is the pre-push hook and CI, i.e. immediately before the deploy that would carry it.
+ */
+describe('13-71 R9 — the geopoint fence can only move forward of the push', () => {
+  const SHIPPED = '2026-09-24T00:00:00.000Z';
+
+  it('is either the shipped value, or a value still in the future when the suite runs', async () => {
+    const { GEOPOINT_REQUIREMENT_EFFECTIVE_FROM } = await import('../form-submission-validation.service.js');
+    const value = GEOPOINT_REQUIREMENT_EFFECTIVE_FROM.toISOString();
+    if (value === SHIPPED) return;
+    expect(
+      GEOPOINT_REQUIREMENT_EFFECTIVE_FROM.getTime(),
+      `GEOPOINT_REQUIREMENT_EFFECTIVE_FROM was changed to ${value}, which is already past. A past fence ` +
+        'refuses offline submissions that were valid when captured. Round it FORWARD of the deploy, then ' +
+        'update SHIPPED here once that deploy has landed.',
+    ).toBeGreaterThan(Date.now());
+  });
+});

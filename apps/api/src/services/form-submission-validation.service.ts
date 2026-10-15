@@ -63,9 +63,12 @@ const GEOPOINT_QUESTION_TYPE = 'geopoint';
  * on the 22nd can still arrive on the 23rd.
  *
  * ⛔ A DATE IN SOURCE IS A PROXY FOR "WHEN THIS CODE STARTED RUNNING", and it
- * goes stale silently every time a deploy slips. Residual R9 carries the
- * structural fix (fail loudly at boot when this date is already past); until it
- * lands, CONFIRM THIS VALUE IS STILL IN THE FUTURE IMMEDIATELY BEFORE PUSHING.
+ * goes stale silently every time a deploy slips. ✅ R9 closed 2026-10-15: it shipped
+ * in 7b13ec3 at 2026-09-23 17:48 UTC, six hours early, so it is now CORRECTLY in
+ * the past (a boot-time "must be future" check would crash every restart). What
+ * stops a wrong value is the test 'the geopoint fence can only move forward of
+ * the push': any value other than the shipped one must be in the future when
+ * the pre-push suite and CI run. Move it FORWARD, never back.
  */
 export const GEOPOINT_REQUIREMENT_EFFECTIVE_FROM = new Date('2026-09-24T00:00:00.000Z');
 
