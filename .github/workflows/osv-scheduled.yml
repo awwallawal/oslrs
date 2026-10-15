@@ -9,6 +9,13 @@ name: Scheduled OSV Audit (prod scope)
 # dependency is vulnerable). A red scheduled run notifies the repo admins via
 # GitHub's native scheduled-workflow failure email. Dev-tree findings are
 # surfaced non-blocking via SARIF (same two-tier model).
+#
+# 2026-10-15: the email was not enough. This run went red on 10-05 and 10-12
+# (proxy-addr CRITICAL among four) and nobody saw it until a docs push was
+# blocked on 10-14. A red run now also pages the operator Telegram chat, the
+# same channel the API uses for critical alerts. Needs repo secrets
+# TELEGRAM_BOT_TOKEN + TELEGRAM_OPERATOR_CHAT_ID; without them the step says so
+# in the log and the email remains the only signal.
 
 on:
   schedule:
@@ -80,3 +87,21 @@ jobs:
             osv-full.json
             osv-full.sarif
           retention-days: 30
+
+      # Runs only when an earlier step failed: the BLOCKING gate, or install /
+      # checkout before it (a scan that could not run is also news).
+      - name: Page the operator on Telegram
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OPERATOR_CHAT_ID: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_OPERATOR_CHAT_ID" ]; then
+            echo "::warning::Telegram secrets not set; no page sent. Only GitHub's email reports this failure."
+            exit 0
+          fi
+          TEXT="OSLRS weekly OSV scan FAILED. A production dependency is vulnerable (or the scan could not run). Every deploy will be blocked at lint-and-build until it is fixed. ${RUN_URL}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_OPERATOR_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}" > /dev/null
