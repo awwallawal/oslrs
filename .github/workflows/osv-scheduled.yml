@@ -19,8 +19,11 @@ name: Scheduled OSV Audit (prod scope)
 
 on:
   schedule:
-    # Mondays 06:17 UTC (weekly). Off the hour to avoid the cron thundering herd.
-    - cron: '17 6 * * 1'
+    # DAILY 06:17 UTC (was weekly until 2026-10-15). An advisory published against a dependency
+    # nobody touched blocks the NEXT deploy; a daily run pages within 24 h, usually before anyone
+    # pushes, instead of up to 7 days later in the middle of an unrelated push. Off the hour on
+    # purpose (cron thundering herd).
+    - cron: '17 6 * * *'
   workflow_dispatch: {}
 
 # Scan main's current lockfile regardless of which ref triggered a manual run.

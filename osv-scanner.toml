@@ -15,10 +15,23 @@
 #      `pnpm audit --prod` posture: osv-scanner scans the full lockfile, then
 #      apps/api/scripts/osv-prod-gate.ts keeps ONLY findings whose package is in
 #      pnpm's production dependency closure (`pnpm ls -r --prod --depth Infinity
-#      --json`) and fails the build iff a PROD dependency is vulnerable. This
-#      config file is NOT consulted by the blocking gate — the prod scope makes
-#      the entire dev-tree class evaporate from the deploy-blocking surface, so
-#      no per-CVE ignore is needed to keep it green.
+#      --json`) and fails the build iff a PROD dependency is vulnerable.
+#      ⛔ CORRECTED 2026-10-15: this file IS consulted by the blocking gate. osv-scanner
+#      auto-loads an osv-scanner.toml beside the lockfile without --config; the CI log
+#      of 2026-10-15 14:52 prints "Loaded filter from: /src/osv-scanner.toml" in the
+#      BLOCKING step, and GHSA-hq66 (pdfjs-dist, a PROD dependency) passes the gate
+#      only because of its entry below. Two consequences:
+#        • an entry here is the one-commit way to unblock a deploy: give it an
+#          `ignoreUntil` no more than 14 days out, a reason, and who decided
+#          (see "EMERGENCY UNBLOCK" below). The date re-arms the gate by itself;
+#        • a "dev-only, permanent" entry ALSO silences that advisory in the prod
+#          gate. If xlsx / serialize-javascript / phin ever enter the prod closure,
+#          nothing here blocks it. Re-check the reason when a dep moves to prod.
+#
+#   EMERGENCY UNBLOCK (a fresh advisory on a dependency the push did not touch):
+#     1. Read the advisory against our usage; if exploitable here, FIX, don't waive.
+#     2. Otherwise add [[IgnoredVulns]] id/ignoreUntil (<= 14 days)/reason naming the
+#        assessment and who decided; push. 3. Do the bounded bump within the window.
 #   2. REPORT-ONLY tier — full lockfile, NON-BLOCKING. osv-scanner scans the
 #      whole tree with `--config=osv-scanner.toml` → SARIF → GitHub Security
 #      tab. This preserves dev-tree visibility (a compromised build tool is a

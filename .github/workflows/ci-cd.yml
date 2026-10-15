@@ -82,8 +82,10 @@ jobs:
       #     scan the full lockfile to JSON, then keep only findings whose package
       #     is in pnpm's production closure (`pnpm ls -r --prod`) and fail iff a
       #     PROD dependency is vulnerable. Dev-tree findings never block. The
-      #     scanned set == the real prod set by construction (osv-scanner.toml is
-      #     NOT consulted here). Gate logic: apps/api/src/lib/osv-prod-gate.ts
+      #     scanned set == the real prod set by construction. ⛔ osv-scanner.toml
+      #     IS consulted here (auto-loaded beside the lockfile; the log says "Loaded
+      #     filter from: /src/osv-scanner.toml") — corrected 2026-10-15, see its
+      #     header for what that means. Gate logic: apps/api/src/lib/osv-prod-gate.ts
       #     (unit-tested in the test-api job).
       #   Tier 2 — REPORT-ONLY, non-blocking. Full-tree scan → SARIF → Security
       #     tab + artifact, so a compromised BUILD tool is still surfaced (AC2).
