@@ -289,3 +289,17 @@ result file you did not create in this run).
 run with the clock fixed, is green at 23:59 UTC and red at 00:00:01 UTC on 13-68 R2b, 13-70 R5/R6/R8 and 13-71 R9.
 From 2026-10-16 01:00 WAT every lint, commit, push and CI run fails until each row is done, re-dated with a reason,
 or accepted by Awwal. The 09-30 handoff text listed four rows and missed 13-71 R9. Handoff NEXT 0a.
+
+### F.2 — 2026-10-15 evening: the five dated residuals, done rather than re-dated (Awwal: "do the work and close it with evidence")
+
+| Row | What was done | Evidence | Commit |
+|---|---|---|---|
+| 13-70 R8 | Guard: `PROPOSED-CLOSED` is open; only the id cell's lead may close a dated row | each half mutation-reds its own test; fixed-clock blast radius unchanged (same 5 at 10-16, none new) | `d5f33a6` |
+| 13-71 R9 | Fence pinned: any value other than the shipped one must be future at suite time | first deploy `7b13ec3` 2026-09-23 17:48 UTC, 6 h before effect; 0 waiver events in prod logs 10-01 → 10-15; back-date reds, forward passes | `3b92adf` |
+| 13-70 R5 | Login flood ceiling **100 → 300** by the PRD's own rule | hCaptcha: no per-IP limit published (quota 10,000/month; 78 used in 15 days); bcrypt on prod 268 ms p50 / 278 ms p95 (1 vCPU) | `78b3bc1` |
+| 13-70 R6 | Accepted on R5's figure; watch the monthly quota (reopen at 5,000) | same | (row) |
+| 13-68 R2b | `loginCardinalityWatch`: >20 distinct emails / IP / hour with >80 % failing → one Telegram page | HTTP tests + router wiring; **prod drill 14:48 UTC** with the deployed code, prod Redis, real Telegram: fired at attempt 21, once, keys deleted | `7eccbb2` |
+
+- Pre-push caught one real defect on the way: the ratified mount-order test (`ADJUDICATION D1`) pinned the login stack exactly, and the watch was appended to it. Amended deliberately (controls unchanged, watch pinned last) and folded into the unpushed R2b commit. API suite 4,766 passed / 9 skipped / 0 failed; CI run `38753288155` all green incl. deploy; prod `7eccbb2`, health 200.
+- Prod writes this evening: a bcrypt benchmark (`nice 19`, no writes) and the R2b drill (22 Redis entries under RFC 5737 IP `192.0.2.77`, one `[DRILL]` Telegram message, keys deleted). The first drill attempt failed at import (workspace packages ship as `.ts`; plain `node` cannot load them), wrote nothing; re-run as `node --env-file=/root/oslrs/.env --import tsx` (§2ax).
+- **Not decided here (Awwal's):** 13-70 and 13-71 may now have no open residual rows; moving either story to `done` is a ruling, not a side effect of this pass.
