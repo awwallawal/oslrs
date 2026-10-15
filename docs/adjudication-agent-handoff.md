@@ -1428,8 +1428,12 @@ audit action first written on **2026-08-17** — a zero from a counter that did 
 
 ## 3. Current state (2026-10-14) — READ THIS ONE
 
-⛔ **PROD SHA IS NOT RECORDED HERE (D6).** At 2026-10-14 prod = `fb2e4b1`, origin one docs commit ahead
-(plus this session's commit), health 200. No code shipped. 📄 **Evidence:
+⛔ **PROD SHA IS NOT RECORDED HERE (D6).** At 2026-10-15 13:02 UTC prod = origin = `02ce467`, health 200: verify,
+don't read. 🆕 **2026-10-15: dependency fix shipped** (session record Part F). The OSV prod gate blocked the 10-14
+docs push on four advisories against untouched deps (proxy-addr CRITICAL, not exploitable in our trust config;
+sharp; fast-copy; braces with no fix, removed at the root by moving `@oslsr/testing`'s fast-glob to dev). ⛔ **The
+weekly OSV scan had been red since 10-05 and nobody saw it**; a failed run now pages Telegram, but **only once
+Awwal sets the repo secrets** `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` (NEXT 0). 📄 **Evidence:
 `docs/adjudication-session-2026-10-13-to-14.md`.** 🆕 **The field in one command:** `scripts/field-reading.sql`
 (read-only, `-v t0=… -v since=…`, header has the ssh line; output is PII — terminal only).
 
@@ -1462,6 +1466,10 @@ audit action first written on **2026-08-17** — a zero from a counter that did 
   `health-alert-digest` sends ~10/day to each of 2 inboxes (alert fatigue).
 
 ### ⏭️ NEXT, in priority order
+0. **Awwal: set the two Telegram repo secrets** (`gh secret set TELEGRAM_BOT_TOKEN`, `gh secret set
+   TELEGRAM_OPERATOR_CHAT_ID`, values from prod `.env`). The step fires only on a red run, so the next green
+   Monday proves nothing: confirm the pair once with a manual `sendMessage` to that chat. Until the secrets exist
+   the alert step is a logged warning. Five minutes.
 1. **Consent-gate story** (three behaviours, both forms) + ruling on the 41 + 13 rows.
 2. **Resend the 10 expired** — ids named, the 9 active excluded by id (§2at) · Zainab: address → clear suppression.
 3. **Talk to the two working enumerators** — the No path, duplicates, family/minor registrations.
@@ -2759,6 +2767,13 @@ completion range quoted from memory ("4–30 min") when the minimum was 93 s.
 free for months — the redirect four documents described was never there (§2ay). The real work was not
 DNS; it was the records (a legal template still sending partners to it) and the ownership line in the
 handover.
+
+**Coda, 2026-10-15:** the docs push was blocked by the OSV gate on four advisories nobody had caused; fixed as one
+dependency commit (proxy-addr, sharp, fast-copy bounded; braces removed at the root) and deployed, prod `02ce467`.
+The lesson was the scheduled scan: red for ten days, signal = an email. An alarm that only exists where nobody
+looks is not an alarm; it now pages Telegram once the secrets are set. A second small catch: the push watcher read
+yesterday's result file and called the push done mid-build. A result file you did not create in this run is not a
+result.
 
 ## 7x. Session 2026-09-30 → 10-08 — trial 2 re-provisioned, GPS green in the field, and the consent hole went live
 

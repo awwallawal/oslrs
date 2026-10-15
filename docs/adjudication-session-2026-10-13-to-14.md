@@ -236,3 +236,51 @@ no enumerator ID card can carry it.
 table (coalesce'd), a two-way reconcile (3b), F2, pace, NIN, consent incl. the marketplace cross-check, fraud,
 duplicates (phone / NIN / reversed name), public detail, the staff-sign-in defect, email + masked suppressions, audit
 since `since`. Output is PII — terminal only.
+
+---
+
+## Part F — 2026-10-15: the push that would not deploy, and the scan that had been red for ten days
+
+**What happened.** The four 10-14 commits (`6ec9369` … `3924470`) pushed cleanly, but CI run `38596364528` failed at
+`lint-and-build` on the OSV production-scope gate, so `deploy` was skipped and prod stayed on `fb2e4b1`. Nothing in
+those commits touched a dependency: four advisories had been published against packages already shipping.
+
+| Package | Advisory | Severity | Path into prod | Fix taken |
+|---|---|---|---|---|
+| proxy-addr 2.0.7 | GHSA-jqcg-44mw-7w3h | CRITICAL | **direct** dep of apps/api (`middleware/real-ip.ts`) + express | declaration → `2.0.8`, override `>=2.0.8 <3` |
+| sharp 0.35.4 | GHSA-wq5f-xc86-pv6w (librsvg) | HIGH | direct, apps/api + apps/web | `^0.35.5` |
+| fast-copy 3.0.2 | GHSA-jggr-w7fw-pc2j | MODERATE | pino-pretty | override `>=3.1.0 <4` |
+| braces 3.0.3 | GHSA-vfj7-8cjw-p6xm | HIGH | **packages/testing's own** `fast-glob` | no fix exists: `fast-glob` moved to devDependencies |
+
+- **proxy-addr was not exploitable here.** The flaw makes an IPv4-mapped (`::ffff:a.b.c.d/short`) or zero-leading-bit
+  IPv6 trust subnet match every IPv4 address. Our trust list (`app.ts:127`) is the three presets plus the Cloudflare
+  ranges in `constants/cloudflare-ips.ts`, none of that shape. Fixed anyway. ⛔ *My first report to Awwal said it was
+  "live on prod right now" before reading the advisory's conditions: corrected here.*
+- **braces** had no fixed version. It reached the gate only because `pnpm ls -r --prod` lists each workspace
+  project's own `dependencies`, and `@oslsr/testing` declared `fast-glob` there, although both consumers take the
+  package as a devDependency. Moving it is the root-cause fix (the 9-54 structural-fixes pattern), not an
+  accepted-risk entry. `braces@3.0.3` is still on the VPS disk via build tooling (eslint, rollup, fast-glob); the
+  running API never loads it.
+
+**The weekly scan had already seen it.** `osv-scheduled.yml` failed on **2026-10-05** (run `37326181601`) and
+**2026-10-12** (run `38269976364`). The only signal was GitHub's failure email; nobody acted. Ten days of a red
+CRITICAL, found only because a docs push was blocked.
+
+**Commits (pushed once, 2026-10-15):**
+- `a1af198` `fix(deps)`: the four fixes; `pnpm.comments` overrides + structural-fixes updated.
+- `02ce467` `ci(osv)`: a failed weekly scan pages the operator on Telegram. Needs repo secrets
+  `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` (**not set at 2026-10-15**: `gh secret list` shows only the
+  three deploy secrets); without them the step logs a warning and exits 0.
+
+**Verification, measured:**
+- Prod closure re-listed after install (`pnpm ls -r --prod --depth Infinity`): proxy-addr 2.0.8 on all three paths,
+  sharp 0.35.5, fast-copy 3.1.0, no braces / micromatch / fast-glob.
+- Full pre-push suite (the lockfile forces ALL), api + web + testing cache **misses**: api 4749 passed / 9 skipped
+  (4758), web 3301 passed / 2 todo, testing 64, utils 126 and types 138 (cache replays; sources unchanged).
+- `git ls-remote origin main` = `02ce467`. CI run `38737331872`: every job green incl. `lint-and-build` and `deploy`.
+- Prod read back 2026-10-15 13:02 UTC: HEAD `02ce467`, `nginx -t` OK, the "released to DBPRS" comment present,
+  `oslsr-api` online (restarted 12:55 UTC), health 200, `sharp` loads 0.35.5 / vips 8.18.7, no errors in the API log.
+
+**Caught on the way:** the push watcher read a `push.rc` left from the 10-14 push and reported "exit 0" while the
+suite was still building. The remote ref check exposed it ([never trust a push's exit code], here: never trust a
+result file you did not create in this run).
