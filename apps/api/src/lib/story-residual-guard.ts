@@ -237,13 +237,23 @@ function cells(row: string): string[] {
  * and the guard reported 317 scanned, none open. **The guard did not enforce the one state the
  * standard singles out as blocking.**
  */
-const OPEN_MARKER = /\bOPEN\b|\bDISCHARGE-ON-(?:PUSH|DEPLOY)\b/;
+const OPEN_MARKER = /\bOPEN\b|\bDISCHARGE-ON-(?:PUSH|DEPLOY)\b|\bPROPOSED-CLOSED\b/;
+
+/**
+ * ⛔ Story 13-70 R8 (2026-10-15) — A REVIEW MAY PROPOSE A CLOSURE, NEVER SIGN ONE (handoff §2al).
+ * `PROPOSED-CLOSED` is the state a review writes when it has assembled a closure but the principal
+ * has not ruled. It is OPEN: it blocks `done` and it keeps a DATED deadline armed. Without this the
+ * token's own word CLOSED would excuse the row, which is the signature-nobody-gave failure R8 named.
+ * Stripped before any closure test, so "PROPOSED-CLOSED" can never close a row by containing CLOSED.
+ */
+const PROPOSED_CLOSED = /\bPROPOSED-CLOSED\b/g;
 
 export function isOpenState(state: string): boolean {
   const s = state.toUpperCase();
   if (!OPEN_MARKER.test(s)) return false;
   if (s.includes('REOPEN TRIGGER')) return false; // a monitoring note, not a state
-  return !(s.includes('CLOSED') || s.includes('✅') || s.includes('RESOLVED') || s.includes('DISCHARGED'));
+  const rest = s.replace(PROPOSED_CLOSED, '');
+  return !(rest.includes('CLOSED') || rest.includes('✅') || rest.includes('RESOLVED') || rest.includes('DISCHARGED'));
 }
 
 /**
@@ -389,6 +399,25 @@ const DATED_MARKER = /\bDATED\b\s*:?\s*(20\d\d-[01]\d-[0-3]\d)/;
  */
 const ROW_IS_CLOSED = /\bCLOSED\b|✅|\bRESOLVED\b|\bDISCHARGED\b/;
 
+/**
+ * ⛔ Story 13-70 R8 (2026-10-15) — ONLY THE ID CELL'S LEAD MAY CLOSE A ROW.
+ * The id cell is `**R6** — free-prose description`, and the description routinely QUOTES closure
+ * words ("the sibling was RESOLVED in 13-68", "CLOSED BY DECISION was recorded"). Reading the whole
+ * cell let a row's own prose silently disarm its deadline; R8 itself stayed armed only because its
+ * examples had been moved to another cell. The repo's id-cell closure conventions all sit BEFORE the
+ * first em-dash (`~~**R1**~~ ✅ … — description`, `✅ **R3** — …`), so that segment is the scope.
+ */
+export function idCellLead(idCell: string): string {
+  const cut = idCell.indexOf(' — ');
+  return cut === -1 ? idCell : idCell.slice(0, cut);
+}
+
+/** The closure test for a DATED row: the id cell's lead plus the cell that carries the marker. */
+export function datedRowIsClosed(idCell: string, datedCell: string): boolean {
+  const text = `${idCellLead(idCell)} ${datedCell}`.toUpperCase().replace(PROPOSED_CLOSED, '');
+  return ROW_IS_CLOSED.test(text);
+}
+
 export interface ExpiredResidualHit {
   storyFile: string;
   residualId: string;
@@ -428,7 +457,7 @@ export function findExpiredDatedResiduals(files: StoryFile[], now: Date): Expire
       // only cell that may excuse it. An evidence cell mentioning how another row closed must not.
       const datedCell = row.parts.find((cell) => DATED_MARKER.test(cell));
       if (datedCell === undefined) continue;
-      if (ROW_IS_CLOSED.test(`${row.idCell} ${datedCell}`.toUpperCase())) continue;
+      if (datedRowIsClosed(row.idCell, datedCell)) continue;
 
       const dated = DATED_MARKER.exec(datedCell)!;
       const dueOn = dated[1]!;

@@ -286,6 +286,37 @@ describe('13-70 FR4 — an expired DATED deferral fails the build (AC6/AC8/AC11/
     expect(message).not.toMatch(/line \d+/);
   });
 
+  /**
+   * ⛔ Story 13-70 R8 half (2) — only the id cell's LEAD may close a row. The 2026-09-20 corpus shape:
+   * a dated row whose DESCRIPTION quotes closure vocabulary. Before the fix this returned 0 hits.
+   */
+  it('⛔ R8 a closure word in the id cell DESCRIPTION does not disarm the deadline', () => {
+    const content = ledger(
+      '| **R6** — the sibling question was RESOLVED in 13-68 and R1 was recorded CLOSED BY DECISION | Medium | OPEN — DATED 2026-01-05 | x | Awwal |\n',
+    );
+    expect(findExpiredDatedResiduals([{ path: 'a.md', content }], TODAY).map((h) => h.residualId)).toEqual(['R6']);
+  });
+
+  it('R8 the id-cell LEAD conventions still close a row (✅ and struck, before the em-dash)', () => {
+    const content = ledger(
+      '| ✅ **R3** — description that says OPEN | Medium | was DATED 2026-01-05 | x | Awwal |\n' +
+      '| ~~**R1**~~ ✅ settled — description | Medium | was DATED 2026-01-05 | x | Awwal |\n',
+    );
+    expect(findExpiredDatedResiduals([{ path: 'a.md', content }], TODAY)).toEqual([]);
+  });
+
+  /** ⛔ Story 13-70 R8 half (1) — a review may PROPOSE a closure; only the principal signs one (§2al). */
+  it('⛔ R8 PROPOSED-CLOSED keeps a DATED row armed', () => {
+    const content = ledger('| **R5** — ceiling | Medium | PROPOSED-CLOSED by review — DATED 2026-01-05 | x | Awwal |\n');
+    expect(findExpiredDatedResiduals([{ path: 'a.md', content }], TODAY).map((h) => h.residualId)).toEqual(['R5']);
+  });
+
+  it('⛔ R8 PROPOSED-CLOSED is OPEN for the done-scan, and a real closure beside it still closes', () => {
+    expect(isOpenState('PROPOSED-CLOSED — evidence assembled, awaiting Awwal')).toBe(true);
+    expect(isOpenState('**PROPOSED-CLOSED** 2026-10-15')).toBe(true);
+    expect(isOpenState('was PROPOSED-CLOSED · ✅ CLOSED — ruled by Awwal 2026-10-16')).toBe(false);
+  });
+
   /** 4.1d — one clock, UTC, so the guard cannot flip state at local midnight. */
   it('reads "today" in UTC from the injected clock, not from the local timezone', () => {
     // 2026-08-16T00:30 in UTC+2 is still 2026-08-15 in UTC — the row is due, not overdue.
