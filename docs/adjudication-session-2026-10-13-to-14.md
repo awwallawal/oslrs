@@ -303,3 +303,23 @@ or accepted by Awwal. The 09-30 handoff text listed four rows and missed 13-71 R
 - Pre-push caught one real defect on the way: the ratified mount-order test (`ADJUDICATION D1`) pinned the login stack exactly, and the watch was appended to it. Amended deliberately (controls unchanged, watch pinned last) and folded into the unpushed R2b commit. API suite 4,766 passed / 9 skipped / 0 failed; CI run `38753288155` all green incl. deploy; prod `7eccbb2`, health 200.
 - Prod writes this evening: a bcrypt benchmark (`nice 19`, no writes) and the R2b drill (22 Redis entries under RFC 5737 IP `192.0.2.77`, one `[DRILL]` Telegram message, keys deleted). The first drill attempt failed at import (workspace packages ship as `.ts`; plain `node` cannot load them), wrote nothing; re-run as `node --env-file=/root/oslrs/.env --import tsx` (§2ax).
 - **Not decided here (Awwal's):** 13-70 and 13-71 may now have no open residual rows; moving either story to `done` is a ruling, not a side effect of this pass.
+
+### F.3 — 2026-10-15 late: "work on the thoughts to make it better" (Awwal)
+
+**Done, with evidence**
+
+| Item | What | Evidence |
+|---|---|---|
+| 7-day DATED warning | Guard prints open DATED rows due within 7 days (today inclusive) on every run, `::warning::` on Actions, never fails | 53/53 guard tests (5 new); window mutated to 6 days → 2 red. Replay: artefacts at `7eccbb2` + the new guard at a fixed clock of 2026-10-08 list exactly the five 10-15 rows "due in 7 days", exit 0. `12fe516` |
+| OSV | Scheduled prod-scope scan weekly → **daily**; corrected the two comments that said the blocking gate ignores `osv-scanner.toml` | CI log 2026-10-15 14:52, blocking step: `Loaded filter from: /src/osv-scanner.toml`; GHSA-hq66 (pdfjs-dist, a PROD dep) passes only via its entry. Emergency-unblock recipe written into the toml header. `f3fb9a8` |
+| VPS reboot | Awwal: "if quiet in the last hour, quietly reboot" | Quiet measured 15:38–16:38 UTC: 0 submissions (last 12:00), 0 audit rows, 0 active BullMQ jobs, nginx = one crawler + two logged-out visitors (`refresh` 401). Pre-checks: docker restart policies `unless-stopped`, `pm2-root`/nginx/docker/tailscaled enabled, pm2 dump == live process, AOF on, /boot 15 %. `systemctl reboot` 16:39:21 → up at 16:40 on **6.8.0-147** (was 110), `reboot-required` gone, 0 pm2 restarts, 10 workers initialised, error log clean, health 200 local + public, HEAD `ff55dee`. |
+| 13-70 → done | Awwal's instruction | Guard probe: 10 rows, 0 open. |
+| 13-71 → done | Awwal's instruction + rulings (AskUserQuestion) | Probe found **9 rows still OPEN** — the instruction's premise ("all blocking resolved") was not yet true. R3/R4/R5/R7 discharged on read-only prod data; R2/R6/R8/R14 RULED by Awwal; R1 handed to 13-72 (carried into its Dev Notes). Probe after: 11 rows, 0 open; guard green. |
+
+**R3, recorded as falsified, not rounded.** Prediction (09-20): GPS-carrying enumerator rows >90 % within one week of deploy. Measured, operator accounts excluded, from `7b13ec3` (09-23 17:48 UTC) +7 days: **5 / 8 = 62.5 %**. The 3 misses: 2 people on trial-2 day 1 (09-30), online (lag < 1 s), no `gps_location` key and no reason. After the fence, the code has one path to that shape: U2's legacy-client waiver, i.e. bundles cached before the deploy. One of the two last submitted on 09-15, then sent these 2 rows, then **95 consecutive rows with GPS from 10-03**. From 10-01: **188 / 188**. ⚠️ The 09-30 waiver log lines no longer exist (pm2 keeps 14 days), so this is by elimination over the code paths, not by a log line. ⛔ A query slip on the way: the submitter-id prefix `01a075cc%` matched 17 users, because UUIDv7 ids share a time prefix. Re-run on the full id. Never prefix-match a v7 id.
+
+**R4:** since the fence, 204 enumerator detections, 196 ran the comparison (pre-deploy: 3 ever), **16 ≥ 0.7 partial**, max 0.82. That is R-A8/13-72 input.
+
+**Measured, not built (answers for Awwal)**
+- Node move scoping sweep (subagent, repo) + VPS reads (here): VPS node 20.20.2 from nodesource apt; pnpm **10.28.1** and pm2 6.0.14 are npm globals under `/usr/lib/node_modules`; CI pins pnpm 9.15.0, so the deploy installs with a different pnpm major. `pm2-root.service` runs `/usr/lib/node_modules/pm2/bin/pm2 resurrect` with system PATH; pm2 reports node_version 20.20.2. glibc 2.39.
+- Registrations (respondents by month, public source): May 125 · Jun 3 · Jul 6 · **Aug 241** · Sep 54 · Oct 11 (to the 15th); enumerator source Oct 187 from ~2 active people; 8,278 imported-association respondents (Sep). Public sign-up tracks outreach pushes, not organic traffic.

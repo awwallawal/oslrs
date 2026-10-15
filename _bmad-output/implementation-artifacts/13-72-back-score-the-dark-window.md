@@ -121,6 +121,7 @@ The "pass 2 UNBLOCKED" line is written by the session that deploys 13-73 and app
 ### Out of scope — do NOT widen
 
 - **Threshold changes** → R-A8. This story produces R-A8's input; it does not tune anything.
+- **Carried from 13-71 R1 (handed here by Awwal's ruling, 2026-10-15).** `select_multiple` answer ORDER still counts in the duplicate comparison: `SelectMultipleInput` appends in tap order, so two interviews choosing the same skills in a different order do not match. Sorting before comparing would RAISE match ratios on the exact channel R-A8 calibrates, so decide it together with the thresholds, never before them. Measured 2026-10-15 for context: since the 13-71 fence, 196 enumerator detections ran the comparison and 16 sit at or above the 0.7 partial threshold (max 0.82).
 - **Pass 2** → AC9, blocked on 13-73.
 - **Any change to the engine, the heuristics or the queue** → AC10; that is 13-73's territory.
 - **Import rows** → already scored on the import registry.

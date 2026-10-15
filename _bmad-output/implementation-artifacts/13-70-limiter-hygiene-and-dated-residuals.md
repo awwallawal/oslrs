@@ -1,6 +1,6 @@
 # Story 13.70: Limiter hygiene, and making a dated residual fire
 
-Status: review
+Status: done
 
 <!--
 Authored 2026-09-19 by Bob (SM) via the canonical *create-story workflow
