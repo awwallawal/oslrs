@@ -180,7 +180,8 @@ export function buildLoginRateLimitKey(email: unknown, ip: string | undefined): 
 }
 
 /**
- * Story 13-68 — per-IP FLOOD CEILING for the login routes: 100 requests / IP / 15 min.
+ * Story 13-68 — per-IP FLOOD CEILING for the login routes: 300 requests / IP / 15 min (100 until
+ * 2026-10-15, harmonised by Story 13-70 R5; see the `max` comment below).
  *
  * This is the only login key strangers share, so it is sized for the worst legitimate case behind
  * ONE address — an Opera Mini proxy or a carrier CGNAT gateway carrying many people — not for one
@@ -194,17 +195,20 @@ export function buildLoginRateLimitKey(email: unknown, ip: string | undefined): 
  * ⚠️ It is NOT the bound on a stream of FAILURES (a credential spray, or enumeration of accounts that do not
  * exist — a `user_not_found` login increments nothing account-side, which is why 36 wrong-address enumerator
  * failures left `failed_login_attempts = 0`). Failures are refused by `strictLoginRateLimit` at 61 per hour,
- * long before this ceiling's 100 per 15 minutes; that is the constant not to raise for enumeration.
+ * long before this ceiling's 300 per 15 minutes; that is the constant not to raise for enumeration.
  *
  * ⭐ LOAD-BEARING: this is the ONLY login limiter that counts SUCCESSFUL responses (no
  * skipSuccessfulRequests — and Story 13-70 did not add one; what it added is `skipFailedRequests`
  * bound to a marker predicate, which discounts only the 429s OTHER limiters emit).
  * `loginRateLimit` and `strictLoginRateLimit` both count failures only, so without this ceiling nothing
  * would bound the volume of SUCCESSFUL requests from one IP — e.g. an attacker who already holds valid
- * credentials validating them in bulk. The binding test pins it through the production stack: 100
- * successful logins from one IP are served, the 101st is refused here. It retains the all-response property
+ * credentials validating them in bulk. The binding test pins it through the production stack: LOGIN_IP_FLOOD_MAX
+ * successful logins from one IP are served, the next is refused here. It retains the all-response property
  * the stack used to get from strict; do not add skipSuccessfulRequests to it.
  */
+/** Story 13-70 R5 (2026-10-15): harmonised with the Tier-1 flood peers. Tests read this constant. */
+export const LOGIN_IP_FLOOD_MAX = 300;
+
 export const loginIpFloodLimit = rateLimit({
   store: isTestMode() ? undefined : new RedisStore({
     // @ts-expect-error - Known type mismatch with ioredis
@@ -237,21 +241,26 @@ export const loginIpFloodLimit = rateLimit({
   // roughly seventeen simultaneous people to spend the same budget, against a measured concurrency
   // of three. FR1 did not raise the number; it changed who can spend it.
   //
-  // ⚠️ THE NUMBER ITSELF IS STILL UNDER A DATED REVIEW, and it is not this comment's to move. The
-  // PRD's flood-ceiling divergence ruling (2026-09-17) permits login's 100 against its Tier-1 peers'
-  // 300 only because this ceiling also bounds the hCaptcha `siteverify` call and the bcrypt work
-  // behind it — and it requires BOTH costs to be measured by **2026-10-15**, harmonising to 300 if
-  // neither constrains. Story 13-70 **R5** carries that date. ⛔ And Story 13-70 **R6** records that
-  // FR1 moved the two halves of that justification in OPPOSITE directions: bcrypt is bounded better
-  // (a request refused downstream never reaches it), siteverify worse (it already made the call).
-  // Measured in `login-rate-limit.binding.test.ts`: 40 captcha-passing requests refused by the burst
-  // limiter cost 40 siteverify calls while this counter peaked at 6.
+  // ✅ HARMONISED 100 → 300 ON 2026-10-15 (Story 13-70 R5/R6), by the PRD's own pre-written rule:
+  // the flood-ceiling divergence ruling (2026-09-17) let login sit at 100 against its Tier-1 peers'
+  // 300 only because this ceiling also bounds hCaptcha `siteverify` and bcrypt, and said "if neither
+  // constrains, login harmonises to 300/15 min and this exception is deleted". Both were measured:
+  //   • hCaptcha publishes NO per-IP or per-secret siteverify limit (docs, terms, plans read
+  //     2026-10-15). The "400/IP/hour" was never a vendor figure. Its one real constraint is a
+  //     10,000/month free-tier quota, which no per-IP ceiling bounds (one IP at 100/15 min could
+  //     still send 9,600 a day); prod made 78 siteverify calls in 15 days.
+  //   • bcrypt cost 12 on the 1-vCPU prod VPS: p50 268 ms, p95 278 ms (≈3.7/s). Per IP, FAILED
+  //     attempts are bounded by strict (60/h, ≈16 CPU-s/h); this ceiling only bounds SUCCESSES,
+  //     which need valid credentials. At 300 that is ≤ 1,200/h, ≈9 % of the CPU, from one IP that
+  //     already holds 1,200 working passwords.
+  // Neither constrains, so 300. It also widens the shared-proxy headroom: ≈50 concurrent people
+  // behind one address at 6 counted requests each, against 19 real field accounts in total.
   //
-  // REOPEN TRIGGER: any `auth.login_ip_flood_limit_exceeded` whose IP reverse-resolves to
-  // opera-mini.net or a Nigerian carrier CGNAT range, **or the operator's own IP during a dev/UAT
-  // session** (nine harness accounts share one desk), **or the count of real field accounts
-  // exceeding 19** — 13-71 grows the cohort by design.
-  max: 100,
+  // REOPEN TRIGGER: any `auth.login_ip_flood_limit_exceeded` from an address that is NOT an
+  // opera-mini.net / carrier CGNAT range (a single host at 300 is a bulk-validation run, not a
+  // crowd); monthly siteverify volume above 5,000 (half the free quota); or a VPS resize that
+  // changes the bcrypt figure.
+  max: LOGIN_IP_FLOOD_MAX,
   // ⛔ STORY 13-70 FR1 — A REFUSAL IS NOT A REQUEST (PRD NFR4.4.d). Ruled by Awwal, adjudication
   // 2026-09-20: mark and ignore (Option B), not a status filter (Option A).
   //

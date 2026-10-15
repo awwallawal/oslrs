@@ -41,6 +41,7 @@ const {
   loginIpFloodLimit,
   strictLoginRateLimit,
   shouldSkipRateLimit,
+  LOGIN_IP_FLOOD_MAX: FLOOD,
 } = await import('../login-rate-limit.js');
 const { verifyCaptcha } = await import('../captcha.js');
 const { default: authRouter } = await import('../../routes/auth.routes.js');
@@ -283,10 +284,18 @@ describe('login limiters — binding, real route stacks (Story 13-68)', () => {
     });
   });
 
-  describe('loginIpFloodLimit — per IP, 100 / 15 min, ALL responses (the first layer; the only all-response login ceiling)', () => {
-    it('AC6 alone: allows 100 requests from one IP, refuses the 101st — even when every email is different (the spray)', async () => {
+  describe('loginIpFloodLimit — per IP, LOGIN_IP_FLOOD_MAX (300) / 15 min, ALL responses (the first layer; the only all-response login ceiling)', () => {
+    // ⛔ Story 13-70 R5 (2026-10-15). The PRD's divergence ruling said "if neither constrains, login
+    // harmonises to 300/15 min and this exception is deleted"; hCaptcha (no per-IP limit published) and
+    // bcrypt (268 ms p50 on the prod VPS; failures bounded by strict) were measured and neither does.
+    // The tests below read FLOOD, so this is the line that makes a silent move back to 100 visible.
+    it('R5 the login flood ceiling is harmonised with its Tier-1 peers at 300', () => {
+      expect(FLOOD).toBe(300);
+    });
+
+    it('AC6 alone: allows FLOOD requests from one IP, refuses the next — even when every email is different (the spray)', async () => {
       const ip = '10.6.0.1';
-      const statuses = await repeat(100, (i) => attempt(floodOnly, ip, `ac6-spray-${i}@gmail.com`));
+      const statuses = await repeat(FLOOD, (i) => attempt(floodOnly, ip, `ac6-spray-${i}@gmail.com`));
       expect(statuses.filter((s) => s === 429)).toHaveLength(0);
 
       const refused = await attempt(floodOnly, ip, 'ac6-spray-101@gmail.com');
@@ -302,17 +311,17 @@ describe('login limiters — binding, real route stacks (Story 13-68)', () => {
 
     it('AC6 alone: counts successful logins too (a flood ceiling counts everything)', async () => {
       const ip = '10.6.1.1';
-      const statuses = await repeat(101, (i) => attempt(floodOnly, ip, `ac6-ok-${i}@gmail.com`, PASSWORD_OK));
-      expect(statuses.slice(0, 100)).toEqual(Array(100).fill(200));
-      expect(statuses[100]).toBe(429);
+      const statuses = await repeat(FLOOD + 1, (i) => attempt(floodOnly, ip, `ac6-ok-${i}@gmail.com`, PASSWORD_OK));
+      expect(statuses.slice(0, FLOOD)).toEqual(Array(FLOOD).fill(200));
+      expect(statuses[FLOOD]).toBe(429);
     });
 
     // LOAD-BEARING. Strict counts failures only, so SUCCESSFUL request volume from one IP is bounded by nothing
-    // but this ceiling. Remove it from the route and request 101 is served.
-    it('AC6 load-bearing: through the production stack, 100 successful logins from one IP are served and the 101st is refused by the FLOOD ceiling', async () => {
+    // but this ceiling. Remove it from the route and request FLOOD + 1 is served.
+    it('AC6 load-bearing: through the production stack, FLOOD successful logins from one IP are served and the next is refused by the FLOOD ceiling', async () => {
       const ip = '10.6.2.1';
-      const statuses = await repeat(100, (i) => attempt(fullStack, ip, `ac6-stack-${i}@gmail.com`, PASSWORD_OK));
-      expect(statuses).toEqual(Array(100).fill(200));
+      const statuses = await repeat(FLOOD, (i) => attempt(fullStack, ip, `ac6-stack-${i}@gmail.com`, PASSWORD_OK));
+      expect(statuses).toEqual(Array(FLOOD).fill(200));
 
       const refused = await attempt(fullStack, ip, 'ac6-stack-101@gmail.com', PASSWORD_OK);
       expect(refused.status).toBe(429);
@@ -322,7 +331,7 @@ describe('login limiters — binding, real route stacks (Story 13-68)', () => {
 
     it('it counts the requests the captcha refuses, so the hCaptcha verification call is bounded per IP', async () => {
       const ip = '10.6.3.1';
-      expect(await repeat(100, (i) => attempt(fullStack, ip, `flood-cap-${i}@gmail.com`, 'x', 'forged'))).toEqual(Array(100).fill(400));
+      expect(await repeat(FLOOD, (i) => attempt(fullStack, ip, `flood-cap-${i}@gmail.com`, 'x', 'forged'))).toEqual(Array(FLOOD).fill(400));
       const refused = await attempt(fullStack, ip, 'flood-cap-ok@gmail.com', PASSWORD_OK);
       expect(refused.status).toBe(429);
       expect(warnedWith('auth.login_ip_flood_limit_exceeded')).toHaveLength(1);
@@ -402,7 +411,7 @@ describe('login limiters — binding, real route stacks (Story 13-68)', () => {
   /**
    * ⛔ Story 13-70 R6 — WHAT FR1 COST, MEASURED AND PINNED RATHER THAN DISCOVERED LATER.
    *
-   * The PRD's flood-ceiling divergence ruling (2026-09-17) lets login sit at 100/15min while its
+   * The PRD's flood-ceiling divergence ruling (2026-09-17) let login sit at 100/15min (harmonised to 300 on 2026-10-15, R5) while its
    * Tier-1 peers sit at 300, on ONE stated justification: *being mounted ahead of the CAPTCHA, it
    * also bounds the external hCaptcha `siteverify` call and the bcrypt work behind it.*
    *
@@ -496,29 +505,29 @@ describe('login limiters — binding, real route stacks (Story 13-68)', () => {
 
     it('the ceiling still counts its OWN refusals — the self-skip trap Option A would have introduced', async () => {
       const ip = '10.70.4.1';
-      // 100 successful logins fill the ceiling; the 101st is refused BY THE CEILING.
-      expect(await repeatSettled(100, (i) => attempt(probedStack, ip, `fr1-own-${i}@gmail.com`, PASSWORD_OK)))
-        .toEqual(Array(100).fill(200));
+      // FLOOD successful logins fill the ceiling; the next is refused BY THE CEILING.
+      expect(await repeatSettled(FLOOD, (i) => attempt(probedStack, ip, `fr1-own-${i}@gmail.com`, PASSWORD_OK)))
+        .toEqual(Array(FLOOD).fill(200));
       expect(await repeatSettled(3, (i) => attempt(probedStack, ip, `fr1-own-x${i}@gmail.com`, PASSWORD_OK)))
         .toEqual([429, 429, 429]);
 
       // The probe sits BEHIND the ceiling, so a request the CEILING itself refuses never reaches it:
-      // 100 probe readings, not 103. The count for those three is read from the log line instead —
+      // FLOOD probe readings, not FLOOD + 3. The count for those three is read from the log line instead —
       // which is `attempts`, the field R1's reopen trigger is written against.
-      expect(floodUsed).toHaveLength(100);
+      expect(floodUsed).toHaveLength(FLOOD);
       // It stamps its OWN name (the rule is uniform), and ignores only OTHER limiters' refusals —
       // which is exactly why its own three 429s below are still counted.
-      expect(refusedBy.slice(100)).toEqual([
+      expect(refusedBy.slice(FLOOD)).toEqual([
         'loginIpFloodLimit', 'loginIpFloodLimit', 'loginIpFloodLimit',
       ]);
 
       // Nothing stamped the marker, so nothing was given back: the count keeps climbing past `max`
       // and `attempts` keeps meaning "requests from this IP". Under the rejected Option A it would
-      // pin at 101 forever, and a spray would be indistinguishable from eleven honest enumerators.
+      // pin at FLOOD + 1 forever, and a spray would be indistinguishable from eleven honest enumerators.
       expect(warnedWith('auth.login_ip_flood_limit_exceeded')).toEqual([
-        expect.objectContaining({ keyedBy: 'ip', attempts: 101 }),
-        expect.objectContaining({ attempts: 102 }),
-        expect.objectContaining({ attempts: 103 }),
+        expect.objectContaining({ keyedBy: 'ip', attempts: FLOOD + 1 }),
+        expect.objectContaining({ attempts: FLOOD + 2 }),
+        expect.objectContaining({ attempts: FLOOD + 3 }),
       ]);
     });
 
