@@ -7,6 +7,7 @@ import { authenticate } from '../middleware/auth.js';
 import { verifyCaptcha } from '../middleware/captcha.js';
 import { loginRateLimit, loginIpFloodLimit, strictLoginRateLimit, refreshRateLimit } from '../middleware/login-rate-limit.js';
 import { mfaRateLimit } from '../middleware/mfa-rate-limit.js';
+import { loginCardinalityWatch } from '../middleware/login-cardinality-watch.js';
 import { requireFreshReAuth } from '../middleware/require-fresh-reauth.js';
 import { passwordResetRateLimit, passwordResetCompletionRateLimit, passwordResetCompletionIpFloodLimit } from '../middleware/password-reset-rate-limit.js';
 // Story 9-12 Task 10.3 (2026-05-11 session 8) — `resendVerificationRateLimit`,
@@ -30,7 +31,7 @@ router.post('/activate/:token', activationIpFloodLimit, activationRateLimit, Aut
 
 // Staff login - rate limited + CAPTCHA protected
 // Story 13-68 — two axes, because a shared proxy IP is not a person. ⛔ THE ORDER IS THE CONTROL (review 2026-09-16):
-// 1. loginIpFloodLimit (100/IP/15min, ALL responses) - first, so it bounds everything behind it, the hCaptcha
+// 1. loginIpFloodLimit (300/IP/15min since 2026-10-15, ALL responses) - first, so it bounds everything behind it, the hCaptcha
 //    verification call included; the only layer bounding successful volume per IP.
 //    ⛔ Story 13-70 FR1: being FIRST is also why it is the only limiter that can see every other one's 429.
 //    3 and 4 stamp res.locals.rateLimitRefusedBy and this ceiling hands its own increment back — so "ALL
@@ -41,6 +42,8 @@ router.post('/activate/:token', activationIpFloodLimit, activationRateLimit, Aut
 // 3. loginRateLimit (5 FAILED/EMAIL/15min) - one person's budget; IP fallback when no email (MFA step 2)
 // 4. strictLoginRateLimit (60 FAILED/IP/hour) - LAST, so it is charged only for captcha-passing attempts a person's
 //    own budget allowed: one person spends at most 20/hour of it, which is what makes 60 = 3 people x 20 (review M1)
+// 5. loginCardinalityWatch - Story 13-68 R2b (2026-10-15): DETECTION, refuses nothing. Mounted LAST so it only sees
+//    attempts the controller answers; pages Telegram when one IP tries >20 distinct emails in an hour with >80% failing.
 // Account lockout (AuthService: 10 failures → 30 min, cleared on expiry) and MFA sit behind these.
 // login-rate-limit.binding.test.ts mounts THIS stack, read from the router, and pins each property.
 router.post('/staff/login',
@@ -48,6 +51,7 @@ router.post('/staff/login',
   verifyCaptcha,
   loginRateLimit,
   strictLoginRateLimit,
+  loginCardinalityWatch,
   AuthController.staffLogin
 );
 
@@ -57,6 +61,7 @@ router.post('/public/login',
   verifyCaptcha,
   loginRateLimit,
   strictLoginRateLimit,
+  loginCardinalityWatch,
   AuthController.publicLogin
 );
 

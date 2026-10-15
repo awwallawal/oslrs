@@ -44,6 +44,7 @@ const {
   LOGIN_IP_FLOOD_MAX: FLOOD,
 } = await import('../login-rate-limit.js');
 const { verifyCaptcha } = await import('../captcha.js');
+const { loginCardinalityWatch } = await import('../login-cardinality-watch.js');
 const { default: authRouter } = await import('../../routes/auth.routes.js');
 
 const PASSWORD_OK = 'correct-password';
@@ -189,8 +190,11 @@ describe('login limiters — binding, real route stacks (Story 13-68)', () => {
   // needs an assertion that fails when it changes.
   it('ADJUDICATION D1: the ratified mount order is exactly flood -> captcha -> per-email -> strict', () => {
     const expected = [loginIpFloodLimit, verifyCaptcha, loginRateLimit, strictLoginRateLimit];
+    // Story 13-68 R2b (2026-10-15): the password routes append the cardinality WATCH after the four
+    // controls. It refuses nothing, so the ratified order of the controls is unchanged; it must be LAST
+    // so it only sees answers the controller gave.
     for (const path of ['/staff/login', '/public/login']) {
-      expect(productionMiddleware(path)).toEqual(expected);
+      expect(productionMiddleware(path)).toEqual([...expected, loginCardinalityWatch]);
     }
     // The MFA step-2 routes carry the same four, then mfaRateLimit.
     for (const path of ['/login/mfa', '/login/mfa-backup']) {
