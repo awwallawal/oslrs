@@ -284,3 +284,8 @@ CRITICAL, found only because a docs push was blocked.
 **Caught on the way:** the push watcher read a `push.rc` left from the 10-14 push and reported "exit 0" while the
 suite was still building. The remote ref check exposed it ([never trust a push's exit code], here: never trust a
 result file you did not create in this run).
+
+**Found while checking the handoff (2026-10-15):** five residuals carry `DATED 2026-10-15`. The story-residual guard,
+run with the clock fixed, is green at 23:59 UTC and red at 00:00:01 UTC on 13-68 R2b, 13-70 R5/R6/R8 and 13-71 R9.
+From 2026-10-16 01:00 WAT every lint, commit, push and CI run fails until each row is done, re-dated with a reason,
+or accepted by Awwal. The 09-30 handoff text listed four rows and missed 13-71 R9. Handoff NEXT 0a.

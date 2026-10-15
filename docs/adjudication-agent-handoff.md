@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-10-14 · ⛔ **`oyotradeministry.com.ng` IS RELEASED FROM OSLRS (to DBPRS) — never re-add it; prod clean-up DONE 2026-10-14 (backups in `/root/backups/domain-release-20261014/`).** · ⛔ **Consent hole: 41 declined-consent enumerator rows at 2026-10-14, and one DOES carry a marketplace profile (the 10-08 record said none).** · 📄 Evidence: `docs/adjudication-session-2026-10-13-to-14.md` · 🆕 `scripts/field-reading.sql` = the field in one command · 🆕 §2ay–§2az. · *(Previous header:)* **Last updated:** 2026-10-08 · ⛔ **ENUMERATOR TRIAL 2 IS RUNNING AND THE CONSENT HOLE IS LIVE IN THE FIELD — 28 declined-consent submissions in 8 days (§3).** · 📄 Evidence: `docs/adjudication-session-2026-09-30-to-10-08.md` · 🆕 Playbook §2at–§2ax · ✅ F2 (GPS) green for the first time, 98.1 %. · *(Older header, kept for history:)* **Last updated:** 2026-09-25 · ⛔ **READ §3's FIRST BOX: a different-model review found FIFTEEN defects in 13-71 that the dev, a same-model review AND adjudication had all approved. Adjudication's "the work is sound" was WRONG. Read the diff for LOGIC before reading the story's account of it; green gates are a precondition, never evidence.** · ✅ **13-70 + 13-71 + 13-73 all on prod (`1248be3`), all still `review` — none can close** · ⛔ **The enumerator trial is STOPPED deliberately, so 13-71 is deployed and unprovable** · 🆕 **PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-10-15 · ⛔ **FIVE DATED RESIDUALS EXPIRE AT 2026-10-16 00:00 UTC (01:00 WAT): every lint, commit, push and CI run goes RED until each is done, re-dated with a reason, or accepted by Awwal** (13-68 R2b · 13-70 R5/R6/R8 · 13-71 R9; measured with the guard at fixed clocks, §3 NEXT 0a). · 🛡️ **2026-10-15: the OSV gate blocked the 10-14 docs push (proxy-addr CRITICAL + 3 untouched deps) → fixed and deployed; the weekly scan had been red since 10-05 unseen → Telegram page on failure, inert until the repo secrets are set (NEXT 0b).** · 📄 Evidence: session record Part F. · *(Previous header:)* **Last updated:** 2026-10-14 · ⛔ **`oyotradeministry.com.ng` IS RELEASED FROM OSLRS (to DBPRS) — never re-add it; prod clean-up DONE 2026-10-14 (backups in `/root/backups/domain-release-20261014/`).** · ⛔ **Consent hole: 41 declined-consent enumerator rows at 2026-10-14, and one DOES carry a marketplace profile (the 10-08 record said none).** · 📄 Evidence: `docs/adjudication-session-2026-10-13-to-14.md` · 🆕 `scripts/field-reading.sql` = the field in one command · 🆕 §2ay–§2az. · *(Previous header:)* **Last updated:** 2026-10-08 · ⛔ **ENUMERATOR TRIAL 2 IS RUNNING AND THE CONSENT HOLE IS LIVE IN THE FIELD — 28 declined-consent submissions in 8 days (§3).** · 📄 Evidence: `docs/adjudication-session-2026-09-30-to-10-08.md` · 🆕 Playbook §2at–§2ax · ✅ F2 (GPS) green for the first time, 98.1 %. · *(Older header, kept for history:)* **Last updated:** 2026-09-25 · ⛔ **READ §3's FIRST BOX: a different-model review found FIFTEEN defects in 13-71 that the dev, a same-model review AND adjudication had all approved. Adjudication's "the work is sound" was WRONG. Read the diff for LOGIC before reading the story's account of it; green gates are a precondition, never evidence.** · ✅ **13-70 + 13-71 + 13-73 all on prod (`1248be3`), all still `review` — none can close** · ⛔ **The enumerator trial is STOPPED deliberately, so 13-71 is deployed and unprovable** · 🆕 **PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1426,14 +1426,15 @@ audit action first written on **2026-08-17** — a zero from a counter that did 
 
 ---
 
-## 3. Current state (2026-10-14) — READ THIS ONE
+## 3. Current state (2026-10-15) — READ THIS ONE
 
 ⛔ **PROD SHA IS NOT RECORDED HERE (D6).** At 2026-10-15 13:02 UTC prod = origin = `02ce467`, health 200: verify,
 don't read. 🆕 **2026-10-15: dependency fix shipped** (session record Part F). The OSV prod gate blocked the 10-14
 docs push on four advisories against untouched deps (proxy-addr CRITICAL, not exploitable in our trust config;
 sharp; fast-copy; braces with no fix, removed at the root by moving `@oslsr/testing`'s fast-glob to dev). ⛔ **The
 weekly OSV scan had been red since 10-05 and nobody saw it**; a failed run now pages Telegram, but **only once
-Awwal sets the repo secrets** `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` (NEXT 0). 📄 **Evidence:
+Awwal sets the repo secrets** `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID` (NEXT 0b). ⛔ **Five DATED residuals expire 2026-10-16 00:00 UTC and
+turn every build red (NEXT 0a).** 📄 **Evidence:
 `docs/adjudication-session-2026-10-13-to-14.md`.** 🆕 **The field in one command:** `scripts/field-reading.sql`
 (read-only, `-v t0=… -v since=…`, header has the ssh line; output is PII — terminal only).
 
@@ -1466,7 +1467,14 @@ Awwal sets the repo secrets** `TELEGRAM_BOT_TOKEN` + `TELEGRAM_OPERATOR_CHAT_ID`
   `health-alert-digest` sends ~10/day to each of 2 inboxes (alert fatigue).
 
 ### ⏭️ NEXT, in priority order
-0. **Awwal: set the two Telegram repo secrets** (`gh secret set TELEGRAM_BOT_TOKEN`, `gh secret set
+0a. ⛔ **Five DATED residuals expire 2026-10-16 00:00 UTC** and the story-residual guard (part of `lint`) then
+   fails every commit, push and CI run. Measured 2026-10-15 by running `scripts/lint-story-residuals.ts` with the
+   clock fixed: green at 23:59 UTC, red at 00:00:01 on **13-68 R2b** (cardinality monitor), **13-70 R5** (login
+   ceiling 100 vs tier 300), **R6** (captcha/bcrypt ordering), **R8** (review signing in the principal's name),
+   **13-71 R9** (`GEOPOINT_REQUIREMENT_EFFECTIVE_FROM` rots). The §3-old record listed four and missed R9. Each
+   needs a ruling **from Awwal** (§2al: adjudication may propose, never sign): do it, re-date it with a reason, or
+   accept it with evidence. Never delete the `DATED` marker to get green; that is the guard working.
+0b. **Awwal: set the two Telegram repo secrets** (`gh secret set TELEGRAM_BOT_TOKEN`, `gh secret set
    TELEGRAM_OPERATOR_CHAT_ID`, values from prod `.env`). The step fires only on a red run, so the next green
    Monday proves nothing: confirm the pair once with a manual `sendMessage` to that chat. Until the secrets exist
    the alert step is a logged warning. Five minutes.
