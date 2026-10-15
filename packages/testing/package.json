@@ -24,14 +24,14 @@
     "lint": "eslint --config ../../eslint.config.packages.js src"
   },
   "dependencies": {
-    "@oslsr/utils": "workspace:*",
-    "fast-glob": "^3.3.3"
+    "@oslsr/utils": "workspace:*"
   },
   "peerDependencies": {
     "vitest": "^4.1.8"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "fast-glob": "^3.3.3",
     "typescript": "^5.6.3",
     "vitest": "^4.1.8"
   }
