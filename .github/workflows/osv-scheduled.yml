@@ -13,9 +13,9 @@ name: Scheduled OSV Audit (prod scope)
 # 2026-10-15: the email was not enough. This run went red on 10-05 and 10-12
 # (proxy-addr CRITICAL among four) and nobody saw it until a docs push was
 # blocked on 10-14. A red run now also pages the operator Telegram chat, the
-# same channel the API uses for critical alerts. Needs repo secrets
-# TELEGRAM_BOT_TOKEN + TELEGRAM_OPERATOR_CHAT_ID; without them the step says so
-# in the log and the email remains the only signal.
+# same channel the API uses for critical alerts, via the shared action
+# .github/actions/telegram-page (Story 13-77): secrets set 2026-10-16, a missing
+# secret now FAILS the page job, and `drill: true` proves the channel on demand.
 
 on:
   schedule:
@@ -24,7 +24,12 @@ on:
     # pushes, instead of up to 7 days later in the middle of an unrelated push. Off the hour on
     # purpose (cron thundering herd).
     - cron: '17 6 * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      drill:
+        description: 'Send a [DRILL] page to the operator chat (proves the alert channel; the scan still runs)'
+        type: boolean
+        default: false
 
 # Scan main's current lockfile regardless of which ref triggered a manual run.
 concurrency:
@@ -91,20 +96,26 @@ jobs:
             osv-full.sarif
           retention-days: 30
 
-      # Runs only when an earlier step failed: the BLOCKING gate, or install /
-      # checkout before it (a scan that could not run is also news).
-      - name: Page the operator on Telegram
-        if: failure()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_OPERATOR_CHAT_ID: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_OPERATOR_CHAT_ID" ]; then
-            echo "::warning::Telegram secrets not set; no page sent. Only GitHub's email reports this failure."
-            exit 0
-          fi
-          TEXT="OSLRS weekly OSV scan FAILED. A production dependency is vulnerable (or the scan could not run). Every deploy will be blocked at lint-and-build until it is fixed. ${RUN_URL}"
-          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_OPERATOR_CHAT_ID}" \
-            --data-urlencode "text=${TEXT}" > /dev/null
+  # Story 13-77 AC2 — page the operator. Its own job, so a drill can prove the channel
+  # without anything having to fail. It pages when the scan job failed for ANY reason:
+  # the BLOCKING gate, or install / checkout before it (a scan that could not run is
+  # also news).
+  page:
+    needs: osv-prod-scheduled
+    if: always() && (needs.osv-prod-scheduled.result == 'failure' || inputs.drill == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          sparse-checkout: .github/actions
+      - uses: ./.github/actions/telegram-page
+        with:
+          bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
+          # A REAL failure during a drill run is paged as real, never tagged [DRILL].
+          drill: ${{ (inputs.drill == true && needs.osv-prod-scheduled.result != 'failure') && 'true' || 'false' }}
+          text: "🛡️ OSLRS daily OSV scan FAILED: a production dependency is vulnerable, or the scan could not run. Every deploy is blocked at lint-and-build until it is fixed. Unblock recipe: osv-scanner.toml header (EMERGENCY UNBLOCK)."

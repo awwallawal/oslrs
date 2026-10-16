@@ -29,6 +29,10 @@ name: Prod Verify (read-only)
 on:
   workflow_dispatch:
     inputs:
+      drill:
+        description: 'Send a [DRILL] page to the operator chat and skip the SSH verify (proves the alert channel)'
+        type: boolean
+        default: false
       control_email:
         description: 'Optional: a positive-control address to check for ledger/suppression rows (e.g. lawalkolade+radio4@gmail.com)'
         required: false
@@ -57,7 +61,8 @@ jobs:
     name: Read-only prod verification
     # Dispatch-only: the daily schedule exists for `edge-freshness`, not to SSH into
     # prod and run psql every morning.
-    if: github.event_name == 'workflow_dispatch'
+    # A drill (Story 13-77) proves the pager only; it must not SSH into prod.
+    if: github.event_name == 'workflow_dispatch' && inputs.drill != true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -493,3 +498,26 @@ jobs:
             exit 1
           fi
           echo "OK — all $total precache entries resolve. A returning browser can install this worker."
+
+  # Story 13-77 AC2 — page the operator when the DAILY edge check fails. Before this, a
+  # red scheduled run reached only GitHub's email; the incident this check exists for
+  # ran six days unseen. Manual runs are watched by whoever started them, so only the
+  # schedule pages (plus an explicit drill).
+  page:
+    needs: edge-freshness
+    if: always() && ((github.event_name == 'schedule' && needs.edge-freshness.result == 'failure') || inputs.drill == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/actions
+      - uses: ./.github/actions/telegram-page
+        with:
+          bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
+          # A REAL failure during a drill run is paged as real, never tagged [DRILL].
+          drill: ${{ (inputs.drill == true && needs.edge-freshness.result != 'failure') && 'true' || 'false' }}
+          text: "🌐 OSLRS edge check FAILED: the service worker served at oyoskills.com is cached too long or precaches assets that do not resolve. Returning users may not receive deploys (the 2026-08-10 freeze shape)."

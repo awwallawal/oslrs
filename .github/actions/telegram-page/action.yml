@@ -1,0 +1,49 @@
+# Story 13-77 AC2 — the ONE way a workflow pages the operator on Telegram.
+#
+# Used by osv-scheduled.yml, prod-verify.yml and ci-cd.yml (deploy). Before this, the
+# only page step lived inline in osv-scheduled.yml and printed a WARNING and exited 0
+# when the secrets were missing — the scan then sat red from 2026-10-05 to 10-14 and
+# nobody was told. A page that cannot be sent is itself the news, so here it FAILS.
+#
+# A composite action cannot read `secrets` itself; the caller passes them as inputs.
+# The caller must check the repo out first (a local action is read from disk).
+name: Telegram page
+description: Send a message to the OSLRS operator Telegram chat; fail if the channel is not configured.
+inputs:
+  text:
+    description: What failed and what it blocks. The run URL is appended.
+    required: true
+  bot-token:
+    description: secrets.TELEGRAM_BOT_TOKEN
+    required: true
+  chat-id:
+    description: secrets.TELEGRAM_OPERATOR_CHAT_ID
+    required: true
+  drill:
+    description: "'true' prefixes [DRILL] — a manual proof that the channel works end to end."
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Send
+      shell: bash
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ inputs.bot-token }}
+        CHAT_ID: ${{ inputs.chat-id }}
+        TEXT: ${{ inputs.text }}
+        DRILL: ${{ inputs.drill }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        if [ -z "${TELEGRAM_BOT_TOKEN}" ] || [ -z "${CHAT_ID}" ]; then
+          echo "::error::Telegram secrets TELEGRAM_BOT_TOKEN / TELEGRAM_OPERATOR_CHAT_ID are not set. The alert channel is LOST — nothing reached the operator."
+          exit 1
+        fi
+        PREFIX=""
+        if [ "${DRILL}" = "true" ]; then PREFIX="[DRILL] "; fi
+        curl -fsS --max-time 20 -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+          --data-urlencode "chat_id=${CHAT_ID}" \
+          --data-urlencode "text=${PREFIX}${TEXT}
+        ${RUN_URL}" > /dev/null
+        echo "Paged the operator chat${PREFIX:+ (drill)}."

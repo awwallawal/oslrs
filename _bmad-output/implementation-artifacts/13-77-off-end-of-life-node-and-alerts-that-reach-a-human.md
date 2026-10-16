@@ -1,6 +1,6 @@
 # Story 13.77: Off end-of-life Node, and CI alerts that reach a human
 
-Status: ready-for-dev
+Status: in-progress
 
 <!--
 Created 2026-10-16 via canonical SM *create-story (yolo), on Awwal's instruction: "put the telegram
@@ -66,14 +66,14 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
 
 ## Tasks / Subtasks
 
-- [ ] **Task 0 — Ruling** (AC: #1)
-  - [ ] 0.1 Get Awwal's ruling on `<TARGET>` (24 recommended). Record it with two-part attribution.
+- [x] **Task 0 — Ruling** (AC: #1)
+  - [x] 0.1 Get Awwal's ruling on `<TARGET>` (24 recommended). Record it with two-part attribution.
 - [ ] **Task 1 — Alert channel first** (AC: #2) — ship and drill BEFORE any Node change, so the risky steps below have a working pager.
-  - [ ] 1.1 With Awwal's go-ahead, set both secrets by piping, never printing:
+  - [x] 1.1 With Awwal's go-ahead, set both secrets by piping, never printing:
     `ssh root@oslsr-home-app "grep '^TELEGRAM_BOT_TOKEN=' /root/oslrs/.env | cut -d= -f2- | tr -d '\"'" | gh secret set TELEGRAM_BOT_TOKEN`
     and the same for `TELEGRAM_OPERATOR_CHAT_ID`. Check `gh secret list` (names only).
-  - [ ] 1.2 Create `.github/actions/telegram-page/action.yml` (composite): inputs `text`, `bot-token`, `chat-id`, `drill`. A missing token or chat id → `::error::` + exit 1.
-  - [ ] 1.3 Use it in `osv-scheduled.yml` (replace the inline step; fix the "weekly" text), `prod-verify.yml` (scheduled failures) and the `ci-cd.yml` `deploy` job (`if: failure()`).
+  - [x] 1.2 Create `.github/actions/telegram-page/action.yml` (composite): inputs `text`, `bot-token`, `chat-id`, `drill`. A missing token or chat id → `::error::` + exit 1.
+  - [x] 1.3 Use it in `osv-scheduled.yml` (replace the inline step; fix the "weekly" text), `prod-verify.yml` (scheduled failures) and the `ci-cd.yml` `deploy` job (`if: failure()`).
   - [ ] 1.4 Add the `drill` input to each `workflow_dispatch`. Run the three drills; Awwal confirms three `[DRILL]` messages. Record the run ids.
 - [ ] **Task 2 — Repo pins** (AC: #3)
   - [ ] 2.1 `.nvmrc`, `engines`, `@types/node` ×4, Dockerfiles ×2. `pnpm install`, then tsc for all packages.
@@ -167,9 +167,18 @@ It is the **deploy path, not the code**. The VPS runs `pnpm install --frozen-loc
 
 ### Agent Model Used
 
+Claude Opus 5.5 (claude-opus-5-5), 2026-10-16.
+
 ### Debug Log References
 
 ### Completion Notes List
+
+- **AC1 RULED 2026-10-16: <TARGET> = Node 24.** Recommendation and evidence by adjudication (scoping sweep, session record F.3); RULING by Awwal ("24 as recommended"), 2026-10-16.
+- **AC2a:** both repo secrets set 2026-10-16 15:59 UTC by piping each value from prod  into  (format checked first without printing: one line each, no quotes, no CR).  shows both. No value was displayed.
+- **AC2b–d:**  (composite; missing secret = ::error + exit 1). Page JOBS, not steps, so a drill needs nothing to fail: osv-scheduled  (replaces the inline step; "weekly" text fixed), prod-verify  (schedule failures of edge-freshness only), ci-cd  (the deploy job's OWN failure only, not a skipped deploy). actionlint 1.7.7: 0 findings on all three.
+- ⛔ **Two traps found while wiring the ci-cd drill, both fixed:** (1) ci-cd's concurrency group is per-ref with , so a drill dispatched on main would have CANCELLED an in-flight deploy. Drills now get a  group. (2)  runs , so it would have run on a drill with every test skipped; now excluded on dispatch.  is skipped on dispatch and every other job needs it, so a ci-cd drill runs ONLY the page job.
+- **A real failure during a drill run is paged as real** (osv / prod-verify): the [DRILL] prefix applies only when the watched job did not fail.
+- prod-verify's SSH  job does not run on a drill (it must not touch prod to test a pager).
 
 ### File List
 

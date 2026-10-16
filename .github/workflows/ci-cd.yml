@@ -5,10 +5,21 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Story 13-77 AC2e — a manual DRILL of the deploy-failure page, and nothing else:
+  # lint-and-build is skipped for dispatch, so every job downstream of it (all tests,
+  # deploy) skips too; only `page-deploy-failure` runs.
+  workflow_dispatch:
+    inputs:
+      drill:
+        description: 'Send a [DRILL] deploy-failure page to the operator chat (runs nothing else)'
+        type: boolean
+        default: false
 
 # Cancel in-progress runs for the same branch
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # ⛔ A drill gets its OWN group (Story 13-77). Same group as a push to main would let
+  # `cancel-in-progress` kill a deploy that is mid-flight to send a test message.
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'workflow_dispatch' && '-drill' || '' }}
   cancel-in-progress: true
 
 env:
@@ -28,6 +39,8 @@ jobs:
   # Job 1: Lint and Build (shared by all test jobs)
   # ============================================
   lint-and-build:
+    # Skipped on a drill dispatch (Story 13-77); every other job needs this one, so they skip with it.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     # security-events: write lets the OSV report-only tier (Story 13-32 AC2)
     # upload SARIF to the GitHub Security tab. contents: read covers checkout /
@@ -740,7 +753,8 @@ jobs:
   # ============================================
   dashboard:
     needs: [test-unit, test-api, test-web]
-    if: always()
+    # always() would run this on a Story 13-77 drill dispatch, where every test job is skipped.
+    if: always() && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -1268,3 +1282,28 @@ jobs:
             date -u +%FT%TZ
             top -bn1 | head -5
             free -h | head -3
+
+  # ============================================
+  # Job 8: Page the operator when the DEPLOY fails (Story 13-77 AC2)
+  # ============================================
+  # Only the deploy job's OWN failure pages: a red test on a PR, or a test failure that
+  # SKIPS the deploy, is already in front of whoever pushed. A deploy that dies part-way
+  # is not — prod may be on the old commit, or half on the new one — and before this it
+  # reached nobody.
+  page-deploy-failure:
+    needs: deploy
+    if: always() && (needs.deploy.result == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.drill == true))
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/actions
+      - uses: ./.github/actions/telegram-page
+        with:
+          bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
+          drill: ${{ (github.event_name == 'workflow_dispatch' && inputs.drill == true) && 'true' || 'false' }}
+          text: "🚨 OSLRS DEPLOY FAILED on main (${{ github.sha }}). Prod may still be on the previous commit, or part-way through this one. Check the run, then verify prod HEAD and /api/v1/health before pushing again."
