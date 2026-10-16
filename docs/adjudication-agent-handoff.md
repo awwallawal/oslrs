@@ -1482,7 +1482,7 @@ then `7eccbb2`; **login flood ceiling is now 300/IP/15 min**. 📄 **Evidence:
    **13-71 R9** (`GEOPOINT_REQUIREMENT_EFFECTIVE_FROM` rots). The §3-old record listed four and missed R9. Each
    needs a ruling **from Awwal** (§2al: adjudication may propose, never sign): do it, re-date it with a reason, or
    accept it with evidence. Never delete the `DATED` marker to get green; that is the guard working.
-0b. **Awwal: set the two Telegram repo secrets** (`gh secret set TELEGRAM_BOT_TOKEN`, `gh secret set
+0b. ➡️ **MOVED INTO STORY 13-77 (2026-10-16, Awwal: "resolve it within the story") — Task 1 / AC2, done FIRST, before the Node work; widened to page on deploy + prod-verify failures too, with a drill.** *(Original entry:)* **Awwal: set the two Telegram repo secrets** (`gh secret set TELEGRAM_BOT_TOKEN`, `gh secret set
    TELEGRAM_OPERATOR_CHAT_ID`, values from prod `.env`). The step fires only on a red run, so the next green
    Monday proves nothing: confirm the pair once with a manual `sendMessage` to that chat. Until the secrets exist
    the alert step is a logged warning. Five minutes.
