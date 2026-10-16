@@ -75,8 +75,8 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
   - [x] 1.2 Create `.github/actions/telegram-page/action.yml` (composite): inputs `text`, `bot-token`, `chat-id`, `drill`. A missing token or chat id → `::error::` + exit 1.
   - [x] 1.3 Use it in `osv-scheduled.yml` (replace the inline step; fix the "weekly" text), `prod-verify.yml` (scheduled failures) and the `ci-cd.yml` `deploy` job (`if: failure()`).
   - [ ] 1.4 Add the `drill` input to each `workflow_dispatch`. Run the three drills; Awwal confirms three `[DRILL]` messages. Record the run ids.
-- [ ] **Task 2 — Repo pins** (AC: #3)
-  - [ ] 2.1 `.nvmrc`, `engines`, `@types/node` ×4, Dockerfiles ×2. `pnpm install`, then tsc for all packages.
+- [x] **Task 2 — Repo pins** (AC: #3)
+  - [x] 2.1 `.nvmrc`, `@types/node` ×4, Dockerfiles ×2. `pnpm install`, then tsc for all packages. ⚠️ `engines` DEFERRED to Task 4.1, see Completion Notes.
 - [ ] **Task 3 — VPS to `<TARGET>`** (AC: #4, #6) — ⛔ prod change: explicit go-ahead from Awwal at the time, inside a measured quiet hour.
   - [ ] 3.1 Quiet-hour check, plus the AC4a backups.
   - [ ] 3.2 nodesource → `<TARGET>`; `apt install nodejs`; prove `pnpm`/`pm2` resolve.
@@ -84,7 +84,7 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
   - [ ] 3.4 `pm2 update` → `node_version` and `process.version` proof → `pm2 save`.
   - [ ] 3.5 Reboot test, as in AC4f.
 - [ ] **Task 4 — CI to `<TARGET>`** (AC: #5, #6, #8)
-  - [ ] 4.1 Change all `node-version` pins; re-grep for the count. Add the deploy-job major assertion (AC8).
+  - [ ] 4.1 Change all `node-version` pins; re-grep for the count. Move root `engines.node` to `>=24.0.0` (deferred here from Task 2). Add the deploy-job major assertion (AC8).
   - [ ] 4.2 `PREPUSH_FULL=1 git push`; quote the suite totals; watch CI to `deploy` success; prod HEAD == pushed SHA (D6).
   - [ ] 4.3 AC6 closure diff, CI vs VPS.
 - [ ] **Task 5 — pdfjs and the advisory** (AC: #7)
@@ -180,6 +180,8 @@ Claude Opus 5.5 (claude-opus-5-5), 2026-10-16.
 - ⚠️ **Process slip, recorded:** the first write of these notes used backticks inside a bash `node -e` string and bash EXECUTED them (memory: pitfall-backticks-in-node-e-under-bash). Every substitution failed harmlessly: two were `gh secret set\` / `gh secret list\`, rejected as unknown commands, and `gh secret list` afterwards still shows both secrets at 15:59. The notes were committed with blanks in `c4fdb90` and repaired in the next commit.
 - **A real failure during a drill run is paged as real** (osv / prod-verify): the [DRILL] prefix applies only when the watched job did not fail.
 - prod-verify's SSH `verify` job does not run on a drill (it must not touch prod to test a pager).
+- ⚠️ **AC3 SPLIT, a defect in this story's own order (found at dev time, 2026-10-16).** AC3 put root `engines.node` into the Task 2 commit, before the VPS and CI move. But `.npmrc` has `engine-strict=true`, and pnpm checks the ROOT project's `engines` as well as dependencies'. So that commit would have made `pnpm install` refuse on CI (Node 20) and on the VPS deploy (Node 20): the exact Story 11-2 failure this story exists to avoid. Task 2 therefore ships `.nvmrc` (`24`, major only, so it never goes stale and AC8 can compare majors), `@types/node ^24.19.0` ×4 and Dockerfiles `node:24-alpine`. `engines` moves in Task 4.1, with the CI flip, after the VPS is on 24.
+- **Task 2 evidence:** the lockfile's resolved-package set changed in exactly two entries: `@types/node` 20.19.27 → 24.19.2 and its type-only dependency `undici-types` 6.21.0 → 7.24.6. The other 146 changed lines are peer-suffix churn, and no runtime package moved. tsc `--noEmit`: api 0, web 0, types 0, utils 0, config 0; `packages/testing` 3 errors, all **pre-existing** (identical on the baseline). They are vitest-4 type exports in `src/reporter.ts` (`Reporter`, `File`, `Task`), unrelated to Node and left for their own fix.
 - **AC2e drills, 2026-10-16 ~16:07 UTC, all three `page` jobs SUCCESS** (Telegram API accepted each; `curl -f`): osv-scheduled `38929352284` (scan also green), prod-verify `38929378407` (edge-freshness green, SSH verify skipped), ci-cd `38929412982` (every other job skipped). ⭐ **The concurrency fix was proved live:** the ci-cd drill was dispatched while push run `38929242472` (`c4fdb90`) was mid-pipeline, and that run went on to `deploy: success` (prod `c4fdb90`, health 200), with `page-deploy-failure` correctly SKIPPED on a green deploy. ⏳ **Open until Awwal confirms three `[DRILL]` messages in the operator chat**; "the API accepted it" is not "a human saw it".
 
 ### File List

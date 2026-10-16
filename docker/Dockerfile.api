@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 RUN npm install -g pnpm
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 COPY apps/api/ ./apps/api/
 RUN pnpm --filter @oslsr/api build
 
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY --from=builder /app/apps/api/package.json ./
 COPY --from=builder /app/apps/api/dist ./dist
