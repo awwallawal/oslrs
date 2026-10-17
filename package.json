@@ -27,7 +27,7 @@
     "test:load:full": "k6 run tests/load/health-check.js; k6 run tests/load/auth-endpoints.js; k6 run tests/load/staff-management.js; k6 run tests/load/questionnaire-api.js; k6 run tests/load/combined-stress.js"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "packageManager": "pnpm@9.15.0",
   "devDependencies": {

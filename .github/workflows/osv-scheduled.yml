@@ -47,15 +47,15 @@ jobs:
         with:
           ref: main
 
-      # Pinned identically to ci-cd.yml (Node 20-compatible pnpm; matches the
-      # `packageManager` field). Bump both in lockstep with the workspace.
+      # Pinned identically to ci-cd.yml (pnpm 9.15.0 == the `packageManager`
+      # field == what the VPS runs inside the repo, Story 13-77). Bump in lockstep.
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
         with:
           version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Install dependencies

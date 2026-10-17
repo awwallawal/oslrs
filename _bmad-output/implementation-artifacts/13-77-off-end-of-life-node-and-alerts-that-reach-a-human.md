@@ -68,27 +68,32 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
 
 - [x] **Task 0 — Ruling** (AC: #1)
   - [x] 0.1 Get Awwal's ruling on `<TARGET>` (24 recommended). Record it with two-part attribution.
-- [ ] **Task 1 — Alert channel first** (AC: #2) — ship and drill BEFORE any Node change, so the risky steps below have a working pager.
+- [x] **Task 1 — Alert channel first** (AC: #2) — ship and drill BEFORE any Node change, so the risky steps below have a working pager.
   - [x] 1.1 With Awwal's go-ahead, set both secrets by piping, never printing:
     `ssh root@oslsr-home-app "grep '^TELEGRAM_BOT_TOKEN=' /root/oslrs/.env | cut -d= -f2- | tr -d '\"'" | gh secret set TELEGRAM_BOT_TOKEN`
     and the same for `TELEGRAM_OPERATOR_CHAT_ID`. Check `gh secret list` (names only).
   - [x] 1.2 Create `.github/actions/telegram-page/action.yml` (composite): inputs `text`, `bot-token`, `chat-id`, `drill`. A missing token or chat id → `::error::` + exit 1.
   - [x] 1.3 Use it in `osv-scheduled.yml` (replace the inline step; fix the "weekly" text), `prod-verify.yml` (scheduled failures) and the `ci-cd.yml` `deploy` job (`if: failure()`).
   - [x] 1.5 (drill `39021627180` received — Awwal: "got the drill oslrs is down message", 2026-10-17) (added 2026-10-17, Awwal: "add the uptime alert, then the reboot test") `.github/workflows/uptime.yml`: probe the public `/api/v1/health` every 5 min (3 tries, 30 s apart) and page on STATE CHANGE only (DOWN once, RECOVERED once), keyed on the previous run's `probe` job result. Drill it. Origin: the 2026-10-17 `pm2 update` outage ran 15 min and nothing alerted.
-  - [ ] 1.4 Add the `drill` input to each `workflow_dispatch`. Run the three drills; Awwal confirms three `[DRILL]` messages. Record the run ids.
+  - [x] 1.4 ✅ Awwal confirmed all three received, 2026-10-17: "drill oslrs edge check failed, drill oslrs deploy failed and drill oslsrs daily osv scan received yesterday". Add the `drill` input to each `workflow_dispatch`. Run the three drills; Awwal confirms three `[DRILL]` messages. Record the run ids.
 - [x] **Task 2 — Repo pins** (AC: #3)
   - [x] 2.1 `.nvmrc`, `@types/node` ×4, Dockerfiles ×2. `pnpm install`, then tsc for all packages. ⚠️ `engines` DEFERRED to Task 4.1, see Completion Notes.
 - [ ] **Task 3 — VPS to `<TARGET>`** (AC: #4, #6) — ⛔ prod change: explicit go-ahead from Awwal at the time, inside a measured quiet hour.
   - [x] 3.1 Quiet-hour check, plus the AC4a backups.
   - [x] 3.2 nodesource → `<TARGET>`; `apt install nodejs`; prove `pnpm`/`pm2` resolve.
-  - [ ] 3.3 Align pnpm per AC6.
+  - [x] 3.3 Align pnpm per AC6. ✅ **Already aligned: the premise was a mis-measurement** (see the measured-facts table). The effective VPS pnpm in the repo is 9.15.0 == CI == `packageManager`. AC6's proof is now the deploy-time check (Task 4.1), which reads `pnpm -v` inside the repo on every deploy. Moving to pnpm 10 was considered and REJECTED as out of scope: it would CHANGE prod installs (dependency lifecycle scripts stop running; `node_modules` re-laid out on a 1-vCPU box mid-deploy) for no benefit this story needs.
   - [x] 3.4 `pm2 update` → `node_version` and `process.version` proof → `pm2 save`. (⚠️ `pm2 update` dropped the API: a 15-min outage, restored from backup; see Completion Notes.)
   - [x] 3.5 Reboot test, as in AC4f. ✅ 2026-10-17 09:40:53 UTC, after a quiet-hour check at 10:40 WAT (0 submissions, 0 audit rows, 0 non-health API calls in 60 min; dump = [oslsr-api]; `pm2-root` enabled). Back at 09:41:16:
     - `pm2-logrotate:0` started first, then `oslsr-api:1`. **The boot path uses the SAFE id order**, which confirms the incident root cause is specific to `pm2 update`.
     - `node_version` 24.22.0; every API process runs `/usr/bin/node`; `workers.initialized` logged; error log 0 lines.
     - docker ×3, nginx and tailscaled all active; health 200 local and public; HEAD `8d51868`.
 - [ ] **Task 4 — CI to `<TARGET>`** (AC: #5, #6, #8)
-  - [ ] 4.1 Change all `node-version` pins; re-grep for the count. Move root `engines.node` to `>=24.0.0` (deferred here from Task 2). Add the deploy-job major assertion (AC8).
+  - [x] 4.1 Change all `node-version` pins; re-grep for the count. Move root `engines.node` to `>=24.0.0` (deferred here from Task 2). Add the deploy-job major assertion (AC8).
+    - 11 `node-version` pins → 24 (ci-cd ×8, e2e, benchmarks, osv-scheduled); re-grep finds 0 left. `e2e.yml` is CRLF and was edited with its line endings preserved.
+    - The 6 stale "Node 20-compatible pnpm" comments were rewritten. pnpm pins stay at 9.15.0 (see 3.3).
+    - Deploy job, right after `git pull`: fails unless `node` major == `.nvmrc` major AND the in-repo `pnpm -v` == `packageManager`. Dry-run read-only on the VPS: node 24 / want 24, pnpm 9.15.0 / want 9.15.0.
+    - The dry run is what exposed the pnpm mis-measurement: my first edit had moved CI and `packageManager` to 10.28.1, and it was reverted before commit.
+    - actionlint findings identical before and after (all pre-existing shellcheck notes); `pnpm install --frozen-lockfile` clean, lockfile untouched.
   - [ ] 4.2 `PREPUSH_FULL=1 git push`; quote the suite totals; watch CI to `deploy` success; prod HEAD == pushed SHA (D6).
   - [ ] 4.3 AC6 closure diff, CI vs VPS.
 - [ ] **Task 5 — pdfjs and the advisory** (AC: #7)
@@ -108,7 +113,7 @@ It is the **deploy path, not the code**. The VPS runs `pnpm install --frozen-loc
 | Fact | Value | Measured |
 |---|---|---|
 | VPS Node | 20.20.2 from nodesource apt (`nodesource.list`); `/usr/bin/node` | 2026-10-15 |
-| VPS pnpm / pm2 | **10.28.1** / 6.0.14, npm globals in `/usr/lib/node_modules` | 2026-10-15 |
+| VPS pnpm / pm2 | global **10.28.1** / 6.0.14, npm globals in `/usr/lib/node_modules`. ⛔ **CORRECTED 2026-10-17:** inside `/root/oslrs`, `pnpm -v` = **9.15.0**. pnpm 10 switches itself to `packageManager` by default, so deploys always installed with 9.15.0, the same as CI. The 10-15 reading was taken from `$HOME`, where no `packageManager` applies | 2026-10-15 / 2026-10-17 |
 | CI pnpm | 9.15.0 (every workflow + root `packageManager`) | 2026-10-16 |
 | PM2 boot unit | `pm2-root.service`, `ExecStart=/usr/lib/node_modules/pm2/bin/pm2 resurrect`, system PATH | 2026-10-15 |
 | API process | `bash -c "npx tsx src/index.ts"`, cwd `/root/oslrs/apps/api`; dump == live | 2026-10-15 |

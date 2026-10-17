@@ -58,18 +58,18 @@ jobs:
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
         with:
-          # Pin pnpm to a Node 20-compatible version. The action's default
-          # behavior (no `version:`) installs the LATEST pnpm, which started
-          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
-          # CI uses Node 20, so the default install fails with
-          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
-          # 9.15.0 matches `packageManager` in root package.json. Bump in
-          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          # Pinned explicitly: the action's default (no `version:`) installs the
+          # LATEST pnpm. 9.15.0 == `packageManager` in root package.json. The VPS
+          # has pnpm 10.28.1 installed globally, but inside the repo it switches
+          # itself to `packageManager` (pnpm 10 default; measured 2026-10-17, Story
+          # 13-77), so deploys install with 9.15.0 too. Bump `packageManager` and
+          # these pins together; the deploy job FAILS if the effective VPS pnpm
+          # differs from `packageManager`.
           version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       # Optimization 1: Turbo Remote Cache (GitHub Actions)
@@ -268,18 +268,18 @@ jobs:
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
         with:
-          # Pin pnpm to a Node 20-compatible version. The action's default
-          # behavior (no `version:`) installs the LATEST pnpm, which started
-          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
-          # CI uses Node 20, so the default install fails with
-          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
-          # 9.15.0 matches `packageManager` in root package.json. Bump in
-          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          # Pinned explicitly: the action's default (no `version:`) installs the
+          # LATEST pnpm. 9.15.0 == `packageManager` in root package.json. The VPS
+          # has pnpm 10.28.1 installed globally, but inside the repo it switches
+          # itself to `packageManager` (pnpm 10 default; measured 2026-10-17, Story
+          # 13-77), so deploys install with 9.15.0 too. Bump `packageManager` and
+          # these pins together; the deploy job FAILS if the effective VPS pnpm
+          # differs from `packageManager`.
           version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Download build artifacts
@@ -389,18 +389,18 @@ jobs:
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
         with:
-          # Pin pnpm to a Node 20-compatible version. The action's default
-          # behavior (no `version:`) installs the LATEST pnpm, which started
-          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
-          # CI uses Node 20, so the default install fails with
-          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
-          # 9.15.0 matches `packageManager` in root package.json. Bump in
-          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          # Pinned explicitly: the action's default (no `version:`) installs the
+          # LATEST pnpm. 9.15.0 == `packageManager` in root package.json. The VPS
+          # has pnpm 10.28.1 installed globally, but inside the repo it switches
+          # itself to `packageManager` (pnpm 10 default; measured 2026-10-17, Story
+          # 13-77), so deploys install with 9.15.0 too. Bump `packageManager` and
+          # these pins together; the deploy job FAILS if the effective VPS pnpm
+          # differs from `packageManager`.
           version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Download build artifacts
@@ -528,7 +528,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -620,7 +620,7 @@ jobs:
           version: 9.15.0
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -672,18 +672,18 @@ jobs:
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
         with:
-          # Pin pnpm to a Node 20-compatible version. The action's default
-          # behavior (no `version:`) installs the LATEST pnpm, which started
-          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
-          # CI uses Node 20, so the default install fails with
-          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
-          # 9.15.0 matches `packageManager` in root package.json. Bump in
-          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          # Pinned explicitly: the action's default (no `version:`) installs the
+          # LATEST pnpm. 9.15.0 == `packageManager` in root package.json. The VPS
+          # has pnpm 10.28.1 installed globally, but inside the repo it switches
+          # itself to `packageManager` (pnpm 10 default; measured 2026-10-17, Story
+          # 13-77), so deploys install with 9.15.0 too. Bump `packageManager` and
+          # these pins together; the deploy job FAILS if the effective VPS pnpm
+          # differs from `packageManager`.
           version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Download build artifacts
@@ -764,18 +764,18 @@ jobs:
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
         with:
-          # Pin pnpm to a Node 20-compatible version. The action's default
-          # behavior (no `version:`) installs the LATEST pnpm, which started
-          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
-          # CI uses Node 20, so the default install fails with
-          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
-          # 9.15.0 matches `packageManager` in root package.json. Bump in
-          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          # Pinned explicitly: the action's default (no `version:`) installs the
+          # LATEST pnpm. 9.15.0 == `packageManager` in root package.json. The VPS
+          # has pnpm 10.28.1 installed globally, but inside the repo it switches
+          # itself to `packageManager` (pnpm 10 default; measured 2026-10-17, Story
+          # 13-77), so deploys install with 9.15.0 too. Bump `packageManager` and
+          # these pins together; the deploy job FAILS if the effective VPS pnpm
+          # differs from `packageManager`.
           version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -924,18 +924,18 @@ jobs:
       # release when pnpm/action-setup publishes a Node 24 stable (likely v6.x line).
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
         with:
-          # Pin pnpm to a Node 20-compatible version. The action's default
-          # behavior (no `version:`) installs the LATEST pnpm, which started
-          # requiring Node.js 22.13+ in pnpm 10.x (released ~early 2025). Our
-          # CI uses Node 20, so the default install fails with
-          # `ERR_UNKNOWN_BUILTIN_MODULE: No such built-in module: node:sqlite`.
-          # 9.15.0 matches `packageManager` in root package.json. Bump in
-          # lockstep with `packageManager` if/when the workspace upgrades pnpm.
+          # Pinned explicitly: the action's default (no `version:`) installs the
+          # LATEST pnpm. 9.15.0 == `packageManager` in root package.json. The VPS
+          # has pnpm 10.28.1 installed globally, but inside the repo it switches
+          # itself to `packageManager` (pnpm 10 default; measured 2026-10-17, Story
+          # 13-77), so deploys install with 9.15.0 too. Bump `packageManager` and
+          # these pins together; the deploy job FAILS if the effective VPS pnpm
+          # differs from `packageManager`.
           version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Download build artifacts
@@ -1094,6 +1094,23 @@ jobs:
             DEPLOY_START=$(date +%s)
 
             git pull origin main
+
+            # ⛔ Story 13-77 AC6/AC8 — the runtime must be what the repo says, BEFORE
+            # anything installs. Node major == .nvmrc major, and pnpm == packageManager
+            # exactly. A drifted VPS fails HERE with a readable message instead of
+            # half-installing (the Story 11-2 engine-strict failure) or silently
+            # installing with a different pnpm than CI tested. `pnpm -v` is read INSIDE
+            # the repo on purpose: the VPS's global pnpm is 10.28.1 but switches itself
+            # to `packageManager` here, so this is the pnpm that actually installs.
+            WANT_NODE=$(tr -d 'v \r\n' < .nvmrc | cut -d. -f1)
+            HAVE_NODE=$(node -p 'process.versions.node.split(".")[0]')
+            WANT_PNPM=$(node -p 'require("./package.json").packageManager.split("@")[1]')
+            HAVE_PNPM=$(pnpm -v)
+            echo "runtime: node ${HAVE_NODE} (want ${WANT_NODE}), pnpm ${HAVE_PNPM} (want ${WANT_PNPM})"
+            if [ "$HAVE_NODE" != "$WANT_NODE" ] || [ "$HAVE_PNPM" != "$WANT_PNPM" ]; then
+              echo "::error::VPS runtime drift: node ${HAVE_NODE} vs .nvmrc ${WANT_NODE}, pnpm ${HAVE_PNPM} vs packageManager ${WANT_PNPM}. Fix the VPS (docs/infrastructure-cicd-playbook.md, Node major upgrade) before deploying."
+              exit 1
+            fi
 
             # Install dependencies if package.json changed.
             # Kept on VPS because the API runs via `pnpm tsx` at runtime and
