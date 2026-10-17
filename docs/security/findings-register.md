@@ -68,7 +68,26 @@ _Maintained by: SM/dev per the maintenance rule above · R2 register authored 20
 
 ---
 
-## GHSA-hq66-cqwq-w95j — pdfjs-dist 5.6.205 (2026-08-07) — ACCEPTED, evidenced
+## GHSA-hq66-cqwq-w95j — pdfjs-dist 5.6.205 (2026-08-07) — ✅ CLOSED 2026-10-17 (fixed, waiver deleted)
+
+> **✅ CLOSED 2026-10-17, Story 13-77 Task 5.** The re-review trigger below fired: CI and the VPS
+> moved to Node 24 (13-77 Tasks 3–4), and `pdfjs-dist` went 5.6.205 → **6.4.299** (≥ the 6.2.108 fix).
+> - The `osv-scanner.toml` waiver is **deleted**. The prod-scope gate, run locally on the new lockfile,
+>   passes WITHOUT it: "No production dependency is vulnerable", and hq66 is not in the output.
+> - **Extraction is unchanged, measured on the real register**: the ITF-SUPA shortlist, used locally
+>   only and never committed; counts and hashes printed, never rows. 5.6.205 vs 6.4.299: 25,822 text
+>   items, 3,673 rows, 3,673 with email, 43 LGAs, 0 failures, and identical SHA-256 of the items, the
+>   canonical rows and the raw cells.
+> - ⚠️ **The "KEEP `isEvalSupported: false`" rule below could not be kept, and the reason is recorded,
+>   not glossed.** pdfjs 6 removed the option from `DocumentInitParameters` (tsc rejects it), and its
+>   legacy main AND worker builds contain zero `isEvalSupported`, zero `new Function(` and zero
+>   `eval(`. The eval path the option disabled no longer exists, so the defence is now structural.
+>   The call-site comment says to restore the option if a future pdfjs brings an eval path back.
+>   Same lesson as the near-miss below: the compiler's objection was read, not cast past.
+> - Attribution: work and evidence by the dev agent, 2026-10-17; story instruction by Awwal ("go ahead
+>   with Task 5").
+>
+> *Original entry, kept as the record of why the waiver was honest while it existed:*
 
 **"Arbitrary JavaScript execution upon opening a malicious PDF."** Newly disclosed against an
 UNCHANGED dependency; blocked a deploy carrying an unrelated fix.

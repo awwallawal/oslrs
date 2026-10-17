@@ -19,8 +19,8 @@
 #      ⛔ CORRECTED 2026-10-15: this file IS consulted by the blocking gate. osv-scanner
 #      auto-loads an osv-scanner.toml beside the lockfile without --config; the CI log
 #      of 2026-10-15 14:52 prints "Loaded filter from: /src/osv-scanner.toml" in the
-#      BLOCKING step, and GHSA-hq66 (pdfjs-dist, a PROD dependency) passes the gate
-#      only because of its entry below. Two consequences:
+#      BLOCKING step, and GHSA-hq66 (pdfjs-dist, a PROD dependency) passed the gate
+#      only because of its entry (entry deleted 2026-10-17, now fixed). Two consequences:
 #        • an entry here is the one-commit way to unblock a deploy: give it an
 #          `ignoreUntil` no more than 14 days out, a reason, and who decided
 #          (see "EMERGENCY UNBLOCK" below). The date re-arms the gate by itself;
@@ -121,33 +121,8 @@ id = "GHSA-jjmj-jmhj-qwj2"
 reason = "react-router-dom 6.30.4 open-redirect→XSS. Same app-layer mitigation (toSafeInternalPath). Fix v7 only (crosses major, override-policy forbids). Accepted-risk (2026-07-24)."
 
 # ─────────────────────────────────────────────────────────────────────────────
-# pdfjs-dist 5.6.205 — GHSA-hq66-cqwq-w95j (2026-08-07)
-#
-# "Arbitrary JavaScript execution upon opening a malicious PDF." Newly disclosed against an
-# UNCHANGED dependency; it blocked a deploy carrying an unrelated fix.
-#
-# WHY ACCEPTED RATHER THAN PATCHED
-#   * Upstream fix is pdfjs-dist@6.2.108. 6.x requires Node 22; CI and the VPS run Node 20, so
-#     the bump HARD-FAILS `pnpm install` on deploy (Story 11-2, and the reason we are pinned here).
-#
-# WHY THE VULNERABLE PATH IS UNREACHABLE — verified in the installed library, not assumed
-#   * The advisory's own workaround is "set enableScripting to false". In pdfjs 5.x that is NOT a
-#     `getDocument` option: every use of it in legacy/build/pdf.mjs is in the ANNOTATION/WIDGET
-#     layer (Action, Mouse Up/Down, datetime widgets) — the browser viewer's interactive render.
-#   * Our only consumer is a SERVER-SIDE text extractor
-#     (apps/api/src/services/import/parsers/pdf-tabular.parser.ts). It calls getDocument + reads
-#     positioned text runs. No getAnnotations, no render(), no annotation layer. The code that
-#     executes document script is never constructed.
-#   * Exposure would additionally require an authenticated STAFF member to upload a hostile PDF
-#     through the admin import surface — not a public path.
-#
-# DEFENCE IN DEPTH THAT IS REAL
-#   * `isEvalSupported: false` IS a valid DocumentInitParameters option (default true) and IS set
-#     at the getDocument call, stopping pdf.js compiling PDF function expressions via eval.
-#     KEEP IT across pdfjs upgrades — this acceptance is only honest while that line exists.
-#
-# RE-REVIEW when Node 22 lands (then just bump to >=6.2.108 and delete this), or if a PDF ever
-# reaches pdfjs from an unauthenticated path, or if we start rendering PDFs client-side.
-[[IgnoredVulns]]
-id = "GHSA-hq66-cqwq-w95j"
-reason = "pdfjs-dist 5.6.205 malicious-PDF script execution — UNREACHABLE: server-side text extraction only (no annotation layer, which is where pdfjs gates scripting); admin-only upload path. Fix @6.2.108 needs Node 22, CI/VPS on Node 20 (11-2). isEvalSupported:false set as defence-in-depth. Accepted-risk (2026-08-07)."
+# pdfjs-dist GHSA-hq66-cqwq-w95j — ✅ FIXED, waiver DELETED 2026-10-17 (Story 13-77 Task 5).
+# Accepted 2026-08-07 only because the fix (6.2.108) needs Node 22 and CI + the VPS ran Node 20.
+# Both moved to Node 24 (13-77), and pdfjs-dist is now 6.4.299. Real-register extraction is
+# byte-identical to 5.6.205 (3,673 rows, matching hashes). The gate passes WITHOUT this
+# entry. `isEvalSupported: false` stays at the call site as defence in depth.

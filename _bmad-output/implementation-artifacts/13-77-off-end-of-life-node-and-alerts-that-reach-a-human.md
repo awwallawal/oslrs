@@ -100,8 +100,15 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
     - Deploy log 11:39:16Z: `runtime: node 24 (want 24), pnpm 9.15.0 (want 9.15.0)` — the AC8 check passing on a real deploy.
     - prod HEAD `13f9cbf`, `oslsr-api` online, health 200.
   - [x] 4.3 AC6 closure diff, CI vs VPS. Superseded: both run pnpm 9.15.0 against the same frozen lockfile, so the closure is identical by construction, and the deploy check now enforces the pnpm equality on every deploy.
-- [ ] **Task 5 — pdfjs and the advisory** (AC: #7)
-  - [ ] 5.1 Bump; assert parser row counts; remove the waiver; update the register; OSV gate green without it.
+- [x] **Task 5 — pdfjs and the advisory** (AC: #7)
+  - [x] 5.1 Bump; assert parser row counts; remove the waiver; update the register; OSV gate green without it.
+    - `pdfjs-dist` 5.6.205 → **6.4.299**: released 2026-10-03, 14 days old, engines `>=22.13.0 || >=24`, ≥ the 6.2.108 fix.
+    - Lockfile: pdfjs-dist, its optional `@napi-rs/canvas` 0.1.100 → 1.0.11 (Node-API prebuilds, engines `>= 10`), and `node-readable-to-web-readable-stream` dropped. Nothing else moved.
+    - ⭐ **Row counts measured on the REAL register, beyond CI's `> 3000` threshold.** The gitignored fixture was absent, but `~/Downloads/Oyo_shortlisted_artisans.pdf` (the ITF-SUPA shortlist; PII, used locally only, counts and hashes printed, never rows) ran through `extractPdfItems` + `parsePdfTabular` before and after. **Byte-identical:** 25,822 items, 3,673 rows, 3,673 with email, 43 LGAs, 0 failures, and identical SHA-256 of items, canonical rows and raw cells. Time 7.7 s → 8.2 s.
+    - ⚠️ **AC7 "keep `isEvalSupported:false`" could not be met as written.** pdfjs 6 removed the option (tsc TS2353), and the 6.4.299 legacy main + worker builds contain 0 `isEvalSupported`, 0 `new Function(`, 0 `eval(`: the eval path it disabled is gone upstream, so the defence is now structural. The call-site comment records this and says to restore the option if an eval path returns. The real-register comparison was re-run after the removal: still identical.
+    - Waiver deleted from `osv-scanner.toml` (a tombstone comment is left; header updated). The prod-scope gate, run locally with the CI image digest and the new lockfile: "✅ No production dependency is vulnerable", hq66 absent from the output. 5 dev-only advisories are listed non-blocking (braces, markdown-it, source-map-js, sprintf-js, vitest), unrelated to this change.
+    - `docs/security/findings-register.md` GHSA-hq66 → ✅ CLOSED, with the evidence. The font / CMap workaround is kept (removing it was not compared).
+    - tsc 0 errors; `src/services/import` 64 passed / 1 skipped (the gitignored real-fixture test, replaced by the manual comparison above); eslint clean.
 - [ ] **Task 6 — Docs** (AC: #8, #9)
   - [ ] 6.1 Playbook "Node major upgrade" section, plus every doc hit in Dev Notes.
 

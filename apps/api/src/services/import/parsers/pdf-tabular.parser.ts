@@ -26,12 +26,13 @@ import { tableFromItems, type PdfTextItem } from './pdf-layout.js';
 import type { ParseResult, ParserInput, ParsedRow, ParseFailure } from './types.js';
 
 // Resolve the pdfjs-dist asset dirs so Node text extraction can decode standard
-// fonts + CMaps. Without these, pdfjs 5.x silently yields ZERO text for real PDFs
-// embedding standard-14 / CID fonts (the ITF-SUPA register) — 6.x was more
-// lenient but requires Node 22 (CI + the VPS run Node 20). Providing the data
-// keeps us on a Node-20-compatible pdfjs while extracting correctly. pdfjs's
-// factory validates a URL string ending in '/', so use a file:// URL
-// (forward-slashed + trailing slash) which is correct on Windows AND Linux.
+// fonts + CMaps. Without these, pdfjs 5.x silently yielded ZERO text for real PDFs
+// embedding standard-14 / CID fonts (the ITF-SUPA register). Kept on 6.x (Story
+// 13-77, 2026-10-17): with them, 6.4.299 extracts the real register byte-identically
+// to 5.6.205 (3,673 rows, matching hashes), and removing them was not tested — do
+// not delete them without that comparison. pdfjs's factory validates a URL string
+// ending in '/', so use a file:// URL (forward-slashed + trailing slash) which is
+// correct on Windows AND Linux.
 const requireFromHere = createRequire(import.meta.url);
 const PDFJS_DIST_DIR = path.dirname(requireFromHere.resolve('pdfjs-dist/package.json'));
 const STANDARD_FONT_DATA_URL = pathToFileURL(path.join(PDFJS_DIST_DIR, 'standard_fonts') + path.sep).href;
@@ -73,20 +74,23 @@ export async function extractPdfItems(
      * unreachable from here, which is why the finding is accepted in `osv-scanner.toml` rather
      * than "mitigated" by a line that does nothing.
      *
-     * The upstream fix is `pdfjs-dist@6.2.108`; 6.x requires **Node 22** and CI + the VPS run
-     * **Node 20**, so a bump hard-fails `pnpm install` on deploy (Story 11-2).
+     * ✅ FIXED 2026-10-17 (Story 13-77): the upstream fix is `pdfjs-dist@6.2.108`, which needed
+     * Node 22 while CI + the VPS ran Node 20. Both are on Node 24 now, pdfjs-dist is 6.4.299, and
+     * the osv-scanner.toml waiver is deleted. The analysis above stays as the record of why the
+     * waiver was honest while it existed.
      *
-     * `isEvalSupported: false` IS a real `DocumentInitParameters` option (default `true`) and is
-     * kept as genuine defence-in-depth: it stops pdf.js compiling PDF function expressions via
-     * `eval`. Costs us only a little speed on colour/function-heavy PDFs, which we do not care
-     * about for text extraction. **KEEP IT** — same standing rule as the react-router
-     * safe-redirect mitigation.
+     * `isEvalSupported: false` was set here on 5.x as defence in depth: it stopped pdf.js
+     * compiling PDF function expressions via `eval`. ⛔ **REMOVED 2026-10-17 because pdfjs 6
+     * removed the eval path itself, not because the defence stopped mattering.** In 6.4.299 the
+     * option is gone from `DocumentInitParameters` (tsc rejects it), and the legacy main AND
+     * worker builds contain zero `isEvalSupported`, zero `new Function(` and zero `eval(`. There
+     * is nothing left to switch off. If a future pdfjs reintroduces an eval-based path, the
+     * option comes back.
      */
-    isEvalSupported: false,
     // Node-safe: don't fetch remote fonts (main-thread, no worker).
     useSystemFonts: true,
-    // Local font + CMap data so text extraction works on Node 20 pdfjs (5.x) —
-    // without these, real PDFs with standard/CID fonts extract to zero text.
+    // Local font + CMap data — without these, pdfjs 5.x extracted zero text from real
+    // PDFs with standard/CID fonts. Kept on 6.x; see the comment at the top of this file.
     standardFontDataUrl: STANDARD_FONT_DATA_URL,
     cMapUrl: CMAP_URL,
     cMapPacked: true,
