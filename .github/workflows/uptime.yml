@@ -12,9 +12,12 @@ name: Uptime (prod health)
 # ⚠️ GitHub's schedule is best-effort: runs can start late or be dropped under load, so
 # detection is typically 5–15 minutes, not 5. Good enough to never again find an outage
 # by accident; not a substitute for a paid uptime monitor if one is ever wanted.
-# Observed 2026-10-17: the first scheduled run had not fired 2 h after the workflow was
-# added (dispatch worked). This comment's push re-registers the schedule. If runs stay
-# absent, the schedule itself is the failure, and an external monitor is the fix.
+# ⛔ MEASURED 2026-10-17: DO NOT TRUST THIS AS THE UPTIME MONITOR. No scheduled run had
+# fired 2.5 h after it was added, even after a re-registering push (dispatch works). On this
+# repo GitHub delays EVERY schedule by 4–5 h: osv-scheduled (cron 06:17) started at 10:46 on
+# 10-17 and 11:26 on 10-16, and prod-verify likewise. A */5 schedule under that throttling
+# barely runs. Kept as a free, best-effort backstop; the real monitor must live outside
+# GitHub (Story 13-77 follow-up).
 on:
   schedule:
     - cron: '*/5 * * * *'

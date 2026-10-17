@@ -264,8 +264,8 @@ ufw allow from <YOUR_IP_ADDRESS> to any port 9443
 ### 3.5 Install Node.js (for build tools)
 
 ```bash
-# Install Node.js 20 LTS via NodeSource
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+# Install Node.js 24 LTS via NodeSource
+curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt install -y nodejs
 
 # Install pnpm
@@ -276,7 +276,7 @@ node --version  # Should show v20.x.x
 pnpm --version
 ```
 
-- [ ] Node.js 20 LTS installed
+- [ ] Node.js 24 LTS installed
 - [ ] pnpm installed
 
 ---

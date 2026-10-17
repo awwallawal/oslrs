@@ -28,7 +28,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 **CRITICAL: Lock to these exact versions to prevent conflicts**
 
 **Runtime & Language:**
-- **Node.js 20 LTS** (locked via `.nvmrc`) - Required for all backend and build tooling
+- **Node.js 24 LTS** (locked via `.nvmrc`) - Required for all backend and build tooling
 - **TypeScript 5.x** with `strict: true` - All workspaces must use strict mode
 - **ES Modules** (`"type": "module"` in package.json) - NOT CommonJS
 
@@ -857,7 +857,7 @@ queue.add('submission-ingestion', { submissionId }, {
 oslr_cl/
 ├── apps/
 │   ├── web/              # React 18.3 PWA (Vite + Tailwind + shadcn/ui)
-│   └── api/              # Node.js 20 + Express API
+│   └── api/              # Node.js 24 + Express API
 ├── packages/
 │   ├── types/            # Shared TypeScript types + Zod schemas
 │   ├── utils/            # Shared utilities (AppError, verhoeff, UUIDv7 helpers)

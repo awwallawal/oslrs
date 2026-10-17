@@ -719,10 +719,10 @@ curl -fsSL https://get.docker.com -o get-docker.sh
 sh get-docker.sh
 ```
 
-### 5.3 Install Node.js 20 + pnpm + PM2
+### 5.3 Install Node.js 24 + pnpm + PM2
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt install -y nodejs
 npm install -g pnpm pm2
 ```
@@ -1290,7 +1290,7 @@ Sufficient for: 200 staff users, 1K concurrent public users, 1M records/year.
 1. **Replace domain** — NGINX config, certbot, `.env`
 2. **Replace repo URL** — git clone, GitHub Actions
 3. **Replace secrets** — JWT, DB password, API keys
-4. **Keep the stack** — Node 20 + pnpm + PostgreSQL 15 + Redis 7 + NGINX + PM2
+4. **Keep the stack** — Node 24 + pnpm + PostgreSQL 15 + Redis 7 + NGINX + PM2
 5. **Keep the CI/CD structure** — lint -> build -> test (parallel) -> deploy
 6. **Keep the process patterns** — spike-first, prep-as-force-multipliers, three-layer quality, story-shaped improvements
 

@@ -85,7 +85,7 @@ Critical NFRs driving architectural decisions:
 1. **Infrastructure:** Single self-hosted Linux VPS (NDPA data residency - data must remain in Nigeria), Docker Compose deployment, no cloud-hosted services for core data
 2. ~~**ODK Central:** Self-hosted containerized instance~~ **REMOVED (SCP-2026-02-05-001).** Native form system replaces ODK Central entirely.
 3. **Technology Stack (Locked per PRD):**
-   - Node.js 20 LTS
+   - Node.js 24 LTS
    - PostgreSQL 15
    - Redis 7
    - React with Tailwind CSS + shadcn/ui
@@ -357,7 +357,7 @@ cd packages/config && pnpm init && cd ../..
 
 **Language & Runtime:**
 - TypeScript 5.x across all workspaces with strict configuration
-- Node.js 20 LTS with ES modules (`"type": "module"`)
+- Node.js 24 LTS with ES modules (`"type": "module"`)
 - Shared TypeScript configurations via `packages/types`
 
 **Styling Solution:**
@@ -368,7 +368,7 @@ cd packages/config && pnpm init && cd ../..
 **Build Tooling:**
 - **Frontend:** Vite 6.x with React plugin (fast HMR, code splitting, tree shaking)
 - **Backend:** tsx for development, tsc for production builds
-- **Docker:** Multi-stage builds with Node 20 Alpine base images
+- **Docker:** Multi-stage builds with Node 24 Alpine base images
 - **Monorepo:** pnpm workspaces for efficient dependency management
 
 **Testing Framework:**
@@ -4578,7 +4578,7 @@ oslsr/
 ├── pnpm-workspace.yaml             # pnpm workspace configuration
 ├── .gitignore
 ├── .env.example
-├── .nvmrc                          # Node.js 20 LTS version lock
+├── .nvmrc                          # Node.js 24 LTS version lock
 ├── turbo.json                      # Turborepo build caching (optional)
 │
 ├── .github/
@@ -4746,7 +4746,7 @@ oslsr/
 │   │           ├── globals.css
 │   │           └── tailwind.css
 │   │
-│   └── api/                        # Node.js 20 LTS + Express API
+│   └── api/                        # Node.js 24 LTS + Express API
 │       ├── package.json
 │       ├── tsconfig.json
 │       ├── .env
@@ -5248,7 +5248,7 @@ _This section provides comprehensive validation of the complete architecture for
 All technology choices work together without conflicts:
 
 - ✅ React 18.3 + Vite 6.x, TanStack Query 5.x, React Router 7
-- ✅ Node.js 20 LTS + Express + ES modules
+- ✅ Node.js 24 LTS + Express + ES modules
 - ✅ PostgreSQL 15 + Drizzle ORM 1.x + UUIDv7
 - ✅ Redis 7 + BullMQ + ioredis
 - ✅ Tailwind CSS v4 + shadcn/ui + Radix UI
@@ -5328,7 +5328,7 @@ All technology choices work together without conflicts:
 # Story 1.1: Project Initialization
 # 1. Create monorepo with pnpm workspaces
 # 2. Initialize React 18.3 + Vite + Tailwind + shadcn/ui
-# 3. Initialize Node.js 20 + Express + TypeScript
+# 3. Initialize Node.js 24 + Express + TypeScript
 # 4. Create packages/{types,utils,config}
 # See "Starter Template Evaluation" section for complete commands
 ```

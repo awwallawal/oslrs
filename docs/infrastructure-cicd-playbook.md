@@ -94,14 +94,53 @@ docker run -d -p 8000:8000 -p 9443:9443 \
 # to create admin account, otherwise it locks out (see Pitfalls)
 ```
 
-### 1.5 Install Node.js 20 + pnpm + PM2
+### 1.5 Install Node.js 24 + pnpm + PM2
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt install -y nodejs
 npm install -g pnpm pm2
 node --version && pnpm --version
 ```
+
+> ⚠️ `pnpm --version` depends on the directory. pnpm 10 switches itself to the repo's `packageManager`
+> version, so the global may say 10.x while `cd /root/oslrs && pnpm -v` says 9.15.0. The deploy checks
+> the in-repo value (Story 13-77).
+
+### 1.5a Node major upgrade on a running VPS (Story 13-77, done 2026-10-17: 20 → 24)
+
+**Order: VPS first, then CI, then anything that needs the new major.** Code that runs on the old major
+runs on the new one; the reverse hard-fails `pnpm install` (`engine-strict=true`, Story 11-2). Root
+`engines` moves WITH the CI flip, not before: pnpm checks the root project's `engines` too.
+
+1. **Quiet hour, measured.** In the last 60 min: 0 `submissions`, 0 `audit_logs`, 0 active BullMQ jobs
+   (`bull:*:active`), no non-health `/api/` lines in nginx. Weekend mornings were quiet in 2026-10.
+2. **Back up**, into a new directory under `/root/backups/` (e.g. `node-upgrade-<date>/`): `node -v`,
+   `apt-cache policy nodejs`, `/etc/apt/sources.list.d/nodesource.list`, **`/root/.pm2/dump.pm2`**,
+   `pm2 jlist`, `npm ls -g --depth 0`.
+3. **Switch the repo and install:** edit `nodesource.list` from `node_<old>.x` to `node_<new>.x`, run
+   `apt-get update`, then `DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs`. Check `node -v`,
+   `pnpm -v` and `pm2 -v` all still answer. The npm globals live in `/usr/lib/node_modules` and survived 20 → 24.
+4. **Move PM2 onto the new Node, and check.** ⛔ **Never chain `pm2 update && pm2 save`.**
+   - On 2026-10-17, `pm2 update` resurrected `oslsr-api` as id 0, and the `pm2-logrotate` module's
+     self-start then STOPPED id 0. The site was 502 for 15 minutes while the command hung.
+   - Run `pm2 update`, then `pm2 ls`. It must show `oslsr-api online`. If not, copy the backed-up
+     `dump.pm2` back and run `pm2 resurrect`.
+   - Only then `pm2 save`.
+   - Prove the PROCESS, not health: `pm2 jlist` `node_version`, and `readlink /proc/<pid>/exe` for the
+     API pids. Health stays 200 while PM2 still runs the old Node.
+5. **Reboot test:** `systemctl reboot`. At boot, `pm2-root.service` (`pm2 resurrect`) starts
+   `pm2-logrotate:0` first, then `oslsr-api:1` (the safe order). Re-run the step 4 proofs.
+6. **Then CI:** every `node-version:` pin and root `engines`. The deploy job fails unless the VPS Node
+   major == `.nvmrc` and the in-repo `pnpm -v` == `packageManager`.
+
+**Rollback:** copy back the backed-up `nodesource.list`, run `apt-get update`, then
+`apt-get install -y --allow-downgrades nodejs=<old full version, from the backed-up apt policy>`.
+Then repeat step 4. Revert any commit that NEEDS the new major (e.g. a dependency with a higher
+`engines`) before rolling the VPS back.
+
+⚠️ The agent's auto-mode permission classifier refuses `apt-get install` on prod as a production
+deploy. The operator runs steps 3–4 with `!` and the agent verifies each one.
 
 ### 1.6 Install NGINX + Certbot
 
@@ -796,7 +835,7 @@ To reuse this infrastructure for a different project:
 1. **Replace domain** — update NGINX config, certbot, `.env`
 2. **Replace repo URL** — update git clone and GitHub Actions
 3. **Replace secrets** — new JWT, DB password, API keys
-4. **Keep the stack** — Node 20 + pnpm + PostgreSQL 15 + Redis 7 + NGINX + PM2 + Portainer
+4. **Keep the stack** — Node 24 + pnpm + PostgreSQL 15 + Redis 7 + NGINX + PM2 + Portainer
 5. **Keep the CI/CD structure** — lint → build → test (parallel) → deploy
 6. **Keep the patterns** — `db:push:force` for CI, Turbo for monorepo, Vitest split configs
 

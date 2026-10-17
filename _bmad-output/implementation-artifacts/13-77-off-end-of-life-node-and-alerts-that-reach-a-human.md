@@ -1,6 +1,6 @@
 # Story 13.77: Off end-of-life Node, and CI alerts that reach a human
 
-Status: in-progress
+Status: review
 
 <!--
 Created 2026-10-16 via canonical SM *create-story (yolo), on Awwal's instruction: "put the telegram
@@ -109,8 +109,12 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
     - Waiver deleted from `osv-scanner.toml` (a tombstone comment is left; header updated). The prod-scope gate, run locally with the CI image digest and the new lockfile: "✅ No production dependency is vulnerable", hq66 absent from the output. 5 dev-only advisories are listed non-blocking (braces, markdown-it, source-map-js, sprintf-js, vitest), unrelated to this change.
     - `docs/security/findings-register.md` GHSA-hq66 → ✅ CLOSED, with the evidence. The font / CMap workaround is kept (removing it was not compared).
     - tsc 0 errors; `src/services/import` 64 passed / 1 skipped (the gitignored real-fixture test, replaced by the manual comparison above); eslint clean.
-- [ ] **Task 6 — Docs** (AC: #8, #9)
-  - [ ] 6.1 Playbook "Node major upgrade" section, plus every doc hit in Dev Notes.
+- [x] **Task 6 — Docs** (AC: #8, #9)
+  - [x] 6.1 Playbook "Node major upgrade" section, plus every doc hit in Dev Notes.
+    - `docs/infrastructure-cicd-playbook.md` §1.5a: the real 20 → 24 run as a recipe (quiet hour, backups, install, `pm2 update` WITH the `pm2 ls` check, process-level proof, reboot test, CI last, rollback), plus a note that `pnpm -v` is per-directory.
+    - Node 20 → 24 in `_bmad-output/project-context.md` (the bible, :31 and :860), `docs/portable-playbook.md`, `vps-setup-checklist.md` (CRLF kept), `docs/NEW-LAPTOP-SETUP-GUIDE.md` (CRLF kept; `nvm install 24`), and `architecture.md` (7 sites).
+    - Re-grep: the only "Node 20" left is playbook Pitfall #25, which is about the GitHub Actions RUNNER runtime (`using: node20`), not the app. It is correct as written.
+- **Task 5 on prod (2026-10-17 12:00Z, run `39030516377`):** CI's blocking OSV gate "✅ No production dependency is vulnerable" without the waiver; deploy `runtime: node 24 (want 24), pnpm 9.15.0 (want 9.15.0)`; the VPS `apps/api` resolves pdfjs-dist 6.4.299, which loads under v24.22.0; `oslsr-api` online, error log 0, health 200, HEAD `7fa7323`.
 
 ## Dev Notes
 
@@ -225,5 +229,14 @@ Claude Opus 5.5 (claude-opus-5-5), 2026-10-16.
 - **AC2e drills, 2026-10-16 ~16:07 UTC, all three `page` jobs SUCCESS** (Telegram API accepted each; `curl -f`): osv-scheduled `38929352284` (scan also green), prod-verify `38929378407` (edge-freshness green, SSH verify skipped), ci-cd `38929412982` (every other job skipped). ⭐ **The concurrency fix was proved live:** the ci-cd drill was dispatched while push run `38929242472` (`c4fdb90`) was mid-pipeline, and that run went on to `deploy: success` (prod `c4fdb90`, health 200), with `page-deploy-failure` correctly SKIPPED on a green deploy. ⏳ **Open until Awwal confirms three `[DRILL]` messages in the operator chat**; "the API accepted it" is not "a human saw it".
 
 ### File List
+
+- NEW `.github/actions/telegram-page/action.yml` · NEW `.github/workflows/uptime.yml`
+- `.github/workflows/ci-cd.yml` (Node 24 ×8, drill + concurrency + dashboard guard, `page-deploy-failure`, deploy runtime check), `osv-scheduled.yml`, `prod-verify.yml`, `e2e.yml` (CRLF), `benchmarks.yml`
+- `.nvmrc`, `package.json` (engines, `@types/node`), `apps/api/package.json` (`@types/node`, pdfjs-dist), `apps/web/package.json`, `packages/testing/package.json` (CRLF), `pnpm-lock.yaml`
+- `docker/Dockerfile.api`, `docker/Dockerfile.web`
+- `apps/api/src/services/import/parsers/pdf-tabular.parser.ts` (comments; `isEvalSupported` removed, with the reason)
+- `osv-scanner.toml` (GHSA-hq66 waiver deleted; header corrected), `docs/security/findings-register.md`
+- `docs/infrastructure-cicd-playbook.md` (§1.5a), `docs/portable-playbook.md`, `docs/NEW-LAPTOP-SETUP-GUIDE.md`, `_bmad-output/project-context.md`, `_bmad-output/planning-artifacts/architecture.md`, `_bmad-output/implementation-artifacts/vps-setup-checklist.md`
+- Prod (not in git): nodesource `node_24.x`, nodejs 24.22.0, `/root/backups/node-upgrade-20261017/`, pm2 dump re-saved. Repo secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OPERATOR_CHAT_ID`.
 
 ### Review Follow-ups (AI)

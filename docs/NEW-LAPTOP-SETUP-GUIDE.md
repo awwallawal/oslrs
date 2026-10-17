@@ -93,7 +93,7 @@ git --version
 
 ---
 
-### 1.2 Install Node.js 20 LTS
+### 1.2 Install Node.js 24 LTS
 
 **Option A: Direct Download (Simplest)**
 1. Go to [nodejs.org](https://nodejs.org/)
@@ -102,7 +102,7 @@ git --version
 4. Verify:
    ```powershell
    node --version
-   # Expected: v20.x.x (must be 20.18.1 or higher)
+   # Expected: v24.x.x (major must match .nvmrc = 24; CI + VPS enforce it)
 
    npm --version
    # Expected: 10.x.x
@@ -114,8 +114,8 @@ git --version
 3. Close and reopen terminal
 4. Install Node:
    ```powershell
-   nvm install 20.18.1
-   nvm use 20.18.1
+   nvm install 24
+   nvm use 24
    node --version
    ```
 
@@ -124,12 +124,12 @@ git --version
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 source ~/.bashrc  # or ~/.zshrc
 
-nvm install 20.18.1
-nvm use 20.18.1
+nvm install 24
+nvm use 24
 node --version
 ```
 
-- [ ] Node.js 20.x installed and verified
+- [ ] Node.js 24.x installed and verified
 
 ---
 
@@ -606,7 +606,7 @@ pnpm lint              # Run linter
 
 | Tool | Required Version | Check Command |
 |------|-----------------|---------------|
-| Node.js | 20.x (20.18.1+) | `node --version` |
+| Node.js | 24.x (.nvmrc = 24) | `node --version` |
 | pnpm | 9.x (9.15.0) | `pnpm --version` |
 | Docker | 24.x+ | `docker --version` |
 | Git | 2.x+ | `git --version` |
