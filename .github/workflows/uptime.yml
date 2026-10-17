@@ -1,0 +1,99 @@
+name: Uptime (prod health)
+
+# Story 13-77 — added 2026-10-17 after a 15-minute outage (09:07–09:22 UTC, `pm2 update`
+# dropped the API) that NOTHING reported. The CI pages cover failed runs, the API's own
+# alerts die with the API, and prod-verify's edge check is daily. This probes the public
+# health endpoint every 5 minutes, through Cloudflare, exactly as a user's browser does.
+#
+# Pages on a STATE CHANGE only: one "DOWN" when it breaks, one "RECOVERED" when it comes
+# back — not every 5 minutes for the length of an outage (a pager that floods gets muted).
+# The previous state is the conclusion of the previous scheduled run of this workflow.
+#
+# ⚠️ GitHub's schedule is best-effort: runs can start late or be dropped under load, so
+# detection is typically 5–15 minutes, not 5. Good enough to never again find an outage
+# by accident; not a substitute for a paid uptime monitor if one is ever wanted.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      drill:
+        description: 'Send a [DRILL] DOWN page to the operator chat (proves the alert channel; no probe)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    outputs:
+      detail: ${{ steps.p.outputs.detail }}
+    steps:
+      - id: p
+        name: GET /api/v1/health (3 tries, 30 s apart)
+        run: |
+          detail=""
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://oyoskills.com/api/v1/health || true)
+            if [ "$code" = "200" ]; then echo "UP on try $i"; exit 0; fi
+            detail="${detail} try${i}=${code:-000}"
+            if [ "$i" -lt 3 ]; then sleep 30; fi
+          done
+          echo "detail=${detail}" >> "$GITHUB_OUTPUT"
+          echo "::error::oyoskills.com health failed 3 times:${detail}"
+          exit 1
+
+  page:
+    needs: probe
+    if: always() && (github.event_name == 'schedule' || inputs.drill == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - id: s
+        name: Did the state change since the previous scheduled run?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOW: ${{ needs.probe.result }}
+          DRILL: ${{ inputs.drill == true && 'true' || 'false' }}
+        run: |
+          if [ "$DRILL" = "true" ]; then echo "send=down" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # The previous run's PROBE result, not its overall conclusion: a page job that failed
+          # (Telegram unreachable) while the site was up must not read as "it was down".
+          prev_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow uptime.yml --event schedule --status completed \
+                      --limit 5 --json databaseId \
+                      --jq "[.[] | select(.databaseId != ${GITHUB_RUN_ID})][0].databaseId // empty")
+          prev=success
+          if [ -n "$prev_id" ]; then
+            prev=$(gh run view -R "$GITHUB_REPOSITORY" "$prev_id" --json jobs \
+                     --jq '[.jobs[] | select(.name == "probe")][0].conclusion // "success"')
+          fi
+          echo "previous=${prev} now=${NOW}"
+          if [ "$NOW" = "failure" ] && [ "$prev" != "failure" ]; then echo "send=down" >> "$GITHUB_OUTPUT"
+          elif [ "$NOW" = "success" ] && [ "$prev" = "failure" ]; then echo "send=up" >> "$GITHUB_OUTPUT"
+          else echo "send=none" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.s.outputs.send != 'none'
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github/actions
+      - if: steps.s.outputs.send == 'down'
+        uses: ./.github/actions/telegram-page
+        with:
+          bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
+          drill: ${{ inputs.drill == true && 'true' || 'false' }}
+          text: "🔴 OSLRS is DOWN: https://oyoskills.com/api/v1/health failed 3 times in ~1 min (${{ needs.probe.outputs.detail || 'drill' }}). First checks: ssh → pm2 ls (is oslsr-api listed and online?), docker ps, nginx -t. One more message follows when it recovers."
+      - if: steps.s.outputs.send == 'up'
+        uses: ./.github/actions/telegram-page
+        with:
+          bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
+          text: "🟢 OSLRS RECOVERED: https://oyoskills.com/api/v1/health answers 200 again."

@@ -74,6 +74,7 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
     and the same for `TELEGRAM_OPERATOR_CHAT_ID`. Check `gh secret list` (names only).
   - [x] 1.2 Create `.github/actions/telegram-page/action.yml` (composite): inputs `text`, `bot-token`, `chat-id`, `drill`. A missing token or chat id → `::error::` + exit 1.
   - [x] 1.3 Use it in `osv-scheduled.yml` (replace the inline step; fix the "weekly" text), `prod-verify.yml` (scheduled failures) and the `ci-cd.yml` `deploy` job (`if: failure()`).
+  - [ ] 1.5 (added 2026-10-17, Awwal: "add the uptime alert, then the reboot test") `.github/workflows/uptime.yml`: probe the public `/api/v1/health` every 5 min (3 tries, 30 s apart) and page on STATE CHANGE only (DOWN once, RECOVERED once), keyed on the previous run's `probe` job result. Drill it. Origin: the 2026-10-17 `pm2 update` outage ran 15 min and nothing alerted.
   - [ ] 1.4 Add the `drill` input to each `workflow_dispatch`. Run the three drills; Awwal confirms three `[DRILL]` messages. Record the run ids.
 - [x] **Task 2 — Repo pins** (AC: #3)
   - [x] 2.1 `.nvmrc`, `@types/node` ×4, Dockerfiles ×2. `pnpm install`, then tsc for all packages. ⚠️ `engines` DEFERRED to Task 4.1, see Completion Notes.
