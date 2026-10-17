@@ -78,10 +78,10 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
 - [x] **Task 2 — Repo pins** (AC: #3)
   - [x] 2.1 `.nvmrc`, `@types/node` ×4, Dockerfiles ×2. `pnpm install`, then tsc for all packages. ⚠️ `engines` DEFERRED to Task 4.1, see Completion Notes.
 - [ ] **Task 3 — VPS to `<TARGET>`** (AC: #4, #6) — ⛔ prod change: explicit go-ahead from Awwal at the time, inside a measured quiet hour.
-  - [ ] 3.1 Quiet-hour check, plus the AC4a backups.
-  - [ ] 3.2 nodesource → `<TARGET>`; `apt install nodejs`; prove `pnpm`/`pm2` resolve.
+  - [x] 3.1 Quiet-hour check, plus the AC4a backups.
+  - [x] 3.2 nodesource → `<TARGET>`; `apt install nodejs`; prove `pnpm`/`pm2` resolve.
   - [ ] 3.3 Align pnpm per AC6.
-  - [ ] 3.4 `pm2 update` → `node_version` and `process.version` proof → `pm2 save`.
+  - [x] 3.4 `pm2 update` → `node_version` and `process.version` proof → `pm2 save`. (⚠️ `pm2 update` dropped the API: a 15-min outage, restored from backup; see Completion Notes.)
   - [ ] 3.5 Reboot test, as in AC4f.
 - [ ] **Task 4 — CI to `<TARGET>`** (AC: #5, #6, #8)
   - [ ] 4.1 Change all `node-version` pins; re-grep for the count. Move root `engines.node` to `>=24.0.0` (deferred here from Task 2). Add the deploy-job major assertion (AC8).
@@ -182,6 +182,26 @@ Claude Opus 5.5 (claude-opus-5-5), 2026-10-16.
 - prod-verify's SSH `verify` job does not run on a drill (it must not touch prod to test a pager).
 - ⚠️ **AC3 SPLIT, a defect in this story's own order (found at dev time, 2026-10-16).** AC3 put root `engines.node` into the Task 2 commit, before the VPS and CI move. But `.npmrc` has `engine-strict=true`, and pnpm checks the ROOT project's `engines` as well as dependencies'. So that commit would have made `pnpm install` refuse on CI (Node 20) and on the VPS deploy (Node 20): the exact Story 11-2 failure this story exists to avoid. Task 2 therefore ships `.nvmrc` (`24`, major only, so it never goes stale and AC8 can compare majors), `@types/node ^24.19.0` ×4 and Dockerfiles `node:24-alpine`. `engines` moves in Task 4.1, with the CI flip, after the VPS is on 24.
 - **Task 2 evidence:** the lockfile's resolved-package set changed in exactly two entries: `@types/node` 20.19.27 → 24.19.2 and its type-only dependency `undici-types` 6.21.0 → 7.24.6. The other 146 changed lines are peer-suffix churn, and no runtime package moved. tsc `--noEmit`: api 0, web 0, types 0, utils 0, config 0; `packages/testing` 3 errors, all **pre-existing** (identical on the baseline). They are vitest-4 type exports in `src/reporter.ts` (`Reporter`, `File`, `Task`), unrelated to Node and left for their own fix.
+- **Task 3, 2026-10-17 (Saturday). Go-ahead by Awwal ("hi can we proceed", then "continue").**
+  - Quiet window measured at 08:59 UTC / 09:59 WAT: 0 submissions in 60 min (last 10-16 16:57), 0 audit rows, 0 active BullMQ jobs, 5 nginx lines, none to /api. Re-checked at 10:02 WAT.
+  - Backups in `/root/backups/node-upgrade-20261017/`: node version, apt policy, `nodesource.list`, `dump.pm2`, `pm2 jlist`, pnpm / pm2 versions, npm globals (corepack 0.34.6, npm 10.8.2, pm2 6.0.14, pnpm 10.28.1). Then `nodesource.list` → `node_24.x`; candidate `24.22.0-1nodesource1`.
+  - ⚠️ The auto-mode permission classifier refused the `apt-get install` from the agent twice ("Production Deploy"), even with Awwal's chat go-ahead. **Awwal ran the install + `pm2 update` himself with `!`**, which is the right shape for a prod runtime change.
+  - Result: `node -v` v24.22.0; pnpm 10.28.1 and pm2 6.0.14 still resolve (AC4c ✓).
+  - 🚨 **INCIDENT, 09:07–09:22 UTC (~15 min): `pm2 update` brought the PM2 daemon back on Node 24 WITHOUT the API.** PM2's own log, 09:07:08:
+    - the new daemon (Node.js 24.22.0) resurrected `oslsr-api` as **id 0**;
+    - then the `pm2-logrotate` MODULE reported itself "not running, starting…", and PM2 logged `Stopping app:oslsr-api id:0` → `exited with code [0] via signal [SIGINT]`.
+    - **An id collision between the module and the app during `pm2 update`.** Before the update the ids were logrotate 0 / api 1; the update's resurrect reversed them. The API never errored (error log empty).
+    - The chained command then hung inside `pm2 update`, so `pm2 save` and the health line never ran. The process-level check (AC4e, not health) found it 14 min later: `pm2 ls` showed only `pm2-logrotate`, local health 000, public 502.
+    - **Restored by adjudication at 09:22:** copied the 08:59 backup `dump.pm2` back and ran `pm2 resurrect` → `oslsr-api` online, health 200 local and public, all workers initialised. The post-update dump was kept as `dump.pm2.after-update`.
+    - **Impact: none measured.** nginx 09:06–09:23 shows ONE 502, the agent's own health probe; 0 submission attempts (Saturday morning, field idle).
+  - **AC4e proven after restore:** every API process runs `/usr/bin/node` (v24.22.0); `pm2 jlist` `node_version` 24.22.0; `workers.initialized` logged; error log 0 lines; `pm2 save` → dump holds `oslsr-api` (cwd `/root/oslrs/apps/api`, `npx tsx src/index.ts`).
+  - ⛔ **Playbook correction for AC8:** never chain `pm2 update && pm2 save`. With a PM2 module installed, `pm2 update` can drop the app. The safe sequence:
+    1. `pm2 save` before anything else;
+    2. `pm2 update`;
+    3. check that `pm2 ls` shows `oslsr-api online` — if not, `pm2 resurrect` from the saved dump;
+    4. `pm2 save` only after that check.
+    The reboot test (AC4f) is the boot path's own proof: the 2026-10-15 reboot came back with ids logrotate-first, but that was under Node 20 and has to be re-proved.
+  - Side slip: `pkill -f "pm2 update"` matched its own shell command line and killed that SSH session (the hung client had already exited). Use `pgrep` then kill the pid, never `pkill -f` with a pattern the command itself contains.
 - **AC2e drills, 2026-10-16 ~16:07 UTC, all three `page` jobs SUCCESS** (Telegram API accepted each; `curl -f`): osv-scheduled `38929352284` (scan also green), prod-verify `38929378407` (edge-freshness green, SSH verify skipped), ci-cd `38929412982` (every other job skipped). ⭐ **The concurrency fix was proved live:** the ci-cd drill was dispatched while push run `38929242472` (`c4fdb90`) was mid-pipeline, and that run went on to `deploy: success` (prod `c4fdb90`, health 200), with `page-deploy-failure` correctly SKIPPED on a green deploy. ⏳ **Open until Awwal confirms three `[DRILL]` messages in the operator chat**; "the API accepted it" is not "a human saw it".
 
 ### File List
