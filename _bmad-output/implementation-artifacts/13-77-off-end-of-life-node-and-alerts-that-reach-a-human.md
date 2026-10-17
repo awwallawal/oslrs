@@ -74,8 +74,8 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
     and the same for `TELEGRAM_OPERATOR_CHAT_ID`. Check `gh secret list` (names only).
   - [x] 1.2 Create `.github/actions/telegram-page/action.yml` (composite): inputs `text`, `bot-token`, `chat-id`, `drill`. A missing token or chat id → `::error::` + exit 1.
   - [x] 1.3 Use it in `osv-scheduled.yml` (replace the inline step; fix the "weekly" text), `prod-verify.yml` (scheduled failures) and the `ci-cd.yml` `deploy` job (`if: failure()`).
-  - [x] 1.5 (drill `39021627180` received — Awwal: "got the drill oslrs is down message", 2026-10-17) (added 2026-10-17, Awwal: "add the uptime alert, then the reboot test") `.github/workflows/uptime.yml`: probe the public `/api/v1/health` every 5 min (3 tries, 30 s apart) and page on STATE CHANGE only (DOWN once, RECOVERED once), keyed on the previous run's `probe` job result. Drill it. Origin: the 2026-10-17 `pm2 update` outage ran 15 min and nothing alerted.
   - [x] 1.4 ✅ Awwal confirmed all three received, 2026-10-17: "drill oslrs edge check failed, drill oslrs deploy failed and drill oslsrs daily osv scan received yesterday". Add the `drill` input to each `workflow_dispatch`. Run the three drills; Awwal confirms three `[DRILL]` messages. Record the run ids.
+  - [x] 1.5 (drill `39021627180` received — Awwal: "got the drill oslrs is down message", 2026-10-17) (added 2026-10-17, Awwal: "add the uptime alert, then the reboot test") `.github/workflows/uptime.yml`: probe the public `/api/v1/health` every 5 min (3 tries, 30 s apart) and page on STATE CHANGE only (DOWN once, RECOVERED once), keyed on the previous run's `probe` job result. Drill it. Origin: the 2026-10-17 `pm2 update` outage ran 15 min and nothing alerted.
 - [x] **Task 2 — Repo pins** (AC: #3)
   - [x] 2.1 `.nvmrc`, `@types/node` ×4, Dockerfiles ×2. `pnpm install`, then tsc for all packages. ⚠️ `engines` DEFERRED to Task 4.1, see Completion Notes.
 - [x] **Task 3 — VPS to `<TARGET>`** (AC: #4, #6) — ⛔ prod change: explicit go-ahead from Awwal at the time, inside a measured quiet hour.
@@ -93,7 +93,7 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
     - The 6 stale "Node 20-compatible pnpm" comments were rewritten. pnpm pins stay at 9.15.0 (see 3.3).
     - Deploy job, right after `git pull`: fails unless `node` major == `.nvmrc` major AND the in-repo `pnpm -v` == `packageManager`. Dry-run read-only on the VPS: node 24 / want 24, pnpm 9.15.0 / want 9.15.0.
     - The dry run is what exposed the pnpm mis-measurement: my first edit had moved CI and `packageManager` to 10.28.1, and it was reverted before commit.
-    - actionlint findings identical before and after (all pre-existing shellcheck notes); `pnpm install --frozen-lockfile` clean, lockfile untouched.
+    - ⛔ **CORRECTED by adjudication 2026-10-17:** "actionlint findings identical before and after" was **unsupported when written**. The comparison used a custom `-format` template that did not parse, so both files held the same template-error line and matched trivially: a clean result that never measured. Re-measured properly with `-oneline` at adjudication of the code review: **10 findings before, 10 after, identical, all pre-existing shellcheck notes** (9 ci-cd, 1 prod-verify). Both trees contain the Task 4 changes, so this now covers Task 4 too. `pnpm install --frozen-lockfile` clean, lockfile untouched.
   - [x] 4.2 `PREPUSH_FULL=1 git push`; quote the suite totals; watch CI to `deploy` success; prod HEAD == pushed SHA (D6).
     - ✅ 2026-10-17: the pre-push suite ran in FULL (root `package.json` forces it). API 4771 passed / 9 skipped; web 3301 passed / 2 todo; utils 126; types 138; testing 64; 0 failed.
     - CI run `39029160692`: every job green on Node 24.
@@ -109,12 +109,12 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
     - Waiver deleted from `osv-scanner.toml` (a tombstone comment is left; header updated). The prod-scope gate, run locally with the CI image digest and the new lockfile: "✅ No production dependency is vulnerable", hq66 absent from the output. 5 dev-only advisories are listed non-blocking (braces, markdown-it, source-map-js, sprintf-js, vitest), unrelated to this change.
     - `docs/security/findings-register.md` GHSA-hq66 → ✅ CLOSED, with the evidence. The font / CMap workaround is kept (removing it was not compared).
     - tsc 0 errors; `src/services/import` 64 passed / 1 skipped (the gitignored real-fixture test, replaced by the manual comparison above); eslint clean.
+    - **On prod (2026-10-17 12:00Z, run `39030516377`):** CI's blocking OSV gate "✅ No production dependency is vulnerable" without the waiver; deploy `runtime: node 24 (want 24), pnpm 9.15.0 (want 9.15.0)`; the VPS `apps/api` resolves pdfjs-dist 6.4.299, which loads under v24.22.0; `oslsr-api` online, error log 0, health 200, HEAD `7fa7323`.
 - [x] **Task 6 — Docs** (AC: #8, #9)
   - [x] 6.1 Playbook "Node major upgrade" section, plus every doc hit in Dev Notes.
     - `docs/infrastructure-cicd-playbook.md` §1.5a: the real 20 → 24 run as a recipe (quiet hour, backups, install, `pm2 update` WITH the `pm2 ls` check, process-level proof, reboot test, CI last, rollback), plus a note that `pnpm -v` is per-directory.
     - Node 20 → 24 in `_bmad-output/project-context.md` (the bible, :31 and :860), `docs/portable-playbook.md`, `vps-setup-checklist.md` (CRLF kept), `docs/NEW-LAPTOP-SETUP-GUIDE.md` (CRLF kept; `nvm install 24`), and `architecture.md` (7 sites).
-    - Re-grep: the only "Node 20" left is playbook Pitfall #25, which is about the GitHub Actions RUNNER runtime (`using: node20`), not the app. It is correct as written.
-- **Task 5 on prod (2026-10-17 12:00Z, run `39030516377`):** CI's blocking OSV gate "✅ No production dependency is vulnerable" without the waiver; deploy `runtime: node 24 (want 24), pnpm 9.15.0 (want 9.15.0)`; the VPS `apps/api` resolves pdfjs-dist 6.4.299, which loads under v24.22.0; `oslsr-api` online, error log 0, health 200, HEAD `7fa7323`.
+    - Re-grep: the only "Node 20" left is playbook Pitfall #25, which is about the GitHub Actions RUNNER runtime (`using: node20`), not the app. It is correct as written. ⚠️ **Corrected by code review (H1):** this re-grep missed `benchmarks.yml:41`, `e2e.yml:93` (fixed in review) and `docs/adjudication-agent-handoff.md:263` (proposed handoff update P1 below).
 
 ## Dev Notes
 
@@ -238,5 +238,40 @@ Claude Opus 5.5 (claude-opus-5-5), 2026-10-16.
 - `osv-scanner.toml` (GHSA-hq66 waiver deleted; header corrected), `docs/security/findings-register.md`
 - `docs/infrastructure-cicd-playbook.md` (§1.5a), `docs/portable-playbook.md`, `docs/NEW-LAPTOP-SETUP-GUIDE.md`, `_bmad-output/project-context.md`, `_bmad-output/planning-artifacts/architecture.md`, `_bmad-output/implementation-artifacts/vps-setup-checklist.md`
 - Prod (not in git): nodesource `node_24.x`, nodejs 24.22.0, `/root/backups/node-upgrade-20261017/`, pm2 dump re-saved. Repo secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OPERATOR_CHAT_ID`.
+- **Code review 2026-10-17 (uncommitted):** `.github/workflows/ci-cd.yml` (`dispatch-is-drill-only`, `PREV_HEAD` rollback, cancelled-deploy page, `node-version-file` ×8), `e2e.yml`, `benchmarks.yml`, `osv-scheduled.yml` (`node-version-file`, comments), `uptime.yml` (previous-run lookup, re-send), `osv-scanner.toml` (tombstone), `docker/Dockerfile.api`, `docker/Dockerfile.web` (pnpm 9.15.0).
+
+### Change Log
+
+| Date | Change |
+|---|---|
+| 2026-10-16 | Story created (SM create-story); AC1 ruled Node 24; Task 1 alert channel + drills; Task 2 repo pins. |
+| 2026-10-17 | Task 3 VPS on Node 24.22.0 (15-min `pm2 update` outage, restored); uptime workflow; reboot test; Task 4 CI on 24 + runtime-drift check; Task 5 pdfjs 6.4.299, GHSA-hq66 closed; Task 6 docs. Status → review. |
+| 2026-10-17 | Adversarial code review: 1 High, 4 Medium, 5 Low, all fixed in the working tree (see Review Follow-ups). Status stays `review`, done PROPOSED pending adjudication's commit + green CI. |
 
 ### Review Follow-ups (AI)
+
+Code review 2026-10-17 (adversarial, BMAD code-review; Claude Opus 5.5). Awwal: "create action items (critical to low) and fix them all automatically".
+
+- [x] [AI-Review][High] H1 — AC9 partial: "Node 20" still live in `.github/workflows/benchmarks.yml:41`, `.github/workflows/e2e.yml:93` ("we use Node 20") and `docs/adjudication-agent-handoff.md:263` ("VPS+CI are Node 20"). Task 6.1's re-grep claim was false. → **FIXED** in both workflows (comment now points at `packageManager`); the handoff line is not the review's remit → **P1** below. Re-grep of `.github/workflows`: 0 "Node 20".
+- [x] [AI-Review][Medium] M1 — `uptime.yml` reads a CANCELLED run (concurrency-replaced, no `probe` job) as "previous = success" → duplicate DOWN, missed RECOVERED. → **FIXED:** walks back up to 20 completed scheduled runs to the first whose `probe` concluded success/failure. Proven against the real run `39035330580` (`probe=success page=success`) and 8 simulated cases (outage start/continue, cancelled run between, recovery after a cancelled run, failed DOWN send, failed UP send, steady, no history): all correct.
+- [x] [AI-Review][Medium] M2 — `page-deploy-failure` ignores a CANCELLED deploy. → **FIXED:** pages on `cancelled` too, but only when `dashboard`, `auth-smoke` and `smoke-e2e` all succeeded (the deploy had been released), so a push superseded mid-tests does not page. Message names the result.
+- [x] [AI-Review][Medium] M3 — The runtime-drift check runs AFTER `git pull`, leaving the tree on the new commit on failure. → **FIXED differently than first proposed:** the check must stay after the pull, because the effective pnpm comes from the checked-out `package.json` (checking before the pull would fail every commit that bumps `packageManager`). The script now records `PREV_HEAD` before the pull and, on drift, runs `git reset --keep "$PREV_HEAD"` (refuses rather than discard local VPS changes) before `exit 1`.
+- [x] [AI-Review][Medium] M4 — `osv-scanner.toml` tombstone falsely said `isEvalSupported: false` stays. → **FIXED:** now says it is gone and why, pointing at the call-site comment and the register.
+- [x] [AI-Review][Low] L1 — CI hardcoded `node-version: 24` ×11. → **FIXED:** all 11 → `node-version-file: '.nvmrc'` (script asserted 11 replacements and that every job checks out before `setup-node`; osv-scheduled checks out `main`, so it reads main's `.nvmrc`).
+- [x] [AI-Review][Low] L2 — AC6 closure diff never run; Dockerfiles unpinned pnpm. → **FIXED:** closure diff RUN 2026-10-17 ~14:51 WAT, both at `e74e8d8` with pnpm 9.15.0: `pnpm ls -r --prod --depth Infinity --json`, normalised to `name@version` + importers → **VPS 690 / laptop 690, 0 differences** (read-only on the VPS). CI not measured directly (same pnpm, frozen lockfile, Linux, as the VPS). Dockerfiles → `npm install -g pnpm@9.15.0` with a bump-together comment.
+- [x] [AI-Review][Low] L3 — ci-cd dispatched with `drill=false` was a green no-op. → **FIXED:** new job `dispatch-is-drill-only` fails such a dispatch with a clear message. (Making it run full CI was rejected: the per-package change detection has never run on a dispatch event.)
+- [x] [AI-Review][Low] L4 — A failed DOWN send was never retried. → **FIXED** with M1: if the previous run's `page` job FAILED, this run re-sends (DOWN while down, RECOVERED while up). Known cost: a page job that failed for a non-Telegram reason during an UP period produces one extra RECOVERED message.
+- [x] [AI-Review][Low] L5 — Story hygiene. → **FIXED:** 1.4/1.5 in order; the Task 5 prod note moved under 5.1; Change Log added.
+
+**Verification of the review fixes:** actionlint 1.7.7 (Docker) on all six workflows before vs after: 10 findings both times, identical, all pre-existing (9 ci-cd, 1 prod-verify). Workflow line endings unchanged (diff shows only the changed lines). No application code changed, so no test suite was re-run. ⚠️ **Not provable locally (needs CI after the push):** the `>-` multi-line `if:` on `page-deploy-failure`, the `dispatch-is-drill-only` job, `node-version-file` on all 11 jobs, and the `PREV_HEAD` rollback (only executes on real drift). Suggested proof after the push: the push run itself (every job on `.nvmrc`), plus one ci-cd dispatch WITHOUT drill (must go red with the message).
+
+#### 📋 PROPOSED HANDOFF UPDATES (for the adjudication agent to adopt, amend or reject)
+
+- **P1** `docs/adjudication-agent-handoff.md:263`: "Check the Node engine FIRST on any dep bump (VPS+CI are Node 20)" → "(VPS+CI are Node 24 since 2026-10-17, Story 13-77; the deploy fails on a node-major or pnpm drift)".
+- **P2** Record that ci-cd's `workflow_dispatch` now FAILS without `drill` (a manual "re-run CI" must re-run a push/PR run).
+
+#### PRE-ADJUDICATION RECORD (code-review session, for the adjudication agent)
+
+- All 10 findings fixed in the working tree, **uncommitted** (the review does not commit or push). Files: `.github/workflows/{ci-cd,e2e,benchmarks,osv-scheduled,uptime}.yml`, `osv-scanner.toml`, `docker/Dockerfile.{api,web}`, this story.
+- Every AC is implemented. AC6's proof now exists (690/690). AC7's "keep `isEvalSupported`" is a recorded, measured deviation (option removed upstream), not a gap.
+- **PROPOSED status: done**, once adjudication commits, pushes and the push run is green. Status left at `review`: a review may propose a closure, never sign one.

@@ -125,4 +125,6 @@ reason = "react-router-dom 6.30.4 open-redirect→XSS. Same app-layer mitigation
 # Accepted 2026-08-07 only because the fix (6.2.108) needs Node 22 and CI + the VPS ran Node 20.
 # Both moved to Node 24 (13-77), and pdfjs-dist is now 6.4.299. Real-register extraction is
 # byte-identical to 5.6.205 (3,673 rows, matching hashes). The gate passes WITHOUT this
-# entry. `isEvalSupported: false` stays at the call site as defence in depth.
+# entry. `isEvalSupported: false` is GONE: pdfjs 6 removed the option along with its eval
+# path (0 `eval(` / `new Function(` in the 6.4.299 builds). See the parser's call-site
+# comment and docs/security/findings-register.md. (Corrected by the 13-77 code review.)

@@ -7,11 +7,13 @@ on:
     branches: [main]
   # Story 13-77 AC2e — a manual DRILL of the deploy-failure page, and nothing else:
   # lint-and-build is skipped for dispatch, so every job downstream of it (all tests,
-  # deploy) skips too; only `page-deploy-failure` runs.
+  # deploy) skips too; only `page-deploy-failure` runs. A dispatch WITHOUT drill fails
+  # on purpose (job `dispatch-is-drill-only`): it would otherwise be a green run that
+  # tested nothing. To re-run CI, re-run a push/PR run instead.
   workflow_dispatch:
     inputs:
       drill:
-        description: 'Send a [DRILL] deploy-failure page to the operator chat (runs nothing else)'
+        description: 'Send a [DRILL] deploy-failure page to the operator chat (runs nothing else; must be ticked)'
         type: boolean
         default: false
 
@@ -35,6 +37,17 @@ env:
   TURBO_TELEMETRY_DISABLED: 1
 
 jobs:
+  # Code review 13-77 L3: a dispatch is only ever a drill. Without `drill` it would be a
+  # green run in which every job skipped — it reads as "CI passed" and tested nothing.
+  dispatch-is-drill-only:
+    if: github.event_name == 'workflow_dispatch' && inputs.drill != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: |
+          echo "::error::This workflow's manual dispatch only runs the deploy-page DRILL (tick 'drill'). It does not run CI. To re-run CI, re-run a push or pull_request run."
+          exit 1
+
   # ============================================
   # Job 1: Lint and Build (shared by all test jobs)
   # ============================================
@@ -69,7 +82,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       # Optimization 1: Turbo Remote Cache (GitHub Actions)
@@ -279,7 +292,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       - name: Download build artifacts
@@ -400,7 +413,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       - name: Download build artifacts
@@ -528,7 +541,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -620,7 +633,7 @@ jobs:
           version: 9.15.0
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -683,7 +696,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       - name: Download build artifacts
@@ -775,7 +788,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -935,7 +948,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       - name: Download build artifacts
@@ -1093,6 +1106,10 @@ jobs:
             free -h | head -3
             DEPLOY_START=$(date +%s)
 
+            # Code review 13-77 M3: remember the deployed commit, so a runtime-drift
+            # failure below can put the working tree back where the running API is.
+            PREV_HEAD=$(git rev-parse HEAD)
+
             git pull origin main
 
             # ⛔ Story 13-77 AC6/AC8 — the runtime must be what the repo says, BEFORE
@@ -1102,6 +1119,9 @@ jobs:
             # installing with a different pnpm than CI tested. `pnpm -v` is read INSIDE
             # the repo on purpose: the VPS's global pnpm is 10.28.1 but switches itself
             # to `packageManager` here, so this is the pnpm that actually installs.
+            # That is also why the check runs AFTER the pull: the effective pnpm comes
+            # from the checked-out package.json, so a commit that bumps packageManager
+            # can only be checked once it is on disk.
             WANT_NODE=$(tr -d 'v \r\n' < .nvmrc | cut -d. -f1)
             HAVE_NODE=$(node -p 'process.versions.node.split(".")[0]')
             WANT_PNPM=$(node -p 'require("./package.json").packageManager.split("@")[1]')
@@ -1109,6 +1129,11 @@ jobs:
             echo "runtime: node ${HAVE_NODE} (want ${WANT_NODE}), pnpm ${HAVE_PNPM} (want ${WANT_PNPM})"
             if [ "$HAVE_NODE" != "$WANT_NODE" ] || [ "$HAVE_PNPM" != "$WANT_PNPM" ]; then
               echo "::error::VPS runtime drift: node ${HAVE_NODE} vs .nvmrc ${WANT_NODE}, pnpm ${HAVE_PNPM} vs packageManager ${WANT_PNPM}. Fix the VPS (docs/infrastructure-cicd-playbook.md, Node major upgrade) before deploying."
+              # Put the tree back on the commit the API is running, so a pm2 restart or a
+              # reboot does not start new code over old node_modules. --keep (not --hard)
+              # refuses rather than discard any local change on the VPS.
+              git reset --keep "$PREV_HEAD"
+              echo "Working tree restored to ${PREV_HEAD}; nothing was installed or restarted."
               exit 1
             fi
 
@@ -1307,9 +1332,23 @@ jobs:
   # SKIPS the deploy, is already in front of whoever pushed. A deploy that dies part-way
   # is not — prod may be on the old commit, or half on the new one — and before this it
   # reached nobody.
+  #
+  # Code review 13-77 M2: a CANCELLED deploy pages too. `cancel-in-progress` lets a
+  # newer push to main kill this run while the deploy is mid-SSH, which leaves prod
+  # exactly "part-way". But a run superseded while its TESTS were still running also
+  # reports the deploy as cancelled, and paging every quick double-push would train
+  # the operator to ignore the pager. So a cancelled deploy pages only when every job
+  # it needs succeeded, i.e. the deploy had been released to start. `always()` (not
+  # `!cancelled()`) is what lets this job run inside a cancelled run at all.
   page-deploy-failure:
-    needs: deploy
-    if: always() && (needs.deploy.result == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.drill == true))
+    needs: [deploy, dashboard, auth-smoke, smoke-e2e]
+    if: >-
+      always() && (
+        needs.deploy.result == 'failure' ||
+        (needs.deploy.result == 'cancelled' && needs.dashboard.result == 'success' &&
+         needs.auth-smoke.result == 'success' && needs.smoke-e2e.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.drill == true)
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -1323,4 +1362,4 @@ jobs:
           bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat-id: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
           drill: ${{ (github.event_name == 'workflow_dispatch' && inputs.drill == true) && 'true' || 'false' }}
-          text: "🚨 OSLRS DEPLOY FAILED on main (${{ github.sha }}). Prod may still be on the previous commit, or part-way through this one. Check the run, then verify prod HEAD and /api/v1/health before pushing again."
+          text: "🚨 OSLRS DEPLOY did not finish on main (${{ needs.deploy.result == 'skipped' && 'drill' || needs.deploy.result }},${{ github.sha }}). Prod may still be on the previous commit, or part-way through this one. Check the run, then verify prod HEAD and /api/v1/health before pushing again."

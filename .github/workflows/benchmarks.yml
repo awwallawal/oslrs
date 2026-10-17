@@ -38,12 +38,12 @@ jobs:
       # SHA-pinned to a Node 24 commit on main — see ci-cd.yml for rationale.
       - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
         with:
-          # Pin pnpm — see ci-cd.yml for rationale (pnpm 10.x requires Node 22.13+; we use Node 20).
+          # Pin pnpm to `packageManager` (9.15.0) — see ci-cd.yml for rationale.
           version: 9.15.0
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       - name: Install dependencies

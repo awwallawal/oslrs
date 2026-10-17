@@ -1,6 +1,7 @@
 FROM node:24-alpine AS builder
 WORKDIR /app
-RUN npm install -g pnpm
+# pnpm pinned to root package.json `packageManager` (Story 13-77 AC6); bump together.
+RUN npm install -g pnpm@9.15.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
 RUN pnpm install --frozen-lockfile
