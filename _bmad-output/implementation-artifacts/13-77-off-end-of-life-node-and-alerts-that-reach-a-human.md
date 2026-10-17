@@ -78,7 +78,7 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
   - [x] 1.4 ✅ Awwal confirmed all three received, 2026-10-17: "drill oslrs edge check failed, drill oslrs deploy failed and drill oslsrs daily osv scan received yesterday". Add the `drill` input to each `workflow_dispatch`. Run the three drills; Awwal confirms three `[DRILL]` messages. Record the run ids.
 - [x] **Task 2 — Repo pins** (AC: #3)
   - [x] 2.1 `.nvmrc`, `@types/node` ×4, Dockerfiles ×2. `pnpm install`, then tsc for all packages. ⚠️ `engines` DEFERRED to Task 4.1, see Completion Notes.
-- [ ] **Task 3 — VPS to `<TARGET>`** (AC: #4, #6) — ⛔ prod change: explicit go-ahead from Awwal at the time, inside a measured quiet hour.
+- [x] **Task 3 — VPS to `<TARGET>`** (AC: #4, #6) — ⛔ prod change: explicit go-ahead from Awwal at the time, inside a measured quiet hour.
   - [x] 3.1 Quiet-hour check, plus the AC4a backups.
   - [x] 3.2 nodesource → `<TARGET>`; `apt install nodejs`; prove `pnpm`/`pm2` resolve.
   - [x] 3.3 Align pnpm per AC6. ✅ **Already aligned: the premise was a mis-measurement** (see the measured-facts table). The effective VPS pnpm in the repo is 9.15.0 == CI == `packageManager`. AC6's proof is now the deploy-time check (Task 4.1), which reads `pnpm -v` inside the repo on every deploy. Moving to pnpm 10 was considered and REJECTED as out of scope: it would CHANGE prod installs (dependency lifecycle scripts stop running; `node_modules` re-laid out on a 1-vCPU box mid-deploy) for no benefit this story needs.
@@ -87,15 +87,19 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
     - `pm2-logrotate:0` started first, then `oslsr-api:1`. **The boot path uses the SAFE id order**, which confirms the incident root cause is specific to `pm2 update`.
     - `node_version` 24.22.0; every API process runs `/usr/bin/node`; `workers.initialized` logged; error log 0 lines.
     - docker ×3, nginx and tailscaled all active; health 200 local and public; HEAD `8d51868`.
-- [ ] **Task 4 — CI to `<TARGET>`** (AC: #5, #6, #8)
+- [x] **Task 4 — CI to `<TARGET>`** (AC: #5, #6, #8)
   - [x] 4.1 Change all `node-version` pins; re-grep for the count. Move root `engines.node` to `>=24.0.0` (deferred here from Task 2). Add the deploy-job major assertion (AC8).
     - 11 `node-version` pins → 24 (ci-cd ×8, e2e, benchmarks, osv-scheduled); re-grep finds 0 left. `e2e.yml` is CRLF and was edited with its line endings preserved.
     - The 6 stale "Node 20-compatible pnpm" comments were rewritten. pnpm pins stay at 9.15.0 (see 3.3).
     - Deploy job, right after `git pull`: fails unless `node` major == `.nvmrc` major AND the in-repo `pnpm -v` == `packageManager`. Dry-run read-only on the VPS: node 24 / want 24, pnpm 9.15.0 / want 9.15.0.
     - The dry run is what exposed the pnpm mis-measurement: my first edit had moved CI and `packageManager` to 10.28.1, and it was reverted before commit.
     - actionlint findings identical before and after (all pre-existing shellcheck notes); `pnpm install --frozen-lockfile` clean, lockfile untouched.
-  - [ ] 4.2 `PREPUSH_FULL=1 git push`; quote the suite totals; watch CI to `deploy` success; prod HEAD == pushed SHA (D6).
-  - [ ] 4.3 AC6 closure diff, CI vs VPS.
+  - [x] 4.2 `PREPUSH_FULL=1 git push`; quote the suite totals; watch CI to `deploy` success; prod HEAD == pushed SHA (D6).
+    - ✅ 2026-10-17: the pre-push suite ran in FULL (root `package.json` forces it). API 4771 passed / 9 skipped; web 3301 passed / 2 todo; utils 126; types 138; testing 64; 0 failed.
+    - CI run `39029160692`: every job green on Node 24.
+    - Deploy log 11:39:16Z: `runtime: node 24 (want 24), pnpm 9.15.0 (want 9.15.0)` — the AC8 check passing on a real deploy.
+    - prod HEAD `13f9cbf`, `oslsr-api` online, health 200.
+  - [x] 4.3 AC6 closure diff, CI vs VPS. Superseded: both run pnpm 9.15.0 against the same frozen lockfile, so the closure is identical by construction, and the deploy check now enforces the pnpm equality on every deploy.
 - [ ] **Task 5 — pdfjs and the advisory** (AC: #7)
   - [ ] 5.1 Bump; assert parser row counts; remove the waiver; update the register; OSV gate green without it.
 - [ ] **Task 6 — Docs** (AC: #8, #9)

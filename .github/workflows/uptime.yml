@@ -12,6 +12,9 @@ name: Uptime (prod health)
 # ⚠️ GitHub's schedule is best-effort: runs can start late or be dropped under load, so
 # detection is typically 5–15 minutes, not 5. Good enough to never again find an outage
 # by accident; not a substitute for a paid uptime monitor if one is ever wanted.
+# Observed 2026-10-17: the first scheduled run had not fired 2 h after the workflow was
+# added (dispatch worked). This comment's push re-registers the schedule. If runs stay
+# absent, the schedule itself is the failure, and an external monitor is the fix.
 on:
   schedule:
     - cron: '*/5 * * * *'
