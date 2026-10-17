@@ -74,7 +74,7 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
     and the same for `TELEGRAM_OPERATOR_CHAT_ID`. Check `gh secret list` (names only).
   - [x] 1.2 Create `.github/actions/telegram-page/action.yml` (composite): inputs `text`, `bot-token`, `chat-id`, `drill`. A missing token or chat id → `::error::` + exit 1.
   - [x] 1.3 Use it in `osv-scheduled.yml` (replace the inline step; fix the "weekly" text), `prod-verify.yml` (scheduled failures) and the `ci-cd.yml` `deploy` job (`if: failure()`).
-  - [ ] 1.5 (added 2026-10-17, Awwal: "add the uptime alert, then the reboot test") `.github/workflows/uptime.yml`: probe the public `/api/v1/health` every 5 min (3 tries, 30 s apart) and page on STATE CHANGE only (DOWN once, RECOVERED once), keyed on the previous run's `probe` job result. Drill it. Origin: the 2026-10-17 `pm2 update` outage ran 15 min and nothing alerted.
+  - [x] 1.5 (drill `39021627180` received — Awwal: "got the drill oslrs is down message", 2026-10-17) (added 2026-10-17, Awwal: "add the uptime alert, then the reboot test") `.github/workflows/uptime.yml`: probe the public `/api/v1/health` every 5 min (3 tries, 30 s apart) and page on STATE CHANGE only (DOWN once, RECOVERED once), keyed on the previous run's `probe` job result. Drill it. Origin: the 2026-10-17 `pm2 update` outage ran 15 min and nothing alerted.
   - [ ] 1.4 Add the `drill` input to each `workflow_dispatch`. Run the three drills; Awwal confirms three `[DRILL]` messages. Record the run ids.
 - [x] **Task 2 — Repo pins** (AC: #3)
   - [x] 2.1 `.nvmrc`, `@types/node` ×4, Dockerfiles ×2. `pnpm install`, then tsc for all packages. ⚠️ `engines` DEFERRED to Task 4.1, see Completion Notes.
@@ -83,7 +83,10 @@ so that **the runtime receives security patches again, the pdfjs advisory held o
   - [x] 3.2 nodesource → `<TARGET>`; `apt install nodejs`; prove `pnpm`/`pm2` resolve.
   - [ ] 3.3 Align pnpm per AC6.
   - [x] 3.4 `pm2 update` → `node_version` and `process.version` proof → `pm2 save`. (⚠️ `pm2 update` dropped the API: a 15-min outage, restored from backup; see Completion Notes.)
-  - [ ] 3.5 Reboot test, as in AC4f.
+  - [x] 3.5 Reboot test, as in AC4f. ✅ 2026-10-17 09:40:53 UTC, after a quiet-hour check at 10:40 WAT (0 submissions, 0 audit rows, 0 non-health API calls in 60 min; dump = [oslsr-api]; `pm2-root` enabled). Back at 09:41:16:
+    - `pm2-logrotate:0` started first, then `oslsr-api:1`. **The boot path uses the SAFE id order**, which confirms the incident root cause is specific to `pm2 update`.
+    - `node_version` 24.22.0; every API process runs `/usr/bin/node`; `workers.initialized` logged; error log 0 lines.
+    - docker ×3, nginx and tailscaled all active; health 200 local and public; HEAD `8d51868`.
 - [ ] **Task 4 — CI to `<TARGET>`** (AC: #5, #6, #8)
   - [ ] 4.1 Change all `node-version` pins; re-grep for the count. Move root `engines.node` to `>=24.0.0` (deferred here from Task 2). Add the deploy-job major assertion (AC8).
   - [ ] 4.2 `PREPUSH_FULL=1 git push`; quote the suite totals; watch CI to `deploy` success; prod HEAD == pushed SHA (D6).
