@@ -1452,8 +1452,11 @@ BEFORE writing this section. That is why it was missing until 10-18 (lesson at t
 
 ### 🧨 What can still trip us (updated 2026-10-18)
 - ✅ ~~Node 20 EOL~~ and ✅ ~~pdfjs GHSA-hq66~~: both closed by 13-77.
-- ⛔ **Nothing reliable tells us prod is down.** GitHub delays every schedule on this repo by 4–5 h, so `uptime.yml`
-  ran 7 times in ~16 h (~190 expected). Until 13-78 ships, an overnight outage is found by a human.
+- ⛔ **Nothing reliable tells us prod is down YET.** GitHub delays every schedule on this repo by 4–5 h, so `uptime.yml`
+  ran 7 times in ~16 h (~190 expected). 🔧 **2026-10-18: 13-78 is BUILT, UNCOMMITTED, NOT installed** (dev-story; `in-progress`: Tasks 1–4 + 7 done, Tasks 5–6 wait on Awwal).
+  `scripts/health-watchdog.sh` + `infra/cron/oslsr-health-watchdog` are in the repo, but nothing pages until Awwal
+  runs the one-line install (playbook Part 7a.1), the AC6 drill passes, and UptimeRobot is set up (Part 7a.2).
+  Until then, an overnight outage is still found by a human. Every deploy now WARNS while the watchdog heartbeat is missing.
 - **New OSV advisories** against unchanged deps, any day. The daily scan pages now (secrets set). Emergency unblock:
   `osv-scanner.toml` header (it IS read by the blocking gate).
 - **hCaptcha free quota 10,000/month** (78 in 15 days at 10-15) · **invitation links expire in 48 h**.

@@ -730,6 +730,75 @@ ssh root@oslsr-home-app 'du -sh /var/www/oslsr.bak.prev 2>/dev/null || echo "no 
 
 ---
 
+## Part 7a: Monitoring and paging (Story 13-78, 2026-10-18)
+
+**Why:** on 2026-10-17 `pm2 update` dropped `oslsr-api` for 15 minutes (site 502) and nothing paged. The
+API's own alerts died with the API. GitHub delays every schedule on this repo by 4–5 h, so `uptime.yml`
+cannot be the monitor. Every page goes to the operator Telegram chat, except where noted below.
+
+| Layer | Sees | Cannot see | Latency |
+|---|---|---|---|
+| In-API alerting (Telegram/email, live since Epic 9) | DB, queue and app-level problems while the API runs | its own death | minutes |
+| **VPS watchdog**, `scripts/health-watchdog.sh` (cron, every minute) | API process gone or hung, PM2 lost the app, Postgres or Redis down | the whole box, or its network, down | ~2 min |
+| **UptimeRobot** (external, free plan) | box, network, nginx, Cloudflare, DNS, TLS | which component inside the box failed | ≤ 5 min |
+| GitHub backstops: `uptime.yml`, prod-verify edge check (daily), deploy-failure page, OSV scan | uptime: the same as UptimeRobot, hours late. Others: their own failures | — | hours |
+
+> ⏳ **Status at 2026-10-18:** the watchdog is BUILT (Story 13-78) but NOT YET INSTALLED, and
+> UptimeRobot is NOT YET SET UP. Until both are done, an outage is still found by a human. Update this
+> line when Tasks 5–6 of 13-78 are done.
+
+### 7a.1 The VPS watchdog
+
+- **What it checks, every minute, each behind a 10 s timeout:**
+  - `curl http://127.0.0.1:3000/api/v1/health` == 200. Liveness only; the deep `/system/health` is super-admin-only.
+  - `pm2 jlist` has `oslsr-api` with status `online`.
+  - `docker exec oslsr-postgres pg_isready`.
+  - `redis-cli ping` == PONG, with the password from `REDIS_URL` passed in `REDISCLI_AUTH` (never argv).
+- **When it pages** (every rule needs **2 runs in a row**, so a one-minute blip never pages):
+  - a check failing 2 runs in a row: ONE "🚨 OSLRS DOWN" naming the checks;
+  - during an outage, ANOTHER check failing 2 runs in a row: ONE "⚠️ OSLRS WORSE" naming it (so "redis is down"
+    cannot hide "and now the API is down too");
+  - every check passing 2 runs in a row: ONE "✅ OSLRS RECOVERED" with the downtime and every check that failed. A
+    crash-looping API (fail, fail, pass, …) therefore stays ONE DOWN, not a DOWN/RECOVERED pair every 3 minutes.
+  - Nothing else. A send that fails is retried every minute until it is delivered. A deploy's `pm2 restart`
+    (seconds) never pages.
+- **Independent by design:** bash + curl + docker only. It reads only `TELEGRAM_BOT_TOKEN`,
+  `TELEGRAM_OPERATOR_CHAT_ID` and `REDIS_URL` from `/root/oslrs/.env` (grep, never `source`), and prints no value.
+  `flock` skips an overlapping run.
+- **Files on the VPS:**
+  - `/var/lib/oslsr-watchdog/`: state, plus the heartbeat `last-run` (epoch seconds).
+  - `/var/log/oslsr-health-watchdog.log`: one line per run. The script cuts it to the newest 512 KiB when it passes
+    1 MiB (about a week), so no logrotate file is needed.
+- **Install (operator, once, AFTER the 13-78 commit has deployed, since it copies from `/root/oslrs`; a prod
+  change, so run it with `!`):**
+  ```bash
+  ssh root@oslsr-home-app 'install -m 0644 -o root -g root /root/oslrs/infra/cron/oslsr-health-watchdog /etc/cron.d/oslsr-health-watchdog'
+  ```
+  The script itself is updated by every deploy's `git pull`. Re-run the install only if the cron file changes.
+  **Uninstall:** `rm /etc/cron.d/oslsr-health-watchdog`.
+- **Verify it runs** (read-only): `tail -3 /var/log/oslsr-health-watchdog.log` shows `ok` lines a minute apart, and
+  `echo $(( $(date +%s) - $(cat /var/lib/oslsr-watchdog/last-run) ))` is under 120.
+- **Its own silence is visible:** every deploy prints the heartbeat age and emits a `::warning::` if it is missing or
+  older than 10 minutes. It also warns when the watchdog runs but cannot DELIVER pages: the first failed
+  Telegram send writes `/var/lib/oslsr-watchdog/page_failing_since`, a delivered one deletes it, and the deploy
+  warns once it is older than 10 minutes (missing or wrong `TELEGRAM_*` in `.env`). ⚖️ Both are warnings, not
+  failures, so a broken monitor never blocks a hotfix deploy. The cost: only someone reading the run sees them.
+- **Drill (13-78 AC6):** in a quiet hour (§1.5a step 1), with the operator's go-ahead:
+  1. `pm2 stop oslsr-api`. Within 2–3 min, ONE DOWN page naming `api, pm2`.
+  2. `pm2 start oslsr-api`. ONE RECOVERED page with the duration, about 2 min after the API is back (2 passing runs).
+  3. Record the page times and the nginx 502 count in the window.
+  ⛔ Never `pm2 update` as part of a drill (§1.5a step 4).
+
+### 7a.2 UptimeRobot (external)
+
+- One HTTP(S) monitor, every 5 min, on `https://oyoskills.com/api/v1/health`, expecting 200.
+- **Account owner:** _to fill at setup (Awwal)_. **Alerts go to:** _to fill at setup._ Check which alert channels
+  the free plan offers when you set it up; do not assume Telegram is among them.
+- **Proof:** UptimeRobot's own "test notification" was received on _date_.
+- ⛔ Never record the account password or any API key here.
+
+---
+
 ## Part 8: Pitfalls & Solutions
 
 | # | Pitfall | Cause | Solution |

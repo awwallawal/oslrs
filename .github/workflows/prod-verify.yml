@@ -503,9 +503,19 @@ jobs:
   # red scheduled run reached only GitHub's email; the incident this check exists for
   # ran six days unseen. Manual runs are watched by whoever started them, so only the
   # schedule pages (plus an explicit drill).
+  #
+  # Story 13-78 Task 4.1(c): `cancelled` pages too. A job that hits `timeout-minutes`
+  # concludes `cancelled`, not `failure`, so an edge that HANGS (the curls stalling) went
+  # unpaged. A scheduled run is never superseded (cancel-in-progress: false), so on the
+  # schedule `cancelled` means a timeout or a human cancel, and both are worth a page.
   page:
     needs: edge-freshness
-    if: always() && ((github.event_name == 'schedule' && needs.edge-freshness.result == 'failure') || inputs.drill == true)
+    if: >-
+      always() && (
+        (github.event_name == 'schedule' &&
+         (needs.edge-freshness.result == 'failure' || needs.edge-freshness.result == 'cancelled')) ||
+        inputs.drill == true
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -519,5 +529,5 @@ jobs:
           bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat-id: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}
           # A REAL failure during a drill run is paged as real, never tagged [DRILL].
-          drill: ${{ (inputs.drill == true && needs.edge-freshness.result != 'failure') && 'true' || 'false' }}
-          text: "🌐 OSLRS edge check FAILED: the service worker served at oyoskills.com is cached too long or precaches assets that do not resolve. Returning users may not receive deploys (the 2026-08-10 freeze shape)."
+          drill: ${{ (inputs.drill == true && needs.edge-freshness.result == 'success') && 'true' || 'false' }}
+          text: "🌐 OSLRS edge check did not pass (${{ needs.edge-freshness.result }}). failure: the service worker served at oyoskills.com is cached too long or precaches assets that do not resolve, so returning users may not receive deploys (the 2026-08-10 freeze shape). cancelled: the check hung past its 6-minute timeout, so the edge may be slow or unreachable."

@@ -18,6 +18,9 @@ name: Uptime (prod health)
 # 10-17 and 11:26 on 10-16, and prod-verify likewise. A */5 schedule under that throttling
 # barely runs. Kept as a free, best-effort backstop; the real monitor must live outside
 # GitHub (Story 13-78). Measured again 2026-10-18: 7 scheduled runs in ~16 h (~190 expected).
+# ➡️ THE REAL MONITOR is Story 13-78: scripts/health-watchdog.sh (VPS cron, every minute, pages on
+# Telegram within ~2 min) plus an external UptimeRobot monitor. Install, drill, layers:
+# docs/infrastructure-cicd-playbook.md, Part 7a "Monitoring and paging".
 on:
   schedule:
     - cron: '*/5 * * * *'

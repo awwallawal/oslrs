@@ -1122,10 +1122,14 @@ jobs:
             # That is also why the check runs AFTER the pull: the effective pnpm comes
             # from the checked-out package.json, so a commit that bumps packageManager
             # can only be checked once it is on disk.
-            WANT_NODE=$(tr -d 'v \r\n' < .nvmrc | cut -d. -f1)
-            HAVE_NODE=$(node -p 'process.versions.node.split(".")[0]')
-            WANT_PNPM=$(node -p 'require("./package.json").packageManager.split("@")[1]')
-            HAVE_PNPM=$(pnpm -v)
+            # Story 13-78 Task 4.1(a): every read is `|| X=unavailable`. Under `set -e` a
+            # bare failing `$(pnpm -v)` (e.g. corepack cannot fetch the pinned pnpm) exited
+            # HERE, before the reset below, leaving the tree on the new commit. Now a
+            # failed read is a mismatch, and the mismatch branch puts the tree back.
+            WANT_NODE=$(tr -d 'v \r\n' < .nvmrc | cut -d. -f1) || WANT_NODE=unreadable
+            HAVE_NODE=$(node -p 'process.versions.node.split(".")[0]') || HAVE_NODE=unavailable
+            WANT_PNPM=$(node -p 'require("./package.json").packageManager.split("@")[1]') || WANT_PNPM=unreadable
+            HAVE_PNPM=$(pnpm -v) || HAVE_PNPM=unavailable
             echo "runtime: node ${HAVE_NODE} (want ${WANT_NODE}), pnpm ${HAVE_PNPM} (want ${WANT_PNPM})"
             if [ "$HAVE_NODE" != "$WANT_NODE" ] || [ "$HAVE_PNPM" != "$WANT_PNPM" ]; then
               echo "::error::VPS runtime drift: node ${HAVE_NODE} vs .nvmrc ${WANT_NODE}, pnpm ${HAVE_PNPM} vs packageManager ${WANT_PNPM}. Fix the VPS (docs/infrastructure-cicd-playbook.md, Node major upgrade) before deploying."
@@ -1136,6 +1140,34 @@ jobs:
               echo "Working tree restored to ${PREV_HEAD}; nothing was installed or restarted."
               exit 1
             fi
+
+            # Story 13-78 AC5: is the VPS watchdog (scripts/health-watchdog.sh, cron every
+            # minute) still running? A watchdog that stopped looks exactly like "all fine".
+            # ⚖️ A WARNING, deliberately NOT a failure: a broken monitor must not block a
+            # hotfix deploy. The cost: the warning is only seen by whoever reads the run.
+            WD_AT=$(cat /var/lib/oslsr-watchdog/last-run 2>/dev/null || true)
+            case "$WD_AT" in
+              ''|*[!0-9]*)
+                echo "::warning::VPS health watchdog has NO heartbeat (/var/lib/oslsr-watchdog/last-run missing). It is not installed or has never run: nothing pages if the API dies. Install: docs/infrastructure-cicd-playbook.md, Monitoring and paging." ;;
+              *)
+                WD_AGE=$(( $(date +%s) - WD_AT ))
+                echo "watchdog heartbeat: ${WD_AGE}s old"
+                if [ "$WD_AGE" -gt 600 ]; then
+                  echo "::warning::VPS health watchdog last ran ${WD_AGE}s ago (>600s). It has stopped: nothing pages if the API dies. Check /etc/cron.d/oslsr-health-watchdog and /var/log/oslsr-health-watchdog.log."
+                fi ;;
+            esac
+            # Code review 13-78 L2: a running watchdog that cannot DELIVER a page (missing
+            # or wrong Telegram creds) also looks like "all fine". It records when sends
+            # started failing; warn once that is older than 10 minutes. Warning only, as above.
+            WD_PF=$(cat /var/lib/oslsr-watchdog/page_failing_since 2>/dev/null || true)
+            case "$WD_PF" in
+              ''|*[!0-9]*) ;;
+              *)
+                WD_PF_AGE=$(( $(date +%s) - WD_PF ))
+                if [ "$WD_PF_AGE" -gt 600 ]; then
+                  echo "::warning::VPS health watchdog cannot deliver pages: every Telegram send has failed for ${WD_PF_AGE}s. Check TELEGRAM_BOT_TOKEN / TELEGRAM_OPERATOR_CHAT_ID in /root/oslrs/.env and /var/log/oslsr-health-watchdog.log."
+                fi ;;
+            esac
 
             # Install dependencies if package.json changed.
             # Kept on VPS because the API runs via `pnpm tsx` at runtime and
@@ -1353,11 +1385,47 @@ jobs:
     timeout-minutes: 3
     permissions:
       contents: read
+      actions: read
     steps:
+      # Story 13-78 Task 4.1(b): a deploy cancelled while still QUEUED (no runner, zero
+      # steps) never touched prod, but it passed the `if:` above and paged. Measured
+      # 2026-10-18: 4 of the last 7 cancelled deploys were like that. Only the
+      # "Deploy to DigitalOcean VPS" step changes prod, so a cancelled deploy pages only
+      # if that step ran (conclusion success/failure/cancelled; `skipped` = never ran).
+      # Not `started_at`: a skipped step carries a start time too (measured on 32847322078).
+      # Fails OPEN: if the API cannot be read, page. A false page beats a silent one.
+      - name: Did the cancelled deploy reach the VPS?
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.deploy.result }}
+        run: |
+          set -uo pipefail
+          if [ "$RESULT" != "cancelled" ]; then echo "page=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # Prints "<number of steps the deploy job has> <Deploy step conclusion or status>".
+          if ! c=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?per_page=100" \
+              --jq '.jobs[] | select(.name == "deploy") | "\(.steps | length) \([.steps[] | select(.name == "Deploy to DigitalOcean VPS") | .conclusion // .status] | join(","))"' 2>&1); then
+            echo "::warning::Could not read the deploy job's steps (${c}); paging anyway."
+            echo "page=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "deploy job: '${c}' (step count, Deploy step state)"
+          case "$c" in
+            "")       echo "::warning::No job named 'deploy' in this run (renamed?). Paging, because this gate cannot tell."
+                      echo "page=true" >> "$GITHUB_OUTPUT" ;;
+            "0 "|"0") echo "Cancelled while QUEUED (no steps ran); prod is untouched. Not paging."
+                      echo "page=false" >> "$GITHUB_OUTPUT" ;;
+            *" skipped") echo "Cancelled before the Deploy step started; prod is untouched. Not paging."
+                      echo "page=false" >> "$GITHUB_OUTPUT" ;;
+            *" ")     echo "::warning::The deploy job ran steps but none is named 'Deploy to DigitalOcean VPS' (renamed?). Paging, because this gate cannot tell."
+                      echo "page=true" >> "$GITHUB_OUTPUT" ;;
+            *)        echo "page=true" >> "$GITHUB_OUTPUT" ;;
+          esac
       - uses: actions/checkout@v5
+        if: steps.gate.outputs.page == 'true'
         with:
           sparse-checkout: .github/actions
       - uses: ./.github/actions/telegram-page
+        if: steps.gate.outputs.page == 'true'
         with:
           bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat-id: ${{ secrets.TELEGRAM_OPERATOR_CHAT_ID }}

@@ -1,0 +1,16 @@
+# Story 13-78 — the VPS health watchdog (scripts/health-watchdog.sh), every minute, as root.
+#
+# Installed BY THE OPERATOR (a prod change), once, from the repo checkout:
+#   install -m 0644 -o root -g root /root/oslrs/infra/cron/oslsr-health-watchdog /etc/cron.d/oslsr-health-watchdog
+# cron picks the file up within a minute; no restart. Uninstall: rm /etc/cron.d/oslsr-health-watchdog
+# The script itself is updated by every deploy's `git pull`; this file only changes if the
+# schedule does (then re-run the install line).
+#
+# cron.d rules: the file name may not contain a dot, the file must be root-owned and not
+# group/world-writable, and it must end with a newline. Output goes to the log (which the
+# script caps at 1 MiB itself), so nothing piles up in root's mailbox.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+* * * * * root /bin/bash /root/oslrs/scripts/health-watchdog.sh >> /var/log/oslsr-health-watchdog.log 2>&1
