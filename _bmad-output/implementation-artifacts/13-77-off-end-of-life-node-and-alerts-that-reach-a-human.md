@@ -226,7 +226,7 @@ Claude Opus 5.5 (claude-opus-5-5), 2026-10-16.
     4. `pm2 save` only after that check.
     The reboot test (AC4f) is the boot path's own proof: the 2026-10-15 reboot came back with ids logrotate-first, but that was under Node 20 and has to be re-proved.
   - Side slip: `pkill -f "pm2 update"` matched its own shell command line and killed that SSH session (the hung client had already exited). Use `pgrep` then kill the pid, never `pkill -f` with a pattern the command itself contains.
-- **AC2e drills, 2026-10-16 ~16:07 UTC, all three `page` jobs SUCCESS** (Telegram API accepted each; `curl -f`): osv-scheduled `38929352284` (scan also green), prod-verify `38929378407` (edge-freshness green, SSH verify skipped), ci-cd `38929412982` (every other job skipped). ⭐ **The concurrency fix was proved live:** the ci-cd drill was dispatched while push run `38929242472` (`c4fdb90`) was mid-pipeline, and that run went on to `deploy: success` (prod `c4fdb90`, health 200), with `page-deploy-failure` correctly SKIPPED on a green deploy. ⏳ **Open until Awwal confirms three `[DRILL]` messages in the operator chat**; "the API accepted it" is not "a human saw it".
+- **AC2e drills, 2026-10-16 ~16:07 UTC, all three `page` jobs SUCCESS** (Telegram API accepted each; `curl -f`): osv-scheduled `38929352284` (scan also green), prod-verify `38929378407` (edge-freshness green, SSH verify skipped), ci-cd `38929412982` (every other job skipped). ⭐ **The concurrency fix was proved live:** the ci-cd drill was dispatched while push run `38929242472` (`c4fdb90`) was mid-pipeline, and that run went on to `deploy: success` (prod `c4fdb90`, health 200), with `page-deploy-failure` correctly SKIPPED on a green deploy. ✅ *All three confirmed received by Awwal on 2026-10-17* (osv, edge check, deploy), plus the uptime drill. Original note: "the API accepted it" is not "a human saw it".
 
 ### File List
 
@@ -288,7 +288,7 @@ Code review 2026-10-17 (adversarial, BMAD code-review; Claude Opus 5.5). Awwal: 
 2. **AC3 split accepted.** Root `engines >=24` landed with the CI flip (`13f9cbf`), not with the Task 2 repo pins. With `engine-strict=true`, landing it earlier would have broken Node-20 installs.
 3. **The 2026-10-17 09:07–09:22 UTC outage is closed.** It was caused by `pm2 update` dropping `oslsr-api`. Impact measured: one 502, the agent's own probe. The fix is the playbook §1.5a sequence (never chain `pm2 update && pm2 save`).
 4. **`uptime.yml` is a best-effort backstop only.** On 2026-10-18 it had fired 7 scheduled runs in ~16 h (~190 expected). The real monitor is Story 13-78.
-5. **The post-review deploy-failure page was re-drilled rather than accepted untested.** ci-cd dispatch `39113803769` (2026-10-18 09:02 UTC, `be95374`, `drill=true`) finished green: `page-deploy-failure: success` and every other job skipped (this covers the `>-` multi-line `if:` and the drill path). ⏳ Awwal still has to confirm that the `[DRILL] OSLRS DEPLOY did not finish` message reached the operator chat.
+5. **The post-review deploy-failure page was re-drilled rather than accepted untested.** ci-cd dispatch `39113803769` (2026-10-18 09:02 UTC, `be95374`, `drill=true`) finished green: `page-deploy-failure: success` and every other job skipped (this covers the `>-` multi-line `if:` and the drill path). ✅ **Received:** Awwal confirmed on 2026-10-18 that the `[DRILL] OSLRS DEPLOY did not finish` message reached the operator chat ("yes i got the drill message").
 
 **False or unsupported claims the adjudication found, corrected 2026-10-18 before closing:**
 

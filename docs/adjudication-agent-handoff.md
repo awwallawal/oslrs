@@ -1441,7 +1441,7 @@ BEFORE writing this section. That is why it was missing until 10-18 (lesson at t
   Upgrade recipe: playbook §1.5a.
 - **Telegram pages** from one shared action, `.github/actions/telegram-page`, wired into osv-scheduled, prod-verify,
   the ci-cd deploy and uptime. A missing secret is an error, not a silent skip. Every drill was confirmed by Awwal
-  except the 10-18 post-review ci-cd drill `39113803769` (green; ⏳ Awwal to confirm receipt). ⚠️ A ci-cd
+  except the 10-18 post-review ci-cd drill `39113803769` (green; ✅ receipt confirmed by Awwal 2026-10-18). ⚠️ A ci-cd
   `workflow_dispatch` FAILS unless `drill` is ticked; to re-run CI, re-run a push run.
 - **pdfjs-dist 6.4.299**, GHSA-hq66 CLOSED, waiver deleted; the real register re-parses byte-identically (3,673 rows).
 - 🚨 **`pm2 update` dropped the API for 15 min on 10-17** (the logrotate module id collision). Never chain
