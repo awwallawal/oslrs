@@ -24,6 +24,7 @@ so that **an outage like 2026-10-17's (15 minutes, found only because an agent h
    - b. **PM2 has the app:** `pm2 jlist` contains `oslsr-api` with status `online`. This catches the exact 10-17 shape (PM2 alive, app gone), even in the seconds before nginx starts failing.
    - c. **Postgres answers:** `docker exec oslsr-postgres pg_isready -U oslsr_user -d oslsr_db`.
    - d. **Redis answers:** `docker exec oslsr-redis redis-cli -a <pw from REDIS_URL> --no-auth-warning ping` == `PONG`. Never print the password.
+     - ⚖️ *C3a, ruled by Awwal 2026-10-18: the password goes in `REDISCLI_AUTH` (environment), not `-a`, so it is on no argv.*
    - ⛔ The deep `/api/v1/system/health` endpoint is super-admin-authenticated (`system.routes.ts:36-37`), so do NOT use it, and do not add an unauthenticated deep-health route for this.
 
 2. **AC2 — Pages on a STATE CHANGE, after confirmation.**
@@ -31,12 +32,15 @@ so that **an outage like 2026-10-17's (15 minutes, found only because an agent h
    - Exactly ONE Telegram message on DOWN, naming the failed check(s) and the first triage command (`pm2 ls`, `docker ps`).
    - Exactly ONE on RECOVERED, with the downtime duration.
    - Nothing while the state is unchanged.
+     - ⚖️ *Amended 2026-10-18 (C1, ruled by Awwal): one exception. During an outage, ANOTHER check failing 2 runs in a row sends ONE "⚠️ OSLRS WORSE" naming it, so a Redis outage cannot hide the API dying. RECOVERED also needs 2 passing runs in a row.*
    - If a DOWN send fails (curl non-zero), the next run retries the send. It is not marked sent.
 
 3. **AC3 — Independent of what it watches.**
    - **bash + curl + docker CLI only.** No node, no tsx, no pnpm, no app code. The 10-17 failure was in the Node/PM2 layer, and a watchdog running through it shares its fate.
    - Telegram credentials are read from `/root/oslrs/.env` by parsing ONLY `TELEGRAM_BOT_TOKEN` and `TELEGRAM_OPERATOR_CHAT_ID` (`grep '^KEY=' | cut -d= -f2-`). Never `source` the file; never print a value.
+     - ⚖️ *C3b, ruled by Awwal 2026-10-18: `REDIS_URL` is read as well (AC1d needs it), the same way. Three keys, not two.*
    - `flock -n` on a lock file, so an overrunning run is skipped, not stacked.
+     - ⚖️ *C3e, ruled by Awwal 2026-10-18: if `flock` is missing, the run goes ahead unlocked and logs a WARN, rather than not watching at all. The VPS has `flock` (no WARN since install).*
    - State lives in `/var/lib/oslsr-watchdog/` (failure counter, the down-since timestamp, whether a page is pending).
 
 4. **AC4 — Installed by a file in the repo, by the operator.**
@@ -44,6 +48,7 @@ so that **an outage like 2026-10-17's (15 minutes, found only because an agent h
    - The schedule is `infra/cron/oslsr-health-watchdog`: a cron.d file running the script every minute as root, with output appended to `/var/log/oslsr-health-watchdog.log`.
    - **Installing is a prod change, so AWWAL runs it with `!`:** copy the cron.d file into `/etc/cron.d/`. The 13-77 precedent is that the agent's permission classifier blocks prod installs. Document the one-liner.
    - Logrotate for the log (weekly, keep 4), or have the script cap its own log size. Pick one and say why.
+     - ⚖️ *C3c, ruled by Awwal 2026-10-18: the script caps its own log (cut to 512 KiB past 1 MiB), so there is no second file to install.*
 
 5. **AC5 — The watchdog's own silence is visible.**
    - Each run writes a heartbeat timestamp to `/var/lib/oslsr-watchdog/last-run`.
@@ -374,8 +379,8 @@ Each step: who runs it, then the prediction, then what stops the line.
 | Item | Evidenced by | Ruled by |
 |---|---|---|
 | M1, M3, L1–L5 fixes | this code-review session (tests + mutations, §Senior Developer Review) | build approved by Awwal 2026-10-18 ("fix them all automatically"); closure UNRULED |
-| M2 fix | this session (measured before and after) | build approved by Awwal, same words; **AC2 wording UNRULED (C1)** |
-| C3 (a)–(e) deviations | dev-story record | UNRULED |
+| M2 fix | this session (measured before and after) | build approved by Awwal, same words; ✅ AC2 wording ruled by Awwal 2026-10-18 ("sign C1"; see Adjudication) |
+| C3 (a)–(e) deviations | dev-story record | ✅ ruled by Awwal 2026-10-18 ("sign … C3a–e") |
 | 2.4, AC6, AC7, Tasks 5–6 | — (not yet possible) | — |
 
 
@@ -391,9 +396,9 @@ Scope: Tasks 1–4 (incl. 4.1), Task 7, and the review fixes. Tasks 5–6 and su
 - **C8:** the dev-story's handoff §3 hunk was ADOPTED as written (it is accurate).
 - **The `AM` trap was cleared at commit:** the reviewed script was re-staged and its mode checked (`100755`).
 
-**Awaiting Awwal's rulings** (proposed by the review; adjudication agrees with each, but may not sign them, §2al):
-- **C1:** the WORSE page (beyond AC2's letter).
-- **C3a–e:** REDISCLI_AUTH instead of `-a`; the `REDIS_URL` read; the self-capped log; RECOVERED retried too; no flock → runs unlocked with a WARN.
+**✅ Rulings SIGNED by Awwal, 2026-10-18** ("sign C1, C3a–e"). Attribution: proposed by the code review · evidenced by the dev-story record, the review's tests, and (C1) the drill · ruled by Awwal. Each is noted at its AC.
+- **C1:** the WORSE page is accepted; AC2 is amended to say so.
+- **C3a–e:** REDISCLI_AUTH instead of `-a`; the `REDIS_URL` read; the self-capped log; RECOVERED retried too; no flock → runs unlocked with a WARN. All accepted as built.
 
 **Done after the push (2026-10-18):** CI/CD 39142282165 and E2E 39142282151 green; prod `0168062`, health 200; script `-rwxr-xr-x` on the VPS; not installed (0 files in `/etc/cron.d` match). **2.4 ticked** (above). **C7 ANSWERED: yes.** The deploy's `::warning::VPS health watchdog has NO heartbeat…` printed inside `appleboy/ssh-action` became a real check-run ANNOTATION (level `warning`), so AC5's "visible" holds, and 13-77's `::error::` lines on the same path do too.
 
@@ -414,9 +419,5 @@ Scope: Tasks 1–4 (incl. 4.1), Task 7, and the review fixes. Tasks 5–6 and su
    - Reported "Down about 2m 0s" vs actual ~1m46s (16:49:55 → 16:51:41), within the predicted ±60 s.
    - nginx 502s 16:49–16:53: **0** (no traffic in the window). Public health 200 after.
    - Every §D step-5 prediction held; no stop condition hit.
-6. ⏳ UptimeRobot (Awwal) · ⏳ rulings C1, C3a–e (Awwal).
-3. Awwal installs (Part 7a.1).
-4. Read the log back.
-5. One ordinary deploy, no page.
-6. The AC6 drill.
-7. UptimeRobot.
+6. ✅ Rulings C1, C3a–e signed by Awwal (above).
+7. ⏳ **UptimeRobot (Task 6, Awwal) — the only thing left.** When the test notification arrives: fill playbook 7a.2 and its status line, tick Task 6, Status → `done`.

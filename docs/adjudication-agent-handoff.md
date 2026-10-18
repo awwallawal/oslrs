@@ -1473,8 +1473,8 @@ BEFORE writing this section. That is why it was missing until 10-18 (lesson at t
 - **Re-read before acting:** `scripts/field-reading.sql` (read-only; output is PII, terminal only, counts in the record).
 
 ### ⏭️ NEXT, in priority order
-1. **13-78 close-out:** the watchdog is ✅ live and drill-proven. Remaining: **UptimeRobot (Task 6, Awwal)** and Awwal's
-   **rulings C1 (WORSE page) and C3a–e** (story, "Adjudication — code part"). Then → done.
+1. **13-78 close-out:** the watchdog is ✅ live and drill-proven. Rulings C1 and C3a–e ✅ **signed by Awwal
+   2026-10-18**. Only **UptimeRobot (Task 6, Awwal)** remains: on the test notification, fill playbook 7a.2 → done.
 2. **Field reading** (read-only), then the **consent-gate story** (three behaviours, both forms) + a ruling on the rows.
 3. **Resend the 10 expired invitation links**: ids named, the 9 active excluded by id (§2at); needs a go-ahead.
 4. Name an owner for fraud-flag review · rule whether field work is officially open.
