@@ -743,9 +743,10 @@ cannot be the monitor. Every page goes to the operator Telegram chat, except whe
 | **UptimeRobot** (external, free plan) | box, network, nginx, Cloudflare, DNS, TLS | which component inside the box failed | ≤ 5 min |
 | GitHub backstops: `uptime.yml`, prod-verify edge check (daily), deploy-failure page, OSV scan | uptime: the same as UptimeRobot, hours late. Others: their own failures | — | hours |
 
-> ⏳ **Status at 2026-10-18:** the watchdog is BUILT (Story 13-78) but NOT YET INSTALLED, and
-> UptimeRobot is NOT YET SET UP. Until both are done, an outage is still found by a human. Update this
-> line when Tasks 5–6 of 13-78 are done.
+> ⏳ **Status at 2026-10-18 16:40 UTC:** the watchdog is INSTALLED and running (`/etc/cron.d/oslsr-health-watchdog`,
+> installed by Awwal 16:38 UTC; first runs `ok`), but the AC6 stop/start DRILL has NOT run, so "it pages" is
+> not yet proven. UptimeRobot is NOT YET SET UP, so a whole-box or network outage is still found by a human.
+> Update this line when the drill and Task 6 of 13-78 are done.
 
 ### 7a.1 The VPS watchdog
 

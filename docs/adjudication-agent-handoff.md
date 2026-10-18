@@ -1457,6 +1457,7 @@ BEFORE writing this section. That is why it was missing until 10-18 (lesson at t
   `scripts/health-watchdog.sh` + `infra/cron/oslsr-health-watchdog` are in the repo, but nothing pages until Awwal
   runs the one-line install (playbook Part 7a.1), the AC6 drill passes, and UptimeRobot is set up (Part 7a.2).
   Until then, an overnight outage is still found by a human. Every deploy now WARNS while the watchdog heartbeat is missing.
+- 🆕 **GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19** (notice on CI run 39142282165). Every CI job uses it. If a push goes red on 10-19+ in setup, services (postgres/redis containers), docker or a native build, suspect the image first. Lever: pin `runs-on: ubuntu-24.04` (bounded, with a date), then fix.
 - **New OSV advisories** against unchanged deps, any day. The daily scan pages now (secrets set). Emergency unblock:
   `osv-scanner.toml` header (it IS read by the blocking gate).
 - **hCaptcha free quota 10,000/month** (78 in 15 days at 10-15) · **invitation links expire in 48 h**.

@@ -84,7 +84,7 @@ so that **an outage like 2026-10-17's (15 minutes, found only because an agent h
     - stdout and the message never contain the token;
     - a held lock → the run is skipped.
   - [x] 2.3 Mutation check: change "2 consecutive" to 1 → a named test goes red.
-  - [ ] 2.4 Runs on CI (ubuntu) and on the Windows laptop (Git Bash). If `flock` is missing on Git Bash, gate only that one case on the platform and say so.
+  - [x] 2.4 ✅ *2026-10-18, adjudication: CI run 39142282165 (`0168062`), test-api: `health-watchdog.script.test.ts (36 tests)`, none skipped; suite 4,807 passed / 9 skipped vs the laptop's 4,806 / 10, so the flock case ran and passed on ubuntu.* Runs on CI (ubuntu) and on the Windows laptop (Git Bash). If `flock` is missing on Git Bash, gate only that one case on the platform and say so.
 - [x] **Task 3 — Install files** (AC: #4)
   - [x] 3.1 `infra/cron/oslsr-health-watchdog` (cron.d format: `* * * * * root /root/oslrs/scripts/health-watchdog.sh >> /var/log/oslsr-health-watchdog.log 2>&1`), plus the log-size decision.
   - [x] 3.2 Make the script executable in git (`git update-index --chmod=+x`). ⚠️ Windows checkouts lose the mode, so verify with `git ls-files -s`.
@@ -395,9 +395,12 @@ Scope: Tasks 1–4 (incl. 4.1), Task 7, and the review fixes. Tasks 5–6 and su
 - **C1:** the WORSE page (beyond AC2's letter).
 - **C3a–e:** REDISCLI_AUTH instead of `-a`; the `REDIS_URL` read; the self-capped log; RECOVERED retried too; no flock → runs unlocked with a WARN.
 
+**Done after the push (2026-10-18):** CI/CD 39142282165 and E2E 39142282151 green; prod `0168062`, health 200; script `-rwxr-xr-x` on the VPS; not installed (0 files in `/etc/cron.d` match). **2.4 ticked** (above). **C7 ANSWERED: yes.** The deploy's `::warning::VPS health watchdog has NO heartbeat…` printed inside `appleboy/ssh-action` became a real check-run ANNOTATION (level `warning`), so AC5's "visible" holds, and 13-77's `::error::` lines on the same path do too.
+
 **Next, in order:**
-1. CI: tick 2.4 from the flock case's line.
-2. First deploy: the NO-heartbeat warning; record whether it became an annotation (C7).
+1. ~~CI 2.4~~ ✅
+2. ~~C7~~ ✅
+3. ✅ **INSTALLED by Awwal 2026-10-18 16:38 UTC** with `!` (playbook 7a.1 one-liner): `-rw-r--r-- root root 980 /etc/cron.d/oslsr-health-watchdog`. **Read back by adjudication 16:40:02Z:** `16:39:02Z ok`, `16:40:02Z ok` (one minute apart, no `WARN: flock`, no `fail:`); state `fails=0`, heartbeat 1 s old, no `page_failing_since`. The §D step 3 prediction held. Next: (4) the deploy of the commit carrying this note is the ordinary-deploy test, and must not page.
 3. Awwal installs (Part 7a.1).
 4. Read the log back.
 5. One ordinary deploy, no page.
