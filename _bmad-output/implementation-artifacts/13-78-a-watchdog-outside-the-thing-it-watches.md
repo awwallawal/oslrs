@@ -94,7 +94,7 @@ so that **an outage like 2026-10-17's (15 minutes, found only because an agent h
     - (b) `page-deploy-failure` can page for a deploy that was cancelled while still QUEUED.
     - (c) A timed-out edge-freshness job may conclude `cancelled` and not page (`prod-verify.yml` ~448).
     Source: the 13-77 story, "Adjudication and closure".
-- [ ] **Task 5 — Install + drill on prod** (AC: #4, #6) — ⛔ Awwal's go-ahead and a quiet hour. Awwal runs the install, and `pm2 stop`/`start`, with `!` if the classifier refuses. The agent verifies each step read-only.
+- [x] **Task 5 — Install + drill on prod** ✅ *2026-10-18: installed 16:38Z, drill 16:50–16:53Z (see Adjudication, step 5)* (AC: #4, #6) — ⛔ Awwal's go-ahead and a quiet hour. Awwal runs the install, and `pm2 stop`/`start`, with `!` if the classifier refuses. The agent verifies each step read-only.
 - [ ] **Task 6 — UptimeRobot** (AC: #7) — Awwal sets it up; the agent records it.
 - [x] **Task 7 — Docs** (AC: #8).
 
@@ -400,7 +400,21 @@ Scope: Tasks 1–4 (incl. 4.1), Task 7, and the review fixes. Tasks 5–6 and su
 **Next, in order:**
 1. ~~CI 2.4~~ ✅
 2. ~~C7~~ ✅
-3. ✅ **INSTALLED by Awwal 2026-10-18 16:38 UTC** with `!` (playbook 7a.1 one-liner): `-rw-r--r-- root root 980 /etc/cron.d/oslsr-health-watchdog`. **Read back by adjudication 16:40:02Z:** `16:39:02Z ok`, `16:40:02Z ok` (one minute apart, no `WARN: flock`, no `fail:`); state `fails=0`, heartbeat 1 s old, no `page_failing_since`. The §D step 3 prediction held. Next: (4) the deploy of the commit carrying this note is the ordinary-deploy test, and must not page.
+3. ✅ **INSTALLED by Awwal 2026-10-18 16:38 UTC** with `!` (playbook 7a.1 one-liner): `-rw-r--r-- root root 980 /etc/cron.d/oslsr-health-watchdog`. **Read back by adjudication 16:40:02Z:** `16:39:02Z ok`, `16:40:02Z ok` (one minute apart, no `WARN: flock`, no `fail:`); state `fails=0`, heartbeat 1 s old, no `page_failing_since`. The §D step 3 prediction held. 
+4. ✅ **Ordinary-deploy test (Risk 1), 2026-10-18:** CI/CD 39146123088 (`54d9cd6`) green. The deploy printed `watchdog heartbeat: 55s old`, no warning; `page-deploy-failure` skipped. `oslsr-api` restarted at 16:47:17Z (`pm_uptime`). The watchdog runs 16:45:02, 16:46:03, 16:47:03 and 16:48:02 were all `ok`, so there was no `fail:` line and no page. ⚠️ The restart fell BETWEEN two runs, so no run sampled the API down: this proves an ordinary deploy does not false-page. It does not prove that the 2-run rule absorbed a sampled blip; the tests cover that.
+5. ✅ **AC6 DRILL PASSED, 2026-10-18.** Go-ahead by Awwal (he ran the stop).
+   - Quiet hour measured at ~16:49Z: 0 submissions, 0 audit rows, 0 non-health `/api` requests in the previous 60 min; last submission 10-16 17:57 WAT.
+   - Sequence (UTC):
+     - `pm2 stop oslsr-api` by Awwal (`!`), ~16:49:55. Then `16:50:02 fail: api, pm2 (run 1, state up)`, no page.
+     - `16:51:02 DOWN confirmed` → **`paged DOWN: api, pm2`**. ✅ Awwal: "got the down message".
+     - `pm2 start oslsr-api` by adjudication at 16:51:34 (the classifier allowed it; restoring service was not held for a relay); local health 200 at 16:51:41.
+     - `16:52:02 ok, still DOWN: 1 of 2 passing runs needed`, no page (the M1 two-pass rule, live).
+     - `16:53:02 RECOVERED after 2m 0s` → **`paged RECOVERED`**. ✅ Awwal: "got the recovered message".
+   - **Exactly 2 pages in the whole drill** (`grep -c paged` = 2); no WORSE page (postgres/redis stayed up, as predicted); 16:54 `ok`.
+   - Reported "Down about 2m 0s" vs actual ~1m46s (16:49:55 → 16:51:41), within the predicted ±60 s.
+   - nginx 502s 16:49–16:53: **0** (no traffic in the window). Public health 200 after.
+   - Every §D step-5 prediction held; no stop condition hit.
+6. ⏳ UptimeRobot (Awwal) · ⏳ rulings C1, C3a–e (Awwal).
 3. Awwal installs (Part 7a.1).
 4. Read the log back.
 5. One ordinary deploy, no page.

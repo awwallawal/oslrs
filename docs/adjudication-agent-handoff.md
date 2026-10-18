@@ -1452,11 +1452,7 @@ BEFORE writing this section. That is why it was missing until 10-18 (lesson at t
 
 ### 🧨 What can still trip us (updated 2026-10-18)
 - ✅ ~~Node 20 EOL~~ and ✅ ~~pdfjs GHSA-hq66~~: both closed by 13-77.
-- ⛔ **Nothing reliable tells us prod is down YET.** GitHub delays every schedule on this repo by 4–5 h, so `uptime.yml`
-  ran 7 times in ~16 h (~190 expected). 🔧 **2026-10-18: 13-78 is BUILT, UNCOMMITTED, NOT installed** (dev-story; `in-progress`: Tasks 1–4 + 7 done, Tasks 5–6 wait on Awwal).
-  `scripts/health-watchdog.sh` + `infra/cron/oslsr-health-watchdog` are in the repo, but nothing pages until Awwal
-  runs the one-line install (playbook Part 7a.1), the AC6 drill passes, and UptimeRobot is set up (Part 7a.2).
-  Until then, an overnight outage is still found by a human. Every deploy now WARNS while the watchdog heartbeat is missing.
+- ✅⏳ **The VPS watchdog is LIVE and drill-proven (13-78, 2026-10-18):** API dead / PM2 lost the app / postgres / redis → one Telegram DOWN within ~2 min, one RECOVERED after 2 passing runs, WORSE if another part fails. Every deploy WARNS (annotation) if its heartbeat is stale or its sends are failing. ⏳ **Still blind to the whole box, its network, nginx, Cloudflare or DNS until UptimeRobot (13-78 Task 6, Awwal) is set up.** `uptime.yml` is the hours-late backstop for those. ⚠️ After any `pm2 update`, run the watchdog by hand once (`bash /root/oslrs/scripts/health-watchdog.sh`): its pm2 parser depends on key order and fails CLOSED (13-78 C6).
 - 🆕 **GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19** (notice on CI run 39142282165). Every CI job uses it. If a push goes red on 10-19+ in setup, services (postgres/redis containers), docker or a native build, suspect the image first. Lever: pin `runs-on: ubuntu-24.04` (bounded, with a date), then fix.
 - **New OSV advisories** against unchanged deps, any day. The daily scan pages now (secrets set). Emergency unblock:
   `osv-scanner.toml` header (it IS read by the blocking gate).
@@ -1464,15 +1460,21 @@ BEFORE writing this section. That is why it was missing until 10-18 (lesson at t
 - Measured safe at 10-15: domain to 2028-04-26, origin cert to 2041, disk 16 %, daily backups. The VPS was rebooted
   on Node 24 on 10-17 (AC4f), boot order safe.
 
-### ⛔ Consent hole and enumerator trial — the last reading is from 2026-10-14 and is STALE
+### ⛔ Consent hole and enumerator trial — R4 field reading 2026-10-18 15:20 WAT (since 10-14 15:55 UTC)
+- **54 declined-consent enumerator surveys** (41 → 54). All 13 new ones are zjbadmus's: 13 of that enumerator's 20 new surveys (65 %); on 10-16 it was 9 of 13.
+- 🆕 **Declined surveys swamp the fraud queue:** 46 of 54 declined are flagged (85 %) vs 16 of 162 consented (10 %), driven by `speed_score`, because a declined survey is short (median 84 s vs 238 s). The consent story must also stop speed-scoring a declined survey, or the first fraud reviewer sees mostly consent noise.
+- 216 enumerator surveys since T0 (+25), GPS 98.6 %, still two people (113 + 94). None since 10-16 17:57 WAT. 10 expired links, 0 staff actions, 0 of 232 fraud flags reviewed. Public: +1 in 4 days; 13 declined, unchanged.
+- Enumerator-captured emails: 22 of 106 suppressed (21 %) vs public 7 of 387 (2 %).
+
+*(The 10-14 reading, kept below for the deltas:)*
 - At 10-14: **41 declined-consent enumerator surveys** (rising), 13 public (11 with a NIN and a marketplace profile).
   The consent-gate story is **still unwritten**: it was NEXT 1 before the Node work took priority. Detail: §3-old14.
 - Trial: 9 active / 10 expired invitation links at 10-14, still essentially two people; 0 of 183 fraud flags reviewed.
 - **Re-read before acting:** `scripts/field-reading.sql` (read-only; output is PII, terminal only, counts in the record).
 
 ### ⏭️ NEXT, in priority order
-1. **Story 13-78 dev: the VPS watchdog + UptimeRobot** (ready-for-dev). It is the only real outage alarm, and it
-   includes Task 4.1's inherited defects.
+1. **13-78 close-out:** the watchdog is ✅ live and drill-proven. Remaining: **UptimeRobot (Task 6, Awwal)** and Awwal's
+   **rulings C1 (WORSE page) and C3a–e** (story, "Adjudication — code part"). Then → done.
 2. **Field reading** (read-only), then the **consent-gate story** (three behaviours, both forms) + a ruling on the rows.
 3. **Resend the 10 expired invitation links**: ids named, the 9 active excluded by id (§2at); needs a go-ahead.
 4. Name an owner for fraud-flag review · rule whether field work is officially open.
