@@ -89,6 +89,11 @@ so that **an outage like 2026-10-17's (15 minutes, found only because an agent h
   - [ ] 3.1 `infra/cron/oslsr-health-watchdog` (cron.d format: `* * * * * root /root/oslrs/scripts/health-watchdog.sh >> /var/log/oslsr-health-watchdog.log 2>&1`), plus the log-size decision.
   - [ ] 3.2 Make the script executable in git (`git update-index --chmod=+x`). ⚠️ Windows checkouts lose the mode, so verify with `git ls-files -s`.
 - [ ] **Task 4 — Deploy heartbeat warning** (AC: #5) — inside the deploy SSH script, after the 13-77 runtime check. Warning only.
+  - [ ] 4.1 🆕 **Inherited from 13-77's adjudication (2026-10-18), three low alerting defects, each to be FIXED or RULED (Awwal), never silently dropped (§2ad):**
+    - (a) The deploy script's `pnpm -v` failure under `set -e` exits BEFORE the `PREV_HEAD` reset, so the tree stays on the new commit.
+    - (b) `page-deploy-failure` can page for a deploy that was cancelled while still QUEUED.
+    - (c) A timed-out edge-freshness job may conclude `cancelled` and not page (`prod-verify.yml` ~448).
+    Source: the 13-77 story, "Adjudication and closure".
 - [ ] **Task 5 — Install + drill on prod** (AC: #4, #6) — ⛔ Awwal's go-ahead and a quiet hour. Awwal runs the install, and `pm2 stop`/`start`, with `!` if the classifier refuses. The agent verifies each step read-only.
 - [ ] **Task 6 — UptimeRobot** (AC: #7) — Awwal sets it up; the agent records it.
 - [ ] **Task 7 — Docs** (AC: #8).

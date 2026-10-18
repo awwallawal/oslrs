@@ -123,11 +123,11 @@ The following job definition should **replace** the current `test-e2e` job in `.
 
       - uses: pnpm/action-setup@v3
         with:
-          version: 9
+          version: 9.15.0   # = packageManager in the root package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version-file: '.nvmrc'   # Node 24
           cache: 'pnpm'
 
       - name: Install dependencies

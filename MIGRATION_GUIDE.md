@@ -4,7 +4,7 @@ This guide explains how to move the **OSLSR** project folder to another machine 
 
 ## 1. Prerequisites on the New Machine
 Ensure the following tools are installed:
-- **Node.js 20 LTS** (Check with `node -v`)
+- **Node.js 24 LTS** (Check with `node -v`; the repo pins it in `.nvmrc`)
 - **pnpm** (Install via `npm install -g pnpm`)
 - **Docker & Docker Compose** (Required for database and services)
 - **Git** (For version control)

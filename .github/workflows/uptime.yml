@@ -17,7 +17,7 @@ name: Uptime (prod health)
 # repo GitHub delays EVERY schedule by 4–5 h: osv-scheduled (cron 06:17) started at 10:46 on
 # 10-17 and 11:26 on 10-16, and prod-verify likewise. A */5 schedule under that throttling
 # barely runs. Kept as a free, best-effort backstop; the real monitor must live outside
-# GitHub (Story 13-77 follow-up).
+# GitHub (Story 13-78). Measured again 2026-10-18: 7 scheduled runs in ~16 h (~190 expected).
 on:
   schedule:
     - cron: '*/5 * * * *'

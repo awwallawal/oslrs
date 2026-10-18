@@ -1,6 +1,6 @@
 # OSLRS Adjudication-Agent Handoff (LIVING DOC)
 
-**Last updated:** 2026-10-15 (late) · ✅ **13-70 + 13-71 ARE DONE** (13-71: R3/R4/R5/R7 discharged on prod data, ⚠️ R3's ">90 % in a week" FALSIFIED as written — 5/8, then 188/188 from 10-01; R2/R6/R8/R14 RULED by Awwal; R1 handed to 13-72) · ✅ **VPS REBOOTED 16:39 UTC** after a measured quiet hour (kernel 6.8.0-110 → 147; all services back unaided, health 200) · 🆕 the story guard WARNS 7 days before a DATED row falls due (`12fe516`) · 🆕 OSV scheduled scan is DAILY, and ⛔ **osv-scanner.toml IS read by the blocking gate** (the comments said not) — the emergency-unblock recipe is in its header (`f3fb9a8`) · ⚠️ **VPS runs pnpm 10.28.1, CI pins 9.15.0** — goes into the Node story · 📄 session record F.3. · *(Previous header:)* **Last updated:** 2026-10-15 (evening) · ✅ **THE FIVE DATED RESIDUALS ARE DONE, NOT RE-DATED** (13-68 R2b login-spray monitor built + fired on prod · 13-70 R5 login flood ceiling 100 → 300 by the PRD's own rule, R6 accepted, R8 guard mechanism shipped · 13-71 R9 fence pinned); prod `7eccbb2` at 14:48 UTC (verify, D6); guard green at 2026-10-16 and 2027-06-01 clocks. ⚠️ Login now allows **300 requests / IP / 15 min** (was 100). · ⛔ Standing trip-wires: Node 20 is past EOL; the VPS has a pending kernel reboot (up 173 d); new OSV advisories can block any push (§3). · 🛡️ **2026-10-15: the OSV gate blocked the 10-14 docs push (proxy-addr CRITICAL + 3 untouched deps) → fixed and deployed; the weekly scan had been red since 10-05 unseen → Telegram page on failure, inert until the repo secrets are set (NEXT 0b).** · 📄 Evidence: session record Part F. · *(Previous header:)* **Last updated:** 2026-10-14 · ⛔ **`oyotradeministry.com.ng` IS RELEASED FROM OSLRS (to DBPRS) — never re-add it; prod clean-up DONE 2026-10-14 (backups in `/root/backups/domain-release-20261014/`).** · ⛔ **Consent hole: 41 declined-consent enumerator rows at 2026-10-14, and one DOES carry a marketplace profile (the 10-08 record said none).** · 📄 Evidence: `docs/adjudication-session-2026-10-13-to-14.md` · 🆕 `scripts/field-reading.sql` = the field in one command · 🆕 §2ay–§2az. · *(Previous header:)* **Last updated:** 2026-10-08 · ⛔ **ENUMERATOR TRIAL 2 IS RUNNING AND THE CONSENT HOLE IS LIVE IN THE FIELD — 28 declined-consent submissions in 8 days (§3).** · 📄 Evidence: `docs/adjudication-session-2026-09-30-to-10-08.md` · 🆕 Playbook §2at–§2ax · ✅ F2 (GPS) green for the first time, 98.1 %. · *(Older header, kept for history:)* **Last updated:** 2026-09-25 · ⛔ **READ §3's FIRST BOX: a different-model review found FIFTEEN defects in 13-71 that the dev, a same-model review AND adjudication had all approved. Adjudication's "the work is sound" was WRONG. Read the diff for LOGIC before reading the story's account of it; green gates are a precondition, never evidence.** · ✅ **13-70 + 13-71 + 13-73 all on prod (`1248be3`), all still `review` — none can close** · ⛔ **The enumerator trial is STOPPED deliberately, so 13-71 is deployed and unprovable** · 🆕 **PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
+**Last updated:** 2026-10-18 · ✅ **13-77 DONE** (Node 24 on CI+VPS, Telegram pages from every gate, pdfjs 6.4.299 / GHSA-hq66 closed; acceptances 1–5 RULED by Awwal; 5 false claims corrected first) · ⛔ **nothing reliable pages on an outage until 13-78 ships** (GitHub ran `uptime.yml` 7× in ~16 h) · ⏭️ 13-78 dev, then a field re-read + the consent story · 🆕 lost-session recovery recipe + "update §3 at each milestone" (§3). · *(Previous header:)* **Last updated:** 2026-10-15 (late) · ✅ **13-70 + 13-71 ARE DONE** (13-71: R3/R4/R5/R7 discharged on prod data, ⚠️ R3's ">90 % in a week" FALSIFIED as written — 5/8, then 188/188 from 10-01; R2/R6/R8/R14 RULED by Awwal; R1 handed to 13-72) · ✅ **VPS REBOOTED 16:39 UTC** after a measured quiet hour (kernel 6.8.0-110 → 147; all services back unaided, health 200) · 🆕 the story guard WARNS 7 days before a DATED row falls due (`12fe516`) · 🆕 OSV scheduled scan is DAILY, and ⛔ **osv-scanner.toml IS read by the blocking gate** (the comments said not) — the emergency-unblock recipe is in its header (`f3fb9a8`) · ⚠️ **VPS runs pnpm 10.28.1, CI pins 9.15.0** — goes into the Node story · 📄 session record F.3. · *(Previous header:)* **Last updated:** 2026-10-15 (evening) · ✅ **THE FIVE DATED RESIDUALS ARE DONE, NOT RE-DATED** (13-68 R2b login-spray monitor built + fired on prod · 13-70 R5 login flood ceiling 100 → 300 by the PRD's own rule, R6 accepted, R8 guard mechanism shipped · 13-71 R9 fence pinned); prod `7eccbb2` at 14:48 UTC (verify, D6); guard green at 2026-10-16 and 2027-06-01 clocks. ⚠️ Login now allows **300 requests / IP / 15 min** (was 100). · ⛔ Standing trip-wires: Node 20 is past EOL; the VPS has a pending kernel reboot (up 173 d); new OSV advisories can block any push (§3). · 🛡️ **2026-10-15: the OSV gate blocked the 10-14 docs push (proxy-addr CRITICAL + 3 untouched deps) → fixed and deployed; the weekly scan had been red since 10-05 unseen → Telegram page on failure, inert until the repo secrets are set (NEXT 0b).** · 📄 Evidence: session record Part F. · *(Previous header:)* **Last updated:** 2026-10-14 · ⛔ **`oyotradeministry.com.ng` IS RELEASED FROM OSLRS (to DBPRS) — never re-add it; prod clean-up DONE 2026-10-14 (backups in `/root/backups/domain-release-20261014/`).** · ⛔ **Consent hole: 41 declined-consent enumerator rows at 2026-10-14, and one DOES carry a marketplace profile (the 10-08 record said none).** · 📄 Evidence: `docs/adjudication-session-2026-10-13-to-14.md` · 🆕 `scripts/field-reading.sql` = the field in one command · 🆕 §2ay–§2az. · *(Previous header:)* **Last updated:** 2026-10-08 · ⛔ **ENUMERATOR TRIAL 2 IS RUNNING AND THE CONSENT HOLE IS LIVE IN THE FIELD — 28 declined-consent submissions in 8 days (§3).** · 📄 Evidence: `docs/adjudication-session-2026-09-30-to-10-08.md` · 🆕 Playbook §2at–§2ax · ✅ F2 (GPS) green for the first time, 98.1 %. · *(Older header, kept for history:)* **Last updated:** 2026-09-25 · ⛔ **READ §3's FIRST BOX: a different-model review found FIFTEEN defects in 13-71 that the dev, a same-model review AND adjudication had all approved. Adjudication's "the work is sound" was WRONG. Read the diff for LOGIC before reading the story's account of it; green gates are a precondition, never evidence.** · ✅ **13-70 + 13-71 + 13-73 all on prod (`1248be3`), all still `review` — none can close** · ⛔ **The enumerator trial is STOPPED deliberately, so 13-71 is deployed and unprovable** · 🆕 **PLAYBOOK RULE §2al — a review may PROPOSE a closure, never SIGN one in the principal's name; every ruling carries a TWO-PART attribution (who evidenced it / who ruled it).** · ⏳ **13-70 pushed `eeacee3`, `review` NOT `done` — R2 is DISCHARGE-ON-DEPLOY and the post-deploy read is outstanding (§3)** · ✅ **ONE WORKING TREE — `wt-13-50` and `wt-13-66` REMOVED per §1a (4,935 junctions each, ZERO pointing outside; main repo verified intact at 2,878 tracked files afterwards)** · ✅ **GATE ITEM 2 IS GREEN** (enumerator path proven on prod, 6 submissions, teardown clean — SCP §12 + `enumerator-prod-smoke-and-golive-gate.md` §F) · **Health:** https://oyoskills.com/api/v1/health · **Start at §2** — run the §2a0 debt gate before anything else.
 
 📻 **JINGLE WEEK 1 — read §9 BEFORE anything else if the date is on or after ~2026-08-25.** It holds the pre-jingle traffic baseline (the "before" half of a comparison that cannot be reconstructed later), the finding that the traffic-watch cron was never installed AND its documented command is broken, the signal to actually watch (NG requests, not total — the top country is the US), and the retro theme. Do not run the retro before week 1 settles.
 
@@ -1426,7 +1426,67 @@ audit action first written on **2026-08-17** — a zero from a counter that did 
 
 ---
 
-## 3. Current state (2026-10-15) — READ THIS ONE
+## 3. Current state (2026-10-18) — READ THIS ONE
+
+⛔ **PROD SHA IS NOT RECORDED HERE (D6).** At 2026-10-18 08:52 UTC prod = origin = local = `be95374`, health 200, VPS on
+Node v24.22.0, `oslsr-api` online. Verify, don't read. 📄 Evidence for 10-16 → 10-17: Story 13-77 (Completion Notes,
+Review Follow-ups, "Adjudication and closure") and Story 13-78's Dev Notes. The 10-17 session ran out of context
+BEFORE writing this section. That is why it was missing until 10-18 (lesson at the end of this section).
+
+### ✅ Story 13-77 is DONE (2026-10-18): Node 24, alerts that reach a human, pdfjs
+- **Node 24 on CI and on the VPS** (nodesource `node_24.x`, 24.22.0), proven per process via `/proc/<pid>/exe`.
+  ⚠️ `pm2 jlist` `node_version` is `undefined` for `oslsr-api`, because it is launched through bash, so it is NOT
+  evidence for this app. `.nvmrc` = `24`, root `engines >=24`, CI `node-version-file: '.nvmrc'`. The **deploy FAILS**
+  if the VPS node major ≠ `.nvmrc` or the in-repo pnpm ≠ `packageManager` (9.15.0), and resets to `PREV_HEAD`.
+  Upgrade recipe: playbook §1.5a.
+- **Telegram pages** from one shared action, `.github/actions/telegram-page`, wired into osv-scheduled, prod-verify,
+  the ci-cd deploy and uptime. A missing secret is an error, not a silent skip. Every drill was confirmed by Awwal
+  except the 10-18 post-review ci-cd drill `39113803769` (green; ⏳ Awwal to confirm receipt). ⚠️ A ci-cd
+  `workflow_dispatch` FAILS unless `drill` is ticked; to re-run CI, re-run a push run.
+- **pdfjs-dist 6.4.299**, GHSA-hq66 CLOSED, waiver deleted; the real register re-parses byte-identically (3,673 rows).
+- 🚨 **`pm2 update` dropped the API for 15 min on 10-17** (the logrotate module id collision). Never chain
+  `pm2 update && pm2 save`; recipe in playbook §1.5a. [[pitfall-pm2-update-drops-app-with-module]]
+- **Closure:** code review `740b1a3` (10 findings, all fixed) → independent fresh-context adjudication
+  PROPOSE-DONE-WITH-ACCEPTANCES → 5 false claims corrected → acceptances 1–5 EVIDENCED by adjudication, RULED by
+  Awwal 2026-10-18. Three low alerting defects were routed to **13-78 Task 4.1** and written into that story.
+
+### 🧨 What can still trip us (updated 2026-10-18)
+- ✅ ~~Node 20 EOL~~ and ✅ ~~pdfjs GHSA-hq66~~: both closed by 13-77.
+- ⛔ **Nothing reliable tells us prod is down.** GitHub delays every schedule on this repo by 4–5 h, so `uptime.yml`
+  ran 7 times in ~16 h (~190 expected). Until 13-78 ships, an overnight outage is found by a human.
+- **New OSV advisories** against unchanged deps, any day. The daily scan pages now (secrets set). Emergency unblock:
+  `osv-scanner.toml` header (it IS read by the blocking gate).
+- **hCaptcha free quota 10,000/month** (78 in 15 days at 10-15) · **invitation links expire in 48 h**.
+- Measured safe at 10-15: domain to 2028-04-26, origin cert to 2041, disk 16 %, daily backups. The VPS was rebooted
+  on Node 24 on 10-17 (AC4f), boot order safe.
+
+### ⛔ Consent hole and enumerator trial — the last reading is from 2026-10-14 and is STALE
+- At 10-14: **41 declined-consent enumerator surveys** (rising), 13 public (11 with a NIN and a marketplace profile).
+  The consent-gate story is **still unwritten**: it was NEXT 1 before the Node work took priority. Detail: §3-old14.
+- Trial: 9 active / 10 expired invitation links at 10-14, still essentially two people; 0 of 183 fraud flags reviewed.
+- **Re-read before acting:** `scripts/field-reading.sql` (read-only; output is PII, terminal only, counts in the record).
+
+### ⏭️ NEXT, in priority order
+1. **Story 13-78 dev: the VPS watchdog + UptimeRobot** (ready-for-dev). It is the only real outage alarm, and it
+   includes Task 4.1's inherited defects.
+2. **Field reading** (read-only), then the **consent-gate story** (three behaviours, both forms) + a ruling on the rows.
+3. **Resend the 10 expired invitation links**: ids named, the 9 active excluded by id (§2at); needs a go-ahead.
+4. Name an owner for fraud-flag review · rule whether field work is officially open.
+5. Carried: teardown (10-08 record Part D), 13-73 R1/R8, 13-76 R2, 13-70 R2, 13-72.
+
+### Lesson (2026-10-18): a lost session is recoverable, but a missing §3 is not free
+- The machine went off after the 10-17 session compacted. The resume point was the compaction summary's
+  "Pending Tasks" block, inside the session transcript `~/.claude/projects/C--Users-DELL-Desktop-oslrs/<id>.jsonl`
+  (newest large file; read it with node, filtered by `timestamp`). Check whether anything ran AFTER the summary
+  (here: nothing).
+- **Update this §3 at each milestone (story closed, deploy verified), not only at session end.** A session can end
+  without warning, and two days of state were missing from the one doc that is read first.
+
+---
+
+## 3-old14. Current state (2026-10-15) — superseded by §3 above
+
+⚠️ **Corrected 2026-10-18:** the Node 20 EOL and pdfjs trip-wires below are CLOSED (Story 13-77, done); the Telegram secrets are set.
 
 ⛔ **PROD SHA IS NOT RECORDED HERE (D6).** At 2026-10-15 13:02 UTC prod = origin = `02ce467`, health 200: verify,
 don't read. 🆕 **2026-10-15: dependency fix shipped** (session record Part F). The OSV prod gate blocked the 10-14

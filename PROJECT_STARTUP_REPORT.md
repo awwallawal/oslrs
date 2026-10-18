@@ -107,7 +107,7 @@ Add a clear "Getting Started" section so the next developer knows exactly what t
 ```markdown
 ## 🚀 Getting Started (Fresh Install)
 
-Prerequisites: Node.js 20+, Docker Desktop.
+Prerequisites: Node.js 24 (`.nvmrc`; `engines >=24` is enforced), Docker Desktop.
 
 1. **Clone & Setup:**
    ```bash

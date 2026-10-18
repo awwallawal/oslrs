@@ -39,7 +39,7 @@ The **Oyo State Labour & Skills Registry (OSLSR)** is a state-wide digital regis
 
 - **Apps:**
     - `@oslsr/web`: React 18.3 PWA with Vite & Tailwind v4
-    - `@oslsr/api`: Express.js API with Node 20 & Drizzle ORM
+    - `@oslsr/api`: Express.js API with Node 24 & Drizzle ORM
 - **Services:**
     - `odk-integration`: Service abstraction for ODK Central
 - **Infrastructure:**

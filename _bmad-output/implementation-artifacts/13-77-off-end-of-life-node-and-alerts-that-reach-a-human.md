@@ -1,6 +1,6 @@
 # Story 13.77: Off end-of-life Node, and CI alerts that reach a human
 
-Status: review
+Status: done
 
 <!--
 Created 2026-10-16 via canonical SM *create-story (yolo), on Awwal's instruction: "put the telegram
@@ -218,7 +218,7 @@ Claude Opus 5.5 (claude-opus-5-5), 2026-10-16.
     - The chained command then hung inside `pm2 update`, so `pm2 save` and the health line never ran. The process-level check (AC4e, not health) found it 14 min later: `pm2 ls` showed only `pm2-logrotate`, local health 000, public 502.
     - **Restored by adjudication at 09:22:** copied the 08:59 backup `dump.pm2` back and ran `pm2 resurrect` → `oslsr-api` online, health 200 local and public, all workers initialised. The post-update dump was kept as `dump.pm2.after-update`.
     - **Impact: none measured.** nginx 09:06–09:23 shows ONE 502, the agent's own health probe; 0 submission attempts (Saturday morning, field idle).
-  - **AC4e proven after restore:** every API process runs `/usr/bin/node` (v24.22.0); `pm2 jlist` `node_version` 24.22.0; `workers.initialized` logged; error log 0 lines; `pm2 save` → dump holds `oslsr-api` (cwd `/root/oslrs/apps/api`, `npx tsx src/index.ts`).
+  - **AC4e proven after restore:** every API process runs `/usr/bin/node` (v24.22.0); `workers.initialized` logged; ⚠️ *corrected 2026-10-18 by adjudication:* this line first said "`pm2 jlist` `node_version` 24.22.0". That is FALSE for the API: `oslsr-api` is launched via `/usr/bin/bash` (`exec_interpreter: none`), so its `node_version` is `undefined`; the 24.22.0 belonged to `pm2-logrotate`. AC4e's `pm2 jlist` half therefore cannot prove anything for this app, and the per-process `/proc/<pid>/exe` check (re-run 2026-10-18 08:5x UTC: pids 17058/17079/17095 → `/usr/bin/node`, v24.22.0) is the proof; error log 0 lines; `pm2 save` → dump holds `oslsr-api` (cwd `/root/oslrs/apps/api`, `npx tsx src/index.ts`).
   - ⛔ **Playbook correction for AC8:** never chain `pm2 update && pm2 save`. With a PM2 module installed, `pm2 update` can drop the app. The safe sequence:
     1. `pm2 save` before anything else;
     2. `pm2 update`;
@@ -247,6 +247,8 @@ Claude Opus 5.5 (claude-opus-5-5), 2026-10-16.
 | 2026-10-16 | Story created (SM create-story); AC1 ruled Node 24; Task 1 alert channel + drills; Task 2 repo pins. |
 | 2026-10-17 | Task 3 VPS on Node 24.22.0 (15-min `pm2 update` outage, restored); uptime workflow; reboot test; Task 4 CI on 24 + runtime-drift check; Task 5 pdfjs 6.4.299, GHSA-hq66 closed; Task 6 docs. Status → review. |
 | 2026-10-17 | Adversarial code review: 1 High, 4 Medium, 5 Low, all fixed in the working tree (see Review Follow-ups). Status stays `review`, done PROPOSED pending adjudication's commit + green CI. |
+| 2026-10-17 | Review fixes committed `740b1a3`, proven on CI; independent fresh-context adjudication: PROPOSE-DONE-WITH-ACCEPTANCES. |
+| 2026-10-18 | Five false/unsupported claims corrected; post-review ci-cd drill `39113803769` green; Awwal signed acceptances 1–5. **Status → done.** |
 
 ### Review Follow-ups (AI)
 
@@ -275,3 +277,29 @@ Code review 2026-10-17 (adversarial, BMAD code-review; Claude Opus 5.5). Awwal: 
 - All 10 findings fixed in the working tree, **uncommitted** (the review does not commit or push). Files: `.github/workflows/{ci-cd,e2e,benchmarks,osv-scheduled,uptime}.yml`, `osv-scanner.toml`, `docker/Dockerfile.{api,web}`, this story.
 - Every AC is implemented. AC6's proof now exists (690/690). AC7's "keep `isEvalSupported`" is a recorded, measured deviation (option removed upstream), not a gap.
 - **PROPOSED status: done**, once adjudication commits, pushes and the push run is green. Status left at `review`: a review may propose a closure, never sign one.
+
+### ⚖️ Adjudication and closure (2026-10-18)
+
+**Verdict:** PROPOSE-DONE-WITH-ACCEPTANCES, from an independent fresh-context adjudication run on 2026-10-17 (same model, no memory of the dev session, read-only). It found no blocking defect.
+
+**Acceptances.** EVIDENCED by adjudication; RULED by Awwal, 2026-10-18 ("sign 1–5"):
+
+1. **AC7 deviation accepted.** `isEvalSupported: false` was removed because pdfjs 6 removed both the option and its eval path. Evidence: 5.6.205 has 9 `isEvalSupported` and 2 `new Function(` hits; 6.4.299 has 0 of each. The real register re-parsed to 3,673 rows. Restore the option if a future pdfjs brings an eval path back.
+2. **AC3 split accepted.** Root `engines >=24` landed with the CI flip (`13f9cbf`), not with the Task 2 repo pins. With `engine-strict=true`, landing it earlier would have broken Node-20 installs.
+3. **The 2026-10-17 09:07–09:22 UTC outage is closed.** It was caused by `pm2 update` dropping `oslsr-api`. Impact measured: one 502, the agent's own probe. The fix is the playbook §1.5a sequence (never chain `pm2 update && pm2 save`).
+4. **`uptime.yml` is a best-effort backstop only.** On 2026-10-18 it had fired 7 scheduled runs in ~16 h (~190 expected). The real monitor is Story 13-78.
+5. **The post-review deploy-failure page was re-drilled rather than accepted untested.** ci-cd dispatch `39113803769` (2026-10-18 09:02 UTC, `be95374`, `drill=true`) finished green: `page-deploy-failure: success` and every other job skipped (this covers the `>-` multi-line `if:` and the drill path). ⏳ Awwal still has to confirm that the `[DRILL] OSLRS DEPLOY did not finish` message reached the operator chat.
+
+**False or unsupported claims the adjudication found, corrected 2026-10-18 before closing:**
+
+- AC9: `README.md:42`, `MIGRATION_GUIDE.md:7` and `apps/web/e2e/README.md:130` (example YAML: now `node-version-file: '.nvmrc'`, pnpm 9.15.0) said Node 20. A wider re-grep at closure found one more, `PROJECT_STARTUP_REPORT.md:110` ("Node.js 20+"), also fixed. Remaining hits are accurate: ci-cd comments about third-party actions' `using: node20`, and dated historical reports (baseline study, Epic 1 audit).
+- AC4e: the `pm2 jlist` `node_version` claim. Corrected in place above; `/proc` re-measured.
+- `uptime.yml:20` said "13-77 follow-up"; it now says 13-78, with the 10-18 run count.
+- The sprint-status comment said "Needs code-review".
+- Handoff §3 listed Node 20 EOL and pdfjs as open; rewritten (§3, 2026-10-18).
+
+**Low defects, routed to Story 13-78** (it owns the alerting rewrite; not fixed here):
+
+- (a) In the ci-cd deploy script, a failing `pnpm -v` under `set -e` exits before the `PREV_HEAD` reset.
+- (b) A deploy cancelled while still QUEUED can page.
+- (c) A timed-out edge-freshness job may report as `cancelled` and not page (`prod-verify.yml` ~448).
