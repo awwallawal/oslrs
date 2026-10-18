@@ -25,7 +25,7 @@ concurrency:
 jobs:
   export-benchmarks:
     name: ExportService (PDF + CSV)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 15
 
     env:

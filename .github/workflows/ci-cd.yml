@@ -41,7 +41,7 @@ jobs:
   # green run in which every job skipped — it reads as "CI passed" and tested nothing.
   dispatch-is-drill-only:
     if: github.event_name == 'workflow_dispatch' && inputs.drill != true
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 1
     steps:
       - run: |
@@ -54,7 +54,7 @@ jobs:
   lint-and-build:
     # Skipped on a drill dispatch (Story 13-77); every other job needs this one, so they skip with it.
     if: github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     # security-events: write lets the OSV report-only tier (Story 13-32 AC2)
     # upload SARIF to the GitHub Security tab. contents: read covers checkout /
     # build / artifact upload. Scoped explicitly (mirrors the lighthouse job).
@@ -265,7 +265,7 @@ jobs:
   # ============================================
   test-unit:
     needs: lint-and-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     strategy:
       fail-fast: false
       matrix:
@@ -359,7 +359,7 @@ jobs:
   # ============================================
   test-api:
     needs: lint-and-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     services:
       postgres:
         image: postgres:15-alpine
@@ -496,7 +496,7 @@ jobs:
   # ============================================
   auth-smoke:
     needs: lint-and-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     services:
       postgres:
         image: postgres:15-alpine
@@ -583,7 +583,7 @@ jobs:
   # ============================================
   smoke-e2e:
     needs: lint-and-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 10
     # Story 9-62 (E): the fast, stable `smoke` Playwright project (homepage /
     # login / public-nav) GATES the deploy. The FULL e2e suite stays in e2e.yml
@@ -674,7 +674,7 @@ jobs:
   # ============================================
   test-web:
     needs: lint-and-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     steps:
       - uses: actions/checkout@v5
         with:
@@ -768,7 +768,7 @@ jobs:
     needs: [test-unit, test-api, test-web]
     # always() would run this on a Story 13-77 drill dispatch, where every test job is skipped.
     if: always() && github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     steps:
       - uses: actions/checkout@v5
 
@@ -921,7 +921,7 @@ jobs:
   # ============================================
   lighthouse:
     needs: lint-and-build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     # PR-event runs need explicit pull-requests:write to post the Lighthouse
     # score comment via actions/github-script. Without this, GITHUB_TOKEN gets
     # repo-level read-only and the comment-create call returns 403
@@ -1032,7 +1032,7 @@ jobs:
     # (homepage / login / public-nav) blocks the deploy; full e2e stays non-blocking.
     needs: [dashboard, auth-smoke, smoke-e2e]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     steps:
       - uses: actions/checkout@v5
 
@@ -1381,7 +1381,7 @@ jobs:
          needs.auth-smoke.result == 'success' && needs.smoke-e2e.result == 'success') ||
         (github.event_name == 'workflow_dispatch' && inputs.drill == true)
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 3
     permissions:
       contents: read

@@ -142,6 +142,22 @@ Then repeat step 4. Revert any commit that NEEDS the new major (e.g. a dependenc
 ⚠️ The agent's auto-mode permission classifier refuses `apt-get install` on prod as a production
 deploy. The operator runs steps 3–4 with `!` and the agent verifies each one.
 
+### 1.5b CI runner image is PINNED to the VPS OS (2026-10-18)
+
+Every job's `runs-on` is `ubuntu-24.04`, never `ubuntu-latest`. There are 20 in total, across ci-cd, e2e, prod-verify,
+osv-scheduled, uptime and benchmarks. The VPS runs Ubuntu 24.04.4 LTS.
+
+- **Why:** GitHub moved `ubuntu-latest` to Ubuntu 26 from 2026-10-19 (a notice on CI run 39142282165). That would have
+  silently changed the OS under every job, the postgres/redis service containers, docker and the native builds, overnight,
+  with no change on our side. A pinned image changes only when we change it. It also keeps CI on the OS that prod runs.
+- **Measured before pinning:** the 2026-10-18 jobs already reported `Image: ubuntu-24.04`, so the pin changed nothing that day.
+- **Moving to a new image** (do it together with the VPS OS, or deliberately ahead of it):
+  1. On a branch, change one job's `runs-on` (e.g. `test-api`), open a PR, and read the run.
+  2. Then change all jobs, and update this section.
+  3. Never change `ubuntu-latest` back in.
+- **Trip-wire:** GitHub retires old images about 2 years after the next LTS. 24.04 has years left, but a retirement
+  notice in a run's annotations is the signal to plan the move. Check: `grep -rc 'runs-on: ubuntu-24.04' .github/workflows`.
+
 ### 1.6 Install NGINX + Certbot
 
 ```bash

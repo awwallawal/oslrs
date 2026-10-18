@@ -38,7 +38,7 @@ concurrency:
 
 jobs:
   osv-prod-scheduled:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     permissions:
       contents: read
       security-events: write
@@ -103,7 +103,7 @@ jobs:
   page:
     needs: osv-prod-scheduled
     if: always() && (needs.osv-prod-scheduled.result == 'failure' || inputs.drill == true)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 3
     permissions:
       contents: read

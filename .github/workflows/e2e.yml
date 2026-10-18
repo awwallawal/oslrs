@@ -23,7 +23,7 @@ concurrency:
 jobs:
   test-e2e:
     name: E2E Tests (Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     # A normal run is ~6 min; the headroom is for a manual `repeat_each` burn-in.
     timeout-minutes: 25
     # Stabilization period closed 2026-05-09: Pitfall #31 (cache key fix)

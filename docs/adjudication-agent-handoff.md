@@ -1453,7 +1453,7 @@ BEFORE writing this section. That is why it was missing until 10-18 (lesson at t
 ### 🧨 What can still trip us (updated 2026-10-18)
 - ✅ ~~Node 20 EOL~~ and ✅ ~~pdfjs GHSA-hq66~~: both closed by 13-77.
 - ✅⏳ **The VPS watchdog is LIVE and drill-proven (13-78, 2026-10-18):** API dead / PM2 lost the app / postgres / redis → one Telegram DOWN within ~2 min, one RECOVERED after 2 passing runs, WORSE if another part fails. Every deploy WARNS (annotation) if its heartbeat is stale or its sends are failing. ⏳ **Still blind to the whole box, its network, nginx, Cloudflare or DNS until UptimeRobot (13-78 Task 6, Awwal) is set up.** `uptime.yml` is the hours-late backstop for those. ⚠️ After any `pm2 update`, run the watchdog by hand once (`bash /root/oslrs/scripts/health-watchdog.sh`): its pm2 parser depends on key order and fails CLOSED (13-78 C6).
-- 🆕 **GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19** (notice on CI run 39142282165). Every CI job uses it. If a push goes red on 10-19+ in setup, services (postgres/redis containers), docker or a native build, suspect the image first. Lever: pin `runs-on: ubuntu-24.04` (bounded, with a date), then fix.
+- ✅ ~~GitHub moves `ubuntu-latest` to Ubuntu 26 from 2026-10-19~~: **resolved 2026-10-18.** All 20 `runs-on` are pinned to `ubuntu-24.04`, the VPS OS (playbook §1.5b). The image now changes only when we change it.
 - **New OSV advisories** against unchanged deps, any day. The daily scan pages now (secrets set). Emergency unblock:
   `osv-scanner.toml` header (it IS read by the blocking gate).
 - **hCaptcha free quota 10,000/month** (78 in 15 days at 10-15) · **invitation links expire in 48 h**.

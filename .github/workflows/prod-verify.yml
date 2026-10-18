@@ -63,7 +63,7 @@ jobs:
     # prod and run psql every morning.
     # A drill (Story 13-77) proves the pager only; it must not SSH into prod.
     if: github.event_name == 'workflow_dispatch' && inputs.drill != true
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 10
     steps:
       - name: Run the pre-blast read-only checks on the VPS
@@ -444,7 +444,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   edge-freshness:
     name: Edge — sw.js is fresh and its precache resolves
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 6
     steps:
       - name: sw.js must not be cached long-term at the edge
@@ -516,7 +516,7 @@ jobs:
          (needs.edge-freshness.result == 'failure' || needs.edge-freshness.result == 'cancelled')) ||
         inputs.drill == true
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 3
     permissions:
       contents: read

@@ -42,7 +42,7 @@ permissions:
 jobs:
   probe:
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 4
     outputs:
       detail: ${{ steps.p.outputs.detail }}
@@ -64,7 +64,7 @@ jobs:
   page:
     needs: probe
     if: always() && (github.event_name == 'schedule' || inputs.drill == true)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned to the VPS OS (playbook §1.5b)
     timeout-minutes: 3
     steps:
       - id: s
